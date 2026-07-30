@@ -234,6 +234,13 @@ entradas explícitas y validación explicable bajo Core Contracts. Esta fase no
 autoriza ejecución, no elige parámetros científicos y mantiene obligatoria la
 revisión química de la estructura.
 
+La Fase 3 dispone de un corte vertical local que adapta
+`workflow.lock.json` a un paquete Slurm autocontenido mediante un perfil de
+ejecución externo. Conserva destinos exactos, convierte dependencias en
+transferencias verificadas, registra `run.lock.json` y permite
+`prepare/inspect/status/resume` sin enviar trabajos. Su aceptación HPC sigue
+pendiente; no se incrementa versión hasta acumular evidencia real.
+
 La Fase 6 dispone de una base vertical local para SIESTA 5.4.2: catálogo de
 reglas versionado, perfiles de contexto declarados por el investigador,
 validación FDF explicable y preflight de artefactos externos del DAG. Las

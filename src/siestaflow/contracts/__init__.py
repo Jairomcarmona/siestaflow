@@ -14,11 +14,13 @@ from .catalog import (
     EXECUTION_EVIDENCE,
     EXECUTION_REQUEST,
     PLUGIN_DESCRIPTOR,
+    RUN_LOCK,
     VALIDATION_REPORT,
     WORKFLOW_EVENT,
     WORKFLOW_LOCK,
     contract_catalog,
 )
+from .run import PreparedRun
 from .workflow import (
     CompiledWorkflow,
     WorkflowEdge,
@@ -82,6 +84,7 @@ __all__ = [
     "EXECUTION_EVIDENCE",
     "EXECUTION_REQUEST",
     "PLUGIN_DESCRIPTOR",
+    "RUN_LOCK",
     "VALIDATION_REPORT",
     "WORKFLOW_EVENT",
     "WORKFLOW_LOCK",
@@ -107,6 +110,7 @@ __all__ = [
     "PluginDescriptor",
     "ProvenanceLink",
     "ProvenanceRelation",
+    "PreparedRun",
     "RegisteredCapability",
     "ResourceRequest",
     "RuleDescriptor",

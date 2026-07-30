@@ -17,6 +17,10 @@ workflow preflight DEFINITION [--profile PATH] [--pseudo-manifest PATH] [--requi
 workflow plan DEFINITION [--json]
 workflow graph DEFINITION [--format {text,mermaid,json}]
 workflow compile DEFINITION --output PATH [--force] [--dry-run] [--json]
+run prepare WORKFLOW_LOCK --source-root PATH --profile EXECUTION_PROFILE --output PATH --run-id ID [--dry-run] [--json]
+run inspect PACKAGE [--json]
+run status PACKAGE [--json]
+run resume PACKAGE [--previous-job-terminal] [--json]
 campaign create --project PATH --campaign-id ID [--dry-run] [--json]
 campaign validate CAMPAIGN [--dry-run] [--json]
 campaign simulate CAMPAIGN [--dry-run] [--json]
@@ -78,3 +82,19 @@ Validation, preflight, planning and graph rendering are read-only.
 `workflow compile` writes a canonical, hash-bound
 `siestaflow.workflow-lock@1.0` envelope and never authorizes or starts
 execution.
+
+`run prepare` is the strict bridge from a compiled workflow to the persistent
+allocation controller. It rechecks workflow-lock integrity, external artifact
+size and SHA-256, SIESTA FDF preflight, task placement, allocation fit, and the
+external Slurm profile. Exact workflow input destinations are preserved;
+artifact edges become parent-to-child transfers. The resulting directory and
+ZIP include `workflow.lock.json`, `execution-profile.json`,
+`run.lock.json`, the protected inputs, controller runtime, verifier,
+`progress.sh`, and `submit.slurm`. It never executes the submit script.
+
+`run inspect` verifies all immutable package files and cross-checks workflow,
+profile, run, campaign, and task identities. `run status` adds validated
+mutable progress. `run resume` only prints a fail-closed resubmission plan; it
+never contacts Slurm or invokes `sbatch`. A noninitial resubmission requires
+the researcher to confirm scheduler evidence with `--previous-job-terminal`;
+the flag records that assertion but still performs no submission.

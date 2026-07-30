@@ -8,7 +8,7 @@ import re
 import shlex
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import Any, Mapping
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 from .execution.allocation_controller import load_controller_config
@@ -85,6 +85,7 @@ class ControllerPackageBuilder:
         output_root: Path,
         *,
         dry_run: bool = False,
+        provenance_files: Mapping[str, Path] | None = None,
     ) -> ControllerPackageResult:
         campaign_path = campaign_path.resolve()
         source_root = campaign_path.parent
@@ -107,19 +108,70 @@ class ControllerPackageBuilder:
             )
             if _sha(source.read_bytes()) != expected:
                 raise ValueError(f"protected campaign input hash mismatch: {relative}")
+        provenance: dict[str, bytes] = {}
+        reserved = {
+            "campaign.yaml",
+            "manifest.json",
+            "checksums.sha256",
+            "submit.slurm",
+            "verify_package.py",
+            "progress.sh",
+            "README.md",
+        }
+        for target_name, source_path in sorted(
+            (provenance_files or {}).items()
+        ):
+            target = _safe(target_name).as_posix()
+            source = source_path.expanduser().resolve()
+            if (
+                target in reserved
+                or target.startswith(("runtime/", "scripts/"))
+                or target in protected
+            ):
+                raise ValueError(
+                    f"provenance file collides with package content: {target}"
+                )
+            if not source.is_file():
+                raise ValueError(f"provenance file is missing: {source}")
+            provenance[target] = source.read_bytes()
         if destination.exists() or zip_path.exists():
             raise FileExistsError(
                 f"refusing to overwrite controller package: {destination} or {zip_path}"
             )
         if dry_run:
+            generated_targets = (
+                "runtime/siestaflow/__init__.py",
+                "runtime/siestaflow/execution/__init__.py",
+                "runtime/siestaflow/engines/__init__.py",
+                "runtime/siestaflow/engines/siesta/__init__.py",
+                "scripts/run_worker.py",
+                "scripts/progress.py",
+                "submit.slurm",
+                "progress.sh",
+                "verify_package.py",
+                "README.md",
+            )
+            planned_file_count = (
+                1
+                + len(protected)
+                + len(provenance)
+                + len(self._runtime_files())
+                + len(generated_targets)
+                + 2
+            )
             return ControllerPackageResult(
-                package_id, str(destination), str(zip_path), "", len(protected),
+                package_id,
+                str(destination),
+                str(zip_path),
+                "",
+                planned_file_count,
                 "DRY_RUN_NO_SIDE_EFFECTS",
             )
         files: dict[str, bytes] = {}
         files["campaign.yaml"] = campaign_path.read_bytes()
         for relative in protected:
             files[relative] = source_root.joinpath(*_safe(relative).parts).read_bytes()
+        files.update(provenance)
         for relative in self._runtime_files():
             source = self.repository_root / relative
             if not source.is_file():
@@ -265,6 +317,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd -P)"
 cd "$ROOT"
 export PYTHONPATH="$ROOT/runtime"
+export PYTHONDONTWRITEBYTECODE=1
 python3 scripts/progress.py
 echo
 echo "=== SLURM DEL USUARIO ==="

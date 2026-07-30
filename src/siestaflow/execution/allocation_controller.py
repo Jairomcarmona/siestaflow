@@ -9,7 +9,7 @@ import shutil
 import threading
 import time
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path, PurePosixPath
 from typing import Any, Mapping
@@ -58,6 +58,8 @@ class ControllerTask:
     nodes: int = 0
     task_kind: str = "siesta"
     command: tuple[str, ...] = ()
+    input_destinations: Mapping[str, str] = field(default_factory=dict)
+    optional_artifacts: tuple[str, ...] = ()
 
     @property
     def cpus(self) -> int:
@@ -208,23 +210,60 @@ def load_controller_config(path: Path) -> ControllerConfig:
         if not isinstance(hashes, Mapping) or not hashes:
             raise ValueError(f"input_hashes required for {task_id}")
         normalized_hashes: dict[str, str] = {}
-        basenames: set[str] = set()
         for name, digest in hashes.items():
             relative = _safe_relative(str(name), f"{task_id}.input_hashes").as_posix()
             expected = str(digest).lower()
             if len(expected) != 64 or any(char not in "0123456789abcdef" for char in expected):
                 raise ValueError(f"invalid SHA-256 for {relative}")
-            basename = PurePosixPath(relative).name
-            if basename in basenames:
-                raise ValueError(f"staged input basename collision: {basename}")
-            basenames.add(basename)
             normalized_hashes[relative] = expected
         if input_path not in normalized_hashes:
             raise ValueError(f"primary input is not hash-bound: {input_path}")
+        destinations_raw = raw.get("input_destinations")
+        if destinations_raw is None:
+            input_destinations = {
+                relative: PurePosixPath(relative).name
+                for relative in normalized_hashes
+            }
+        else:
+            if not isinstance(destinations_raw, Mapping):
+                raise ValueError(
+                    f"input_destinations must be a mapping for {task_id}"
+                )
+            if set(map(str, destinations_raw)) != set(normalized_hashes):
+                raise ValueError(
+                    f"input_destinations keys must match input_hashes for {task_id}"
+                )
+            input_destinations = {
+                str(relative): _safe_relative(
+                    str(destination),
+                    f"{task_id}.input_destinations",
+                ).as_posix()
+                for relative, destination in destinations_raw.items()
+            }
+        staged_destinations = tuple(input_destinations.values())
+        if len(set(staged_destinations)) != len(staged_destinations):
+            raise ValueError(f"staged input destination collision: {task_id}")
         required_raw = raw.get("required_artifacts", [])
         if not isinstance(required_raw, list):
             raise ValueError(f"required_artifacts must be a list for {task_id}")
         required = tuple(_safe_relative(str(item), f"{task_id}.required_artifacts").as_posix() for item in required_raw)
+        optional_raw = raw.get("optional_artifacts", [])
+        if not isinstance(optional_raw, list):
+            raise ValueError(f"optional_artifacts must be a list for {task_id}")
+        optional = tuple(
+            _safe_relative(
+                str(item), f"{task_id}.optional_artifacts"
+            ).as_posix()
+            for item in optional_raw
+        )
+        if (
+            len(set(required)) != len(required)
+            or len(set(optional)) != len(optional)
+            or set(required) & set(optional)
+        ):
+            raise ValueError(
+                f"required and optional artifacts must be unique for {task_id}"
+            )
         mpi = _positive_int(raw.get("mpi_processes"), f"{task_id}.mpi_processes")
         cpp = _positive_int(raw.get("cpus_per_process", 1), f"{task_id}.cpus_per_process")
         estimate = _nonnegative_float(raw.get("estimated_runtime_seconds"), f"{task_id}.estimated_runtime_seconds")
@@ -256,7 +295,7 @@ def load_controller_config(path: Path) -> ControllerConfig:
                 ),
                 f"{task_id}.transfer.destination",
             ).as_posix()
-            if destination in destinations or PurePosixPath(destination).name in basenames:
+            if destination in destinations or destination in staged_destinations:
                 raise ValueError(f"staged transfer destination collision: {destination}")
             destinations.add(destination)
             transfers.append(ArtifactTransfer(source_task, artifact, destination))
@@ -290,6 +329,7 @@ def load_controller_config(path: Path) -> ControllerConfig:
             task_id, input_path, normalized_hashes, required, mpi, cpp, estimate,
             attempts, bool(raw.get("require_scf_converged", True)),
             dependencies, tuple(transfers), task_nodes, task_kind, task_command,
+            input_destinations, optional,
         ))
     if max_parallel > len(tasks):
         max_parallel = len(tasks)
@@ -609,11 +649,18 @@ class AllocationController:
         attempt = self._attempt_path(task.task_id, attempt_id)
         self._verify_source_inputs(task)
         attempt.mkdir(parents=True, exist_ok=False)
-        for relative in task.input_hashes:
+        for relative, destination_relative in task.input_destinations.items():
             source = self.root / _safe_relative(relative, "input_hashes")
-            shutil.copy2(source, attempt / source.name)
+            destination = attempt / _safe_relative(
+                destination_relative, "input_destinations"
+            )
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, destination)
         self._transfer_inputs(task, attempt)
-        primary = attempt / PurePosixPath(task.input_path).name
+        primary = attempt / _safe_relative(
+            task.input_destinations[task.input_path],
+            "primary input destination",
+        )
         task_state.update({"attempts": number, "last_attempt": attempt_id})
         return attempt_id, attempt, primary
 
@@ -656,13 +703,27 @@ class AllocationController:
             if task.task_kind == "siesta" else None
         )
         artifacts: dict[str, str] = {}
-        required = tuple(dict.fromkeys((*self.CORE_ARTIFACTS, *task.required_artifacts)))
-        for relative in required:
+        artifacts_to_record = tuple(
+            dict.fromkeys(
+                (
+                    *self.CORE_ARTIFACTS,
+                    *task.required_artifacts,
+                    *task.optional_artifacts,
+                )
+            )
+        )
+        for relative in artifacts_to_record:
             path = attempt / _safe_relative(relative, "required_artifacts")
             if path.is_file():
                 artifacts[relative] = _sha_file(path)
         staged_inputs = {
-            relative: _sha_file(attempt / PurePosixPath(relative).name)
+            relative: _sha_file(
+                attempt
+                / _safe_relative(
+                    task.input_destinations[relative],
+                    "input_destinations",
+                )
+            )
             for relative in task.input_hashes
         }
         manifest = {
@@ -733,7 +794,10 @@ class AllocationController:
         if not isinstance(staged, dict) or staged != dict(task.input_hashes):
             return False, "staged input manifest mismatch"
         for relative, expected in task.input_hashes.items():
-            path = attempt / PurePosixPath(relative).name
+            path = attempt / _safe_relative(
+                task.input_destinations[relative],
+                "input_destinations",
+            )
             if not path.is_file() or _sha_file(path) != expected:
                 return False, f"staged input hash mismatch: {relative}"
         transferred = manifest.get("transferred_inputs")
@@ -825,6 +889,10 @@ class AllocationController:
             path = attempt / _safe_relative(relative, "required_artifacts")
             if not path.is_file() or artifacts.get(relative) != _sha_file(path):
                 return False, f"required artifact invalid: {relative}"
+        for relative in task.optional_artifacts:
+            path = attempt / _safe_relative(relative, "optional_artifacts")
+            if path.is_file() and artifacts.get(relative) != _sha_file(path):
+                return False, f"optional artifact invalid: {relative}"
         return True, "exit, termination, manifest, hashes and artifacts verified"
 
     def _recover(self) -> None:

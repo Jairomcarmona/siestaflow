@@ -23,6 +23,13 @@ topological plans and graphs, and writes deterministic
 `siestaflow.workflow-lock@1.0` envelopes. Compilation never authorizes
 execution.
 
+The initial Phase 3 execution adapter turns a verified workflow lock plus an
+external Slurm profile into a self-contained controller package. It preserves
+declared input destinations, compiles DAG edges into hash-bound transfers,
+records a `siestaflow.run-lock@1.0` envelope, and exposes read-only
+inspect/status/resume planning. Preparation never calls `sbatch`; submission
+remains an explicit researcher action.
+
 The Phase 2 CLI vertical adds a read-only environment diagnosis, safe and
 idempotent project scaffolding from researcher-supplied inputs, and a common
 explainable validation report. These commands prepare and diagnose work; they
@@ -58,6 +65,10 @@ python -m siestaflow.cli input validate INPUT.fdf --explain
 python -m siestaflow.cli workflow preflight WORKFLOW.json --json
 python -m siestaflow.cli workflow plan WORKFLOW.json
 python -m siestaflow.cli workflow compile WORKFLOW.json --output workflow.lock.json
+python -m siestaflow.cli run prepare workflow.lock.json --source-root WORKFLOW_ROOT --profile execution-profile.json --output packages --run-id RUN_ID --json
+python -m siestaflow.cli run inspect packages/RUN_ID --json
+python -m siestaflow.cli run status packages/RUN_ID --json
+python -m siestaflow.cli run resume packages/RUN_ID
 python -m siestaflow.cli remote controller-package campaign.json --output packages --json
 python -m pytest -q
 ```

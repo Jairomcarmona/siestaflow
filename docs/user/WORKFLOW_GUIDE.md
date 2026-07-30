@@ -39,6 +39,10 @@ tasks:
     kind: calculation
     capability: siestaflow.engine.siesta
     inputs:
+      - name: fdf
+        source: inputs/restart.fdf
+        destination: input.fdf
+        media_type: text/x-siesta-fdf
       - name: parent_dm
         from:
           task: parent
@@ -123,10 +127,30 @@ these invariants by constructing a lock directly.
 
 ## Current boundary
 
-Phase 1 does not submit, schedule, or execute tasks. Conversion from a
-validated workflow lock to the existing allocation-controller campaign is a
-later integration boundary and must not be inferred from successful
-compilation.
+Phase 1 compilation still does not submit, schedule, or execute tasks. The
+initial Phase 3 adapter can convert the lock to a controller package only when
+every executable task is a `calculation` using
+`siestaflow.engine.siesta`, has one external FDF input, declares the exact
+five resource fields shown above, and fits the external execution profile.
+Non-SIESTA capabilities and nonempty engine settings fail closed until their
+adapters exist.
+
+Preparation requires the original workflow source root because lock artifacts
+are verified again by size and SHA-256. Cluster details live in a separate
+execution-profile file rather than the workflow. A template is available at
+`examples/execution_profiles/slurm_hydra.example.json`.
+
+```bash
+siestaflow run prepare workflow.lock.json \
+  --source-root PATH_TO_WORKFLOW_ROOT \
+  --profile execution-profile.json \
+  --output packages \
+  --run-id relaxation-run-001
+```
+
+The command writes a transferable package and ZIP but does not run
+`sbatch`. Successful compilation or preparation must not be interpreted as
+scientific validity or execution authorization.
 
 See the compilation-only example under
 `examples/workflows/restart_chain_compile_only`.

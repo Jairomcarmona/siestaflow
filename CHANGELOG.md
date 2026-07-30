@@ -41,6 +41,14 @@
 - Declared the SIESTA JSON registries as wheel package data so installed
   distributions carry the same keyword and validation catalogs as source
   checkouts.
+- Added the initial Phase 3 prepared-run adapter and
+  `siestaflow.run-lock@1.0`: workflow locks plus strict external Slurm
+  profiles now produce self-contained controller packages with exact input
+  destinations and hash-bound DAG transfers.
+- Added read-only `run inspect`, `run status`, and `run resume` planning.
+  These commands verify cross-contract identity and never invoke `sbatch`.
+- Added optional output tracking and explicit source-to-destination staging to
+  the allocation controller while retaining schema-1 package compatibility.
 
 ## 0.2.0 consolidation alpha (2026-07-29)
 

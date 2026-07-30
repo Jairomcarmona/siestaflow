@@ -34,6 +34,8 @@ from .execution.allocation_controller import AllocationController, ExecutionStat
 from .execution.campaign_progress import read_campaign_progress, render_campaign_progress
 from .m4_remote_package import M4RemoteSmokePackager
 from .controller_package import ControllerPackageBuilder
+from .run_inspection import RunInspector
+from .run_preparation import RunPreparer, RunPreparationRequest
 from .workflows import (
     WorkflowCompiler,
     render_workflow_graph,
@@ -211,6 +213,36 @@ def build_parser() -> argparse.ArgumentParser:
     workflow_compile.add_argument("--force", action="store_true")
     workflow_compile.add_argument("--dry-run", action="store_true")
     workflow_compile.add_argument("--json", action="store_true")
+
+    prepared_run = sub.add_parser(
+        "run",
+        help="prepare and inspect hash-bound, manually submitted run packages",
+    )
+    prepared_run_sub = prepared_run.add_subparsers(
+        dest="action",
+        required=True,
+    )
+    run_prepare = prepared_run_sub.add_parser(
+        "prepare",
+        help="adapt a workflow lock to a self-contained Slurm package",
+    )
+    run_prepare.add_argument("workflow_lock", type=Path)
+    run_prepare.add_argument("--source-root", type=Path, required=True)
+    run_prepare.add_argument("--profile", type=Path, required=True)
+    run_prepare.add_argument("--output", type=Path, required=True)
+    run_prepare.add_argument("--run-id", required=True)
+    run_prepare.add_argument("--dry-run", action="store_true")
+    run_prepare.add_argument("--json", action="store_true")
+    for action in ("inspect", "status", "resume"):
+        command = prepared_run_sub.add_parser(action)
+        command.add_argument("package", type=Path)
+        if action == "resume":
+            command.add_argument(
+                "--previous-job-terminal",
+                action="store_true",
+                help="confirm that scheduler evidence shows the prior job is terminal",
+            )
+        command.add_argument("--json", action="store_true")
 
     examples = sub.add_parser("examples")
     example_sub = examples.add_subparsers(dest="action", required=True)
@@ -396,6 +428,41 @@ def _dispatch(args: argparse.Namespace) -> int:
             args.json,
         )
         return 0
+    if args.domain == "run":
+        if args.action == "prepare":
+            result = RunPreparer(_repo_root()).prepare(
+                RunPreparationRequest(
+                    workflow_lock=args.workflow_lock,
+                    source_root=args.source_root,
+                    execution_profile=args.profile,
+                    output_root=args.output,
+                    run_id=args.run_id,
+                    dry_run=args.dry_run,
+                )
+            )
+            _emit(result, args.json)
+            return 0
+        inspector = RunInspector()
+        if args.action == "inspect":
+            _emit(inspector.inspect(args.package), args.json)
+            return 0
+        if args.action == "status":
+            _emit(inspector.status(args.package), args.json)
+            return 0
+        plan = inspector.resume(
+            args.package,
+            previous_job_terminal=args.previous_job_terminal,
+        )
+        _emit(plan, args.json)
+        return (
+            2
+            if plan.status
+            in {
+                "PREVIOUS_JOB_TERMINAL_CONFIRMATION_REQUIRED",
+                "BLOCKED_REVIEW_REQUIRED",
+            }
+            else 0
+        )
     if args.domain == "project":
         if args.action == "init":
             result = ProjectScaffolder().initialize(

@@ -252,6 +252,27 @@ def test_dependency_artifact_is_hash_bound_and_transferred(tmp_path: Path):
     assert state(tmp_path)["tasks"]["task-1"]["status"] == "COMPLETED"
 
 
+def test_protected_inputs_are_staged_at_declared_exact_destinations(
+    tmp_path: Path,
+) -> None:
+    campaign, config = make_package(tmp_path, ["SUCCESS"])
+    config["tasks"][0]["input_destinations"] = {
+        "input/task1.fdf": "nested/input.fdf",
+        "pseudopotentials/C.psml": "species/C.psml",
+    }
+    campaign.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+
+    result = controller(campaign, "exact-destinations").run(
+        install_signal_handlers=False
+    )
+
+    assert result is ExecutionStatus.COMPLETED
+    attempt = tmp_path / "work" / "task-1" / "attempt-0001"
+    assert (attempt / "nested" / "input.fdf").read_text() == "SUCCESS\n"
+    assert (attempt / "species" / "C.psml").read_text() == "pseudo"
+    assert not (attempt / "task1.fdf").exists()
+
+
 def test_mutable_restart_dm_keeps_immutable_input_evidence(tmp_path: Path):
     campaign, config = make_package(
         tmp_path,

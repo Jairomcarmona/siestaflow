@@ -21,6 +21,7 @@ EXECUTION_EVIDENCE = ContractRef(
 )
 WORKFLOW_EVENT = ContractRef("siestaflow.workflow-event", CORE_CONTRACT_VERSION)
 WORKFLOW_LOCK = ContractRef("siestaflow.workflow-lock", CORE_CONTRACT_VERSION)
+RUN_LOCK = ContractRef("siestaflow.run-lock", CORE_CONTRACT_VERSION)
 PLUGIN_DESCRIPTOR = ContractRef(
     "siestaflow.plugin-descriptor", CORE_CONTRACT_VERSION
 )
@@ -32,6 +33,7 @@ CORE_CONTRACTS = (
     EXECUTION_EVIDENCE,
     WORKFLOW_EVENT,
     WORKFLOW_LOCK,
+    RUN_LOCK,
     PLUGIN_DESCRIPTOR,
 )
 
