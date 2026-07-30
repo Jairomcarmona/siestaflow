@@ -14,6 +14,12 @@
   while preserving imports from `siestaflow.models`.
 - Added compatibility adapters for current SIESTA validation/artifact models
   and allocation-local launcher models.
+- Corrected the Yoltla-observed restart-DM false negative: transferred inputs
+  now have an immutable pre-execution evidence copy, while the working copy may
+  be legitimately replaced by SIESTA and is recorded as a separate output.
+- Added explicit parsing of successful DM restart consumption, allowlisted the
+  SIESTA 5.4.2 `BASIS_ENTHALPY` deprecation warning, and made recovery
+  re-evaluate incomplete historical attempts without repeating valid work.
 
 ## 0.2.0 consolidation alpha (2026-07-29)
 

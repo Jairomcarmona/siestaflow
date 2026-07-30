@@ -14,14 +14,25 @@ _FLOAT = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][-+]?\d+)?"
 
 class SiestaOutputParser:
     PROVISIONAL = "PROVISIONAL_UNTIL_REAL_OUTPUT_IMPORTED"
+    _BENIGN_WARNING_MARKERS = (
+        "basis_enthalpy and basis_harris_enthalpy files are deprecated",
+    )
+
+    @classmethod
+    def _is_benign_warning(cls, line: str) -> bool:
+        lowered = line.casefold()
+        return any(marker in lowered for marker in cls._BENIGN_WARNING_MARKERS)
 
     def parse(self, lines: Iterable[str], *, synthetic: bool = False) -> SiestaOutputRecord:
         version = None
         started = normal = scf_started = scf_converged = False
+        dm_restart_attempted = dm_restart_succeeded = False
         iterations = atoms = species = None
         energies: list[float] = []
         max_force = elapsed = None
         warnings: list[str] = []
+        benign_warnings: list[str] = []
+        actionable_warnings: list[str] = []
         errors: list[str] = []
         artifacts: set[str] = set()
         spin = None
@@ -67,7 +78,16 @@ class SiestaOutputParser:
                 if suffix.casefold() in lowered:
                     artifacts.add(suffix)
             if "warning" in lowered:
-                warnings.append(line.strip())
+                warning = line.strip()
+                warnings.append(warning)
+                if self._is_benign_warning(warning):
+                    benign_warnings.append(warning)
+                else:
+                    actionable_warnings.append(warning)
+            if "attempting to read dm from file" in lowered:
+                dm_restart_attempted = True
+                if "succeeded" in lowered:
+                    dm_restart_succeeded = True
             if any(marker in lowered for marker in ("job completed", "normal termination", "end of run")):
                 normal = True
             if "pseudopotential" in lowered and any(marker in lowered for marker in ("missing", "not found", "cannot open", "error")):
@@ -100,16 +120,38 @@ class SiestaOutputParser:
         if classification_hint is not None:
             classification = classification_hint
         elif normal and started and (scf_converged or not scf_started):
-            classification = OutputClassification.UNKNOWN_WARNING if warnings else OutputClassification.COMPLETED
+            classification = (
+                OutputClassification.UNKNOWN_WARNING
+                if actionable_warnings
+                else OutputClassification.COMPLETED
+            )
         elif started or scf_started or energies:
             classification = OutputClassification.TRUNCATED_OUTPUT
         else:
             classification = OutputClassification.UNKNOWN_FAILURE
         return SiestaOutputRecord(
-            classification, self.PROVISIONAL, version, started, normal, scf_started,
-            scf_converged, iterations, tuple(energies), max_force, tuple(warnings),
-            tuple(errors), atoms, species, spin, elapsed, tuple(sorted(artifacts)),
-            line_count, synthetic,
+            classification=classification,
+            provisional_status=self.PROVISIONAL,
+            version=version,
+            started=started,
+            normal_termination=normal,
+            scf_started=scf_started,
+            scf_converged=scf_converged,
+            scf_iterations=iterations,
+            energies=tuple(energies),
+            max_force=max_force,
+            warnings=tuple(warnings),
+            errors=tuple(errors),
+            atoms=atoms,
+            species=species,
+            spin_evidence=spin,
+            elapsed_seconds=elapsed,
+            mentioned_artifacts=tuple(sorted(artifacts)),
+            line_count=line_count,
+            synthetic=synthetic,
+            benign_warnings=tuple(benign_warnings),
+            dm_restart_attempted=dm_restart_attempted,
+            dm_restart_succeeded=dm_restart_succeeded,
         )
 
     def gate(self, record: SiestaOutputRecord) -> GateDecision:

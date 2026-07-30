@@ -500,7 +500,7 @@ class AllocationController:
 
     def _transfer_inputs(self, task: ControllerTask, attempt: Path) -> tuple[dict[str, Any], ...]:
         transferred: list[dict[str, Any]] = []
-        for transfer in task.transfers:
+        for index, transfer in enumerate(task.transfers, 1):
             source_state = self._task_state(transfer.from_task)
             source_attempt_id = source_state.get("last_attempt")
             source_manifest_hash = source_state.get("result_manifest_sha256")
@@ -535,7 +535,20 @@ class AllocationController:
                 transfer.destination, f"{task.task_id}.transfer.destination"
             )
             destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source, destination)
+            evidence_relative = (
+                Path(".siestaflow")
+                / "transfer_evidence"
+                / f"{index:04d}"
+                / PurePosixPath(transfer.destination).name
+            )
+            evidence = attempt / evidence_relative
+            evidence.parent.mkdir(parents=True, exist_ok=False)
+            shutil.copy2(source, evidence)
+            shutil.copy2(evidence, destination)
+            if _sha_file(evidence) != actual or _sha_file(destination) != actual:
+                raise ValueError(
+                    f"transferred destination staging mismatch: {transfer.destination}"
+                )
             transferred.append({
                 "from_task": transfer.from_task,
                 "from_attempt": source_attempt_id,
@@ -543,13 +556,51 @@ class AllocationController:
                 "artifact": transfer.artifact,
                 "destination": transfer.destination,
                 "sha256": actual,
+                "evidence_path": evidence_relative.as_posix(),
+                "evidence_sha256": actual,
+                "destination_sha256_before_execution": actual,
+                "destination_mutable_after_launch": True,
             })
         if transferred:
             self._atomic_json(
                 attempt / "transfer_manifest.json",
-                {"schema_version": "1.0", "transfers": transferred},
+                {"schema_version": "2.0", "transfers": transferred},
             )
         return tuple(transferred)
+
+    def _verify_transfers_before_launch(
+        self, task: ControllerTask, attempt: Path
+    ) -> None:
+        """Verify working copies at the last controller boundary before execution."""
+        if not task.transfers:
+            return
+        manifest_path = attempt / "transfer_manifest.json"
+        if not manifest_path.is_file():
+            raise ValueError("transfer manifest missing before launch")
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        records = payload.get("transfers")
+        if not isinstance(records, list) or len(records) != len(task.transfers):
+            raise ValueError("transfer manifest mismatch before launch")
+        for transfer, record in zip(task.transfers, records, strict=True):
+            if not isinstance(record, dict):
+                raise ValueError("invalid transfer record before launch")
+            expected = str(record.get("sha256", ""))
+            destination = attempt / _safe_relative(
+                transfer.destination, f"{task.task_id}.transfer.destination"
+            )
+            evidence = attempt / _safe_relative(
+                str(record.get("evidence_path", "")),
+                f"{task.task_id}.transfer.evidence_path",
+            )
+            if (
+                not destination.is_file()
+                or not evidence.is_file()
+                or _sha_file(destination) != expected
+                or _sha_file(evidence) != expected
+            ):
+                raise ValueError(
+                    f"transferred input changed before launch: {transfer.destination}"
+                )
 
     def _prepare_attempt(self, task: ControllerTask) -> tuple[str, Path, Path]:
         task_state = self._task_state(task.task_id)
@@ -586,6 +637,7 @@ class AllocationController:
             hosts, self.config.processes_per_node,
         )
         try:
+            self._verify_transfers_before_launch(task, attempt)
             selected_launcher = (
                 self._direct_launcher if task.task_kind == "gate" else self.launcher
             )
@@ -627,6 +679,18 @@ class AllocationController:
             "parser_classification": (
                 record.classification.value if record is not None else "GATE_EXIT_STATUS"
             ),
+            "parser_warnings": list(record.warnings) if record is not None else [],
+            "parser_benign_warnings": (
+                list(record.benign_warnings) if record is not None else []
+            ),
+            "restart_evidence": {
+                "dm_read_attempted": (
+                    record.dm_restart_attempted if record is not None else False
+                ),
+                "dm_read_succeeded": (
+                    record.dm_restart_succeeded if record is not None else False
+                ),
+            },
             "input_hashes": staged_inputs, "artifacts": artifacts,
             "transferred_inputs": (
                 json.loads((attempt / "transfer_manifest.json").read_text(encoding="utf-8"))[
@@ -675,6 +739,15 @@ class AllocationController:
         transferred = manifest.get("transferred_inputs")
         if not isinstance(transferred, list) or len(transferred) != len(task.transfers):
             return False, "transferred input manifest mismatch"
+        output_record = None
+        output_path = attempt / "stdout.txt"
+        if task.task_kind == "siesta" and output_path.is_file():
+            output_record = SiestaOutputParser().parse(
+                output_path.read_text(
+                    encoding="utf-8", errors="replace"
+                ).splitlines(keepends=True),
+                synthetic=False,
+            )
         declared_transfers = {
             (item.from_task, item.artifact, item.destination) for item in task.transfers
         }
@@ -692,8 +765,30 @@ class AllocationController:
                 identity[2], f"{task.task_id}.transferred_input"
             )
             digest = str(item.get("sha256", ""))
-            if not destination.is_file() or _sha_file(destination) != digest:
-                return False, f"transferred input hash mismatch: {identity[2]}"
+            if not destination.is_file():
+                return False, f"transferred input missing after execution: {identity[2]}"
+            evidence_path = item.get("evidence_path")
+            if evidence_path:
+                evidence = attempt / _safe_relative(
+                    str(evidence_path), f"{task.task_id}.transfer.evidence_path"
+                )
+                if (
+                    not evidence.is_file()
+                    or str(item.get("evidence_sha256", "")) != digest
+                    or _sha_file(evidence) != digest
+                ):
+                    return False, f"transferred input evidence mismatch: {identity[2]}"
+            elif _sha_file(destination) != digest:
+                # Schema 1.0 compared the working copy after SIESTA had
+                # legitimately replaced a restart DM. Preserve compatibility
+                # only when the real output proves that the DM was consumed.
+                if not (
+                    task.task_kind == "siesta"
+                    and identity[2].casefold().endswith(".dm")
+                    and output_record is not None
+                    and output_record.dm_restart_succeeded
+                ):
+                    return False, f"legacy transferred input hash mismatch: {identity[2]}"
             source_attempt = self._attempt_path(
                 identity[0], str(item.get("from_attempt", ""))
             )
@@ -711,6 +806,15 @@ class AllocationController:
                 or _sha_file(source_artifact) != digest
             ):
                 return False, f"transferred source evidence mismatch: {identity[0]}"
+            if (
+                task.task_kind == "siesta"
+                and identity[2].casefold().endswith(".dm")
+                and (
+                    output_record is None
+                    or not output_record.dm_restart_succeeded
+                )
+            ):
+                return False, f"DM restart consumption not confirmed: {identity[2]}"
         if observed_transfers != declared_transfers:
             return False, "transferred input declaration mismatch"
         artifacts = manifest.get("artifacts")
@@ -737,11 +841,29 @@ class AllocationController:
                 valid = bool(last) and self._validate_attempt(task, last, item.get("result_manifest_sha256"))[0]
                 if not valid:
                     self._set_task(task_id, ExecutionStatus.INCOMPLETE, "previous completed evidence no longer validates")
-            elif item["status"] == ExecutionStatus.RUNNING.value:
-                valid, reason = self._validate_attempt(task, last, item.get("result_manifest_sha256")) if last else (False, "attempt missing")
+            elif item["status"] in {
+                ExecutionStatus.RUNNING.value,
+                ExecutionStatus.INCOMPLETE.value,
+                ExecutionStatus.INTERRUPTED.value,
+            }:
+                valid, reason = (
+                    self._validate_attempt(
+                        task, last, item.get("result_manifest_sha256")
+                    )
+                    if last
+                    else (False, "attempt missing")
+                )
                 if valid:
-                    self._set_task(task_id, ExecutionStatus.COMPLETED, reason, result_manifest_sha256=_sha_file(self._attempt_path(task_id, last) / "result_manifest.json"))
-                else:
+                    self._set_task(
+                        task_id,
+                        ExecutionStatus.COMPLETED,
+                        reason,
+                        result_manifest_sha256=_sha_file(
+                            self._attempt_path(task_id, last)
+                            / "result_manifest.json"
+                        ),
+                    )
+                elif item["status"] == ExecutionStatus.RUNNING.value:
                     self._set_task(task_id, ExecutionStatus.INTERRUPTED, f"recovered in new allocation: {reason}")
         self._save_state()
 

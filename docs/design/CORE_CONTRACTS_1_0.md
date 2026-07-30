@@ -62,6 +62,11 @@ Artifacts and execution paths are relative POSIX paths. Absolute paths,
 drive-qualified paths, and `..` are rejected at the boundary. Artifact
 transfers carry an expected SHA-256 rather than trusting a filename.
 
+A transfer hash identifies the input at the handoff boundary; it does not
+require the executable's working copy to remain byte-identical after launch.
+Runtimes preserve immutable transfer evidence and register a modified working
+copy as a new output artifact with its own digest.
+
 ## Validation policy
 
 A finding declares:
@@ -132,4 +137,3 @@ Every contract change must include:
 6. documentation and changelog entry.
 
 No contract version is raised merely because an implementation changes.
-

@@ -38,6 +38,18 @@ dependencies and optional parent transfers. A transfer is accepted only when
 the parent task is `COMPLETED`, its result manifest hash still matches, and the
 artifact hash agrees with that manifest. A failed parent blocks descendants.
 
+Transferred artifacts are staged through two distinct representations:
+
+1. an immutable, hash-bound evidence copy that records exactly what the child
+   received;
+2. a working copy exposed to SIESTA, which may legitimately be replaced during
+   execution (for example, a restart `.DM`).
+
+The working copy is verified immediately before launch. After execution its
+hash is recorded as an output rather than compared with the original input
+hash. For a SIESTA DM handoff, completion also requires runtime evidence that
+the restart file was successfully read.
+
 Gate tasks are small hash-bound commands executed directly by the controller.
 They exist for deterministic operations such as convergence selection or
 choosing which validated parent artifact to pass forward. They do not receive
@@ -47,8 +59,9 @@ authority to modify scientific policy.
 protected inputs
   -> SIESTA task through srun/Hydra
   -> result manifest + required artifact hashes
+  -> immutable transfer evidence + mutable working copy
   -> gate task or dependent SIESTA task
-  -> verified transfer into new immutable attempt
+  -> independently hashed final artifacts
 ```
 
 The controller process is never launched through MPI. Only scientific SIESTA

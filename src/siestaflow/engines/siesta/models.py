@@ -170,6 +170,9 @@ class SiestaOutputRecord:
     mentioned_artifacts: tuple[str, ...]
     line_count: int
     synthetic: bool = False
+    benign_warnings: tuple[str, ...] = ()
+    dm_restart_attempted: bool = False
+    dm_restart_succeeded: bool = False
 
 
 @dataclass(frozen=True)
