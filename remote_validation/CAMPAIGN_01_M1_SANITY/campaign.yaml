@@ -1,0 +1,8 @@
+campaign_id: CAMPAIGN_01_M1_SANITY
+status: EXECUTION_READY_PENDING_PREFLIGHT
+mode: human_gate_after_task
+persistent_allocation: false
+planned_tasks: 1
+validation_status: BLOCKED
+stop_after_task: true
+real_execution_authorized: false

@@ -1,0 +1,126 @@
+# system_id=SURF_Gr5x5_clean_v01
+# source_xyz=structures/parents/SURF_Gr5x5_clean_v01.xyz
+# geometry_status=DERIVADO_POR_SIMETRIA
+# neutrality_status=neutral
+# planned_total_charge=+0
+# manual_crosscheck_status=CONFIRMED_SIESTA5_4_2_EXTERNAL_LOCAL_MANUAL
+# siesta_manual_version=SIESTA manual 5.4.2
+# fdf_profile=C1_RELAX_VDW_DZP_SEED_SIESTA5
+# protocol_xc=vdW-DF2_LMKLL
+# pseudo_generation_xc=PBE
+# xc_policy=Protocol uses vdW-DF2/LMKLL for total-energy comparisons; PBE refers to pseudopotential generation only.
+# d3_status=not_used_in_protocol_productive_profile
+# This FDF is a local audit seed only. It is not an HPC execution package.
+
+SystemName SURF_Gr5x5_clean_v01 T04A FDF seed
+SystemLabel Gr5x5_clean_v01
+NumberOfAtoms 50
+NumberOfSpecies 1
+
+%block ChemicalSpeciesLabel
+  1 6 C
+%endblock ChemicalSpeciesLabel
+
+LatticeConstant 1.0 Ang
+%block LatticeVectors
+  12.30000000 0.00000000 0.00000000
+  6.15000000 10.65211247 0.00000000
+  0.00000000 0.00000000 25.00000000
+%endblock LatticeVectors
+
+AtomicCoordinatesFormat Ang
+%block AtomicCoordinatesAndAtomicSpecies
+  0.00000000 0.00000000 12.50000000 1 # C
+  1.23000000 0.71014083 12.50000000 1 # C
+  1.23000000 2.13042249 12.50000000 1 # C
+  2.46000000 2.84056332 12.50000000 1 # C
+  2.46000000 4.26084499 12.50000000 1 # C
+  3.69000000 4.97098582 12.50000000 1 # C
+  3.69000000 6.39126748 12.50000000 1 # C
+  4.92000000 7.10140831 12.50000000 1 # C
+  4.92000000 8.52168997 12.50000000 1 # C
+  6.15000000 9.23183080 12.50000000 1 # C
+  2.46000000 0.00000000 12.50000000 1 # C
+  3.69000000 0.71014083 12.50000000 1 # C
+  3.69000000 2.13042249 12.50000000 1 # C
+  4.92000000 2.84056332 12.50000000 1 # C
+  4.92000000 4.26084499 12.50000000 1 # C
+  6.15000000 4.97098582 12.50000000 1 # C
+  6.15000000 6.39126748 12.50000000 1 # C
+  7.38000000 7.10140831 12.50000000 1 # C
+  7.38000000 8.52168997 12.50000000 1 # C
+  8.61000000 9.23183080 12.50000000 1 # C
+  4.92000000 0.00000000 12.50000000 1 # C
+  6.15000000 0.71014083 12.50000000 1 # C
+  6.15000000 2.13042249 12.50000000 1 # C
+  7.38000000 2.84056332 12.50000000 1 # C
+  7.38000000 4.26084499 12.50000000 1 # C
+  8.61000000 4.97098582 12.50000000 1 # C
+  8.61000000 6.39126748 12.50000000 1 # C
+  9.84000000 7.10140831 12.50000000 1 # C
+  9.84000000 8.52168997 12.50000000 1 # C
+  11.07000000 9.23183080 12.50000000 1 # C
+  7.38000000 0.00000000 12.50000000 1 # C
+  8.61000000 0.71014083 12.50000000 1 # C
+  8.61000000 2.13042249 12.50000000 1 # C
+  9.84000000 2.84056332 12.50000000 1 # C
+  9.84000000 4.26084499 12.50000000 1 # C
+  11.07000000 4.97098582 12.50000000 1 # C
+  11.07000000 6.39126748 12.50000000 1 # C
+  12.30000000 7.10140831 12.50000000 1 # C
+  12.30000000 8.52168997 12.50000000 1 # C
+  13.53000000 9.23183080 12.50000000 1 # C
+  9.84000000 0.00000000 12.50000000 1 # C
+  11.07000000 0.71014083 12.50000000 1 # C
+  11.07000000 2.13042249 12.50000000 1 # C
+  12.30000000 2.84056332 12.50000000 1 # C
+  12.30000000 4.26084499 12.50000000 1 # C
+  13.53000000 4.97098582 12.50000000 1 # C
+  13.53000000 6.39126748 12.50000000 1 # C
+  14.76000000 7.10140831 12.50000000 1 # C
+  14.76000000 8.52168997 12.50000000 1 # C
+  15.99000000 9.23183080 12.50000000 1 # C
+%endblock AtomicCoordinatesAndAtomicSpecies
+
+NetCharge 0.0
+
+# Exchange-correlation protocol: vdW-DF2/LMKLL. D3 is not active to avoid double counting dispersion.
+XC.Functional VDW
+XC.Authors LMKLL
+# DFTD3 true  # disabled_by_T04A2_protocol: do not combine D3 with vdW-DF2/LMKLL
+# DFTD3.UseXCDefaults true  # disabled_by_T04A2_protocol: do not combine D3 with vdW-DF2/LMKLL
+
+PAO.BasisSize DZP
+PAO.EnergyShift 200 meV
+PAO.SplitNorm 0.15
+
+Mesh.Cutoff 250 Ry
+
+Spin non-polarized
+
+SolutionMethod diagon
+OccupationFunction FD
+ElectronicTemperature 300 K
+
+MaxSCFIterations 1000
+SCF.Mixer.Method Pulay
+SCF.Mixer.Weight 0.02
+SCF.Mixer.History 3
+SCF.DM.Tolerance 1.d-4
+DM.Normalization.Tolerance 1.d-5
+
+MD.TypeOfRun CG
+MD.Steps 300
+MD.MaxForceTol 0.05 eV/Ang
+
+WriteCoorXmol true
+Charge.Mulliken end
+Charge.Mulliken.Format 1
+WriteForces true
+UseSaveData false
+
+%block kgrid.MonkhorstPack
+  3 0 0 0.0
+  0 3 0 0.0
+  0 0 1 0.0
+%endblock kgrid.MonkhorstPack

@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0",
+  "project_id": "GENERIC_XY_SMOKE",
+  "title": "Minimal arbitrary-species SIESTA smoke package",
+  "engine": "siesta",
+  "systems": ["xy_cell"],
+  "campaigns": ["smoke", "mesh_series"],
+  "pseudopotential_manifest": "pseudopotentials/manifest.yaml",
+  "metadata": {"evidence": "synthetic_only", "scientific_claim": false}
+}

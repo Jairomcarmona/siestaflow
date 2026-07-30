@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0",
+  "phase_id": "05_m1_relax",
+  "campaign_id": "YOLTLA_M1_F5_RELAX",
+  "system_id": "M1_delta_MnO2_neutral_surface_control_v01",
+  "status": "BLOCKED_RELAXATION_POLICY_UNDEFINED",
+  "required_gate": "F4_U_SPIN_POLICY_SIGNED",
+  "reason": "No executable fixed-cell relaxation FDF has a signed force tolerance and constraint policy.",
+  "minimum_runs": 1,
+  "maximum_runs": 3,
+  "required_outputs_for_promotion": [
+    "run.fdf",
+    "siesta.out",
+    "STRUCT_OUT",
+    "XV",
+    "FA"
+  ]
+}
+

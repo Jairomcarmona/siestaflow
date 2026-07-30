@@ -1,0 +1,37 @@
+{
+  "automatic_submission": false,
+  "immutable_files": {
+    ".gitignore": "cfee5dca629a72f86d470a5e4153ca8889e9530052b112aca542159947137543",
+    "CHANGELOG_V3.md": "76e232eb594bb59def21aaacdd68efb7b06102861ee22df4143179b32cc7571e",
+    "DEPLOY_TO_YOLTLA.md": "2e3609e9301cdfa6bb236ad50800d1cdf2a1292dc63b3b489593d7b6e746498f",
+    "PACKAGE_STATUS.json": "c2f2ec9708024cdf3a377966de9b6e1adde978b4c45139bbf50800a26f0ca955",
+    "README.md": "8582fc2f6454fd07c966270a87c97b99acd4237cbb9f65e8502a802d4226331b",
+    "SCIENTIFIC_POLICY.md": "58b727ddd2a6e06676d1d94ee33990372ff474363ae7fa46eb43cd700933dd1b",
+    "TEST_REPORT.md": "df171bf53ad8622a176099e5142deb360529a9a2d9890e48d5908391972fbd5c",
+    "TRACEABILITY.md": "075f130292441b88f6297b526d6d4034296fb74f73912a5be8fa8f2862d4cbc7",
+    "campaign.json": "bd1762a9db432a9749246679fbe288cc4f141ff11a35d24406eeb097be7ed395",
+    "external/pseudopotentials/Mn.psml": "0b97ccd71456e4a7b28316f78ddb30bb1f6a82d9aba386c7fde78090d31c0dc6",
+    "external/pseudopotentials/O.psml": "224ded5c59176d9bcb76d19b7a4a68a48d5dffabf8b262f64d5760250e87c35e",
+    "external/pseudopotentials/README.md": "75d3ecbcc3025eb9922dda5c331291c68a432f7ebf698ced9e3f5c8151c628fc",
+    "geometry/seeds/M1_delta_MnO2_neutral_surface_control_v01.xyz": "5eca941f565df1ac0eea07996d82d50e3b0351513ab2d8082a93262cef998eae",
+    "inputs/base/M1_reference.fdf": "c00e63be793bff61ebe119c92e937c55a0188829adeaa5054e7646cc20e8ede5",
+    "scripts/automatic_campaign.py": "288282b9c38c29a44da6ea4ffaa52753d4221d1071b761e6821673601dab827d",
+    "scripts/inspect_campaign.sh": "5821ba1b23770ed5754f0ef780be7e836347133f420adf6faa0508df374f8708",
+    "submit.slurm": "6339224f4da84c40961bdd80a2f368e03c6eb392fa92bbb2b124ffc7575c97a8",
+    "tests/test_package.py": "e563220355b5514724652565c7bb22630067f0950aafad046821beaa0a768e8f",
+    "tools/build_archive.py": "e0a0fef650d1c75a73e3aaad52019bd501f0b1ad411b770398572e699e98534e",
+    "tools/build_manifest.py": "0993f3e6c0736f4c26ea12717cecf055454fea4ac4f1056b4c2ff522e0ca9ec1",
+    "verify_package.py": "97290cc31cbb2f148139b77be1538a488f75cc1740d3ef61e6cf057d83f5f402"
+  },
+  "login_node_daemon_required": false,
+  "package_id": "YOLTLA_M1_MNO2_AUTOCONVERGENCE_V3",
+  "production_relaxation_enabled": false,
+  "pseudopotential_sha256": {
+    "Mn.psml": "0b97ccd71456e4a7b28316f78ddb30bb1f6a82d9aba386c7fde78090d31c0dc6",
+    "O.psml": "224ded5c59176d9bcb76d19b7a4a68a48d5dffabf8b262f64d5760250e87c35e"
+  },
+  "pseudopotentials_packaged": true,
+  "purpose": "M1_MNO2_AUTOMATED_NUMERICAL_BASIS_U_SPIN_TESTS",
+  "runs_inside_single_slurm_allocation": true,
+  "schema_version": "1.0"
+}

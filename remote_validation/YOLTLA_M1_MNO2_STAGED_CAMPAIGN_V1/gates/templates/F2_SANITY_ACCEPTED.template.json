@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "gate_id": "F2_SANITY_ACCEPTED",
+  "decision": "PENDING",
+  "accepted_by": null,
+  "accepted_at": null,
+  "evidence_sha256": {},
+  "scope": ["03a_mesh"],
+  "required_findings": [
+    "54 atoms Mn18O36 and two species parsed",
+    "VDW/LMKLL active, D3 off, charge 0, spin polarized, no DFTU",
+    "MD.Steps 0 and no geometry motion",
+    "SCF status and warnings recorded without interpreting the raw energy"
+  ]
+}
+

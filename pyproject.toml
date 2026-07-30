@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "siestaflow"
+version = "0.2.0"
+description = "Declarative, evidence-oriented SIESTA campaign orchestrator"
+requires-python = ">=3.11"
+
+[project.scripts]
+siestaflow = "siestaflow.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "profile_id": "m4_surf_gr5x5_yoltla_technical_smoke",
+  "profile_status": "TECHNICAL_SMOKE_REQUIRES_REMOTE_PREFLIGHT",
+  "slurm": {
+    "partition": "q1h-20p",
+    "account": "vini",
+    "qos": "normal"
+  },
+  "resources": {
+    "nodes": 1,
+    "total_cpus": 4,
+    "memory": "2G",
+    "walltime": "00:10:00",
+    "max_parallel_steps": 1,
+    "shutdown_margin_seconds": 60,
+    "termination_grace_seconds": 15
+  },
+  "runtime": {
+    "module_commands": [],
+    "siesta_executable": "siesta",
+    "executable_arguments": [],
+    "srun_command": ["srun"],
+    "srun_arguments": [],
+    "exclusive": true,
+    "environment": {
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1"
+    }
+  },
+  "task": {
+    "mpi_processes": 4,
+    "cpus_per_process": 1,
+    "estimated_runtime_seconds": 300,
+    "max_attempts": 3,
+    "require_scf_converged": true,
+    "required_artifacts": []
+  },
+  "evidence": {
+    "account": "SANITIZED_REAL_REMOTE_EVIDENCE",
+    "qos": "SANITIZED_REAL_REMOTE_EVIDENCE",
+    "partition": "EXPLICIT_PACKAGE_SELECTION_FROM_OBSERVED_COMPATIBLE_DEFAULT",
+    "resources": "TECHNICAL_SMOKE_SELECTION_REQUIRES_REMOTE_PREFLIGHT",
+    "siesta_runtime": "COMMAND_NAME_REQUIRES_REMOTE_PREFLIGHT"
+  }
+}

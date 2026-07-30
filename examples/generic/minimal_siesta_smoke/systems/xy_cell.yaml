@@ -1,0 +1,9 @@
+{
+  "system_id": "xy_cell",
+  "structure": "structures/xy.xyz",
+  "species": ["X", "Y"],
+  "input_template": "systems/xy_cell.fdf",
+  "charge": 0,
+  "technical_spin": "non-polarized",
+  "metadata": {"purpose": "technical_fixture", "scientific_interpretation": "forbidden"}
+}

@@ -1,0 +1,14 @@
+{
+  "source": "SANITIZED_REAL_REMOTE_EVIDENCE",
+  "job_id": "778835",
+  "state": "FAILED",
+  "exit_code": "1:0",
+  "elapsed": "00:00:01",
+  "node": "nc65",
+  "partition": "q1h-20p",
+  "account": "vini",
+  "qos": "normal",
+  "approved_execution": false,
+  "scientific_calculation_performed": false,
+  "credentials_present": false
+}

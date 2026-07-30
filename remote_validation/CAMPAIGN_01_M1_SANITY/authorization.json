@@ -1,0 +1,21 @@
+{
+  "allowed_task_types": [
+    "SIESTA_SYNTHETIC_SANITY"
+  ],
+  "authorization_id": "AUTH_CAMPAIGN_01_M1_SANITY_SYNTHETIC",
+  "campaign_id": "CAMPAIGN_01_M1_SANITY",
+  "content_hash": "18461c694a92c59e0a39d3eb3d04ad3c0a8854817e097c8d0ffdcdf36c7d8361",
+  "expires_at": "2026-08-20T04:51:19.042716+00:00",
+  "forbidden_operations": [
+    "REAL_SIESTA",
+    "SBATCH",
+    "SSH",
+    "AUTO_RESTART"
+  ],
+  "generic_targets": [
+    "M1_U0_FM"
+  ],
+  "issued_at": "2026-07-21T04:51:19.042716+00:00",
+  "issued_by": "SIESTAFLOW_M2_LOCAL",
+  "stop_on_review": true
+}

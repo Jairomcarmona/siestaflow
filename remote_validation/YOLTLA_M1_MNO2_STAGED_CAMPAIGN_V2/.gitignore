@@ -1,0 +1,12 @@
+gates/decisions/
+generated/
+geometry/systems/*/runs/
+site/
+state/
+work/
+results/
+evidence/
+slurm-*.out
+slurm-*.err
+__pycache__/
+*.pyc

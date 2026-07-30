@@ -1,0 +1,7 @@
+{
+  "schema_version":"1.0",
+  "entries":[
+    {"species":"Mn","filename":"Mn.psml","format":"psml","sha256":"0b97ccd71456e4a7b28316f78ddb30bb1f6a82d9aba386c7fde78090d31c0dc6","source":"audited external source","xc_family":"PBE","relativity":null,"distribution_status":"EXTERNAL_NOT_PACKAGED","location_status":"EXTERNAL_NOT_PACKAGED"},
+    {"species":"O","filename":"O.psml","format":"psml","sha256":"224ded5c59176d9bcb76d19b7a4a68a48d5dffabf8b262f64d5760250e87c35e","source":"audited external source","xc_family":"PBE","relativity":null,"distribution_status":"EXTERNAL_NOT_PACKAGED","location_status":"EXTERNAL_NOT_PACKAGED"}
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "gate_id": "F5_M1_GEOMETRY_ACCEPTED",
+  "decision": "PENDING",
+  "accepted_by": null,
+  "accepted_at": null,
+  "evidence_sha256": {},
+  "scope": ["06_m1_electronics", "07a_m1_ca8w", "07b_m1_mg6w"],
+  "system_id": "M1_delta_MnO2_neutral_surface_control_v01",
+  "max_force_ev_ang": null,
+  "struct_out_xv_max_delta_ang": null,
+  "inventory": {"Mn": 18, "O": 36},
+  "cell_fixed": true
+}
+

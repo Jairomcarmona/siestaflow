@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "package_id": "YOLTLA_M1_MNO2_AUTOCONVERGENCE_V3",
+  "status": "LOCAL_VERIFIED_DEPLOYABLE_PACKAGE",
+  "deployable_zip_created": true,
+  "remote_submission_performed": false,
+  "scope": "STATIC_NUMERICAL_BASIS_AND_U_SPIN_TESTS_ONLY",
+  "slurm": {
+    "partition": "qz2d-128p",
+    "nodes": 2,
+    "ntasks": 128,
+    "ntasks_per_node": 64,
+    "walltime": "2-00:00:00"
+  },
+  "siesta_executions": {
+    "normal": 12,
+    "maximum_with_optional_5x5x1": 13
+  },
+  "logical_scientific_tests": {
+    "normal": 13,
+    "maximum_with_optional_5x5x1": 14
+  },
+  "local_verification": {
+    "unit_integration_tests": 12,
+    "status": "PASS",
+    "real_siesta_calculation_performed_locally": false,
+    "remote_slurm_submission_performed": false
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "schema_version":"1.0", "campaign_id":"smoke", "system_id":"xy_cell", "task_type":"SIESTA_SYNTHETIC_SMOKE",
+  "parameter":null, "values":[], "authorization":"authorizations/local.yaml",
+  "policy":"policies/synthetic.yaml", "mode":"single", "synthetic_only":true,
+  "metadata":{"human_gate_after_task":true}
+}

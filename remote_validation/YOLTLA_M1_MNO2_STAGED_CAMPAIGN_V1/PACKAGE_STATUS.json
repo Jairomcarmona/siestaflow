@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "package_id": "YOLTLA_M1_MNO2_STAGED_CAMPAIGN_V1",
+  "package_status": "DESIGNED_AND_LOCALLY_VERIFIABLE_REMOTE_LAUNCH_BLOCKED",
+  "scientific_scope": "M1 ideal neutral Mn18O36 control through F7 scaffolding",
+  "automatic_submission": false,
+  "first_executable_phase": "01_sanity",
+  "prepared_executable_phases": [
+    "01_sanity",
+    "03a_mesh",
+    "03b_kgrid"
+  ],
+  "blocked_requirements": [
+    "audited Mn.psml and O.psml must be imported",
+    "F0 execution authorization is not included",
+    "Yoltla 80 CPU x 48 h profile lacks remote evidence",
+    "F3C stricter basis has not been defined",
+    "F4 executable DFT+U projector policy has not been signed",
+    "F5 force/constraint policy has not been signed",
+    "F7 execution-level complex FDFs and charge/cell policies do not exist"
+  ]
+}
+

@@ -1,0 +1,50 @@
+{
+  "schema_version": "2.0",
+  "package_id": "YOLTLA_M1_MNO2_STAGED_CAMPAIGN_V2",
+  "allocation_policy": {
+    "automatic_submission": false,
+    "controller_location": "inside_slurm_allocation",
+    "multiple_predefined_tasks_per_allocation": true,
+    "persistent_state": ["state", "work", "evidence", "results"]
+  },
+  "allocation_bundles": [
+    {
+      "id": "00_scaling_calibration",
+      "kind": "TECHNICAL_NONSCIENTIFIC",
+      "requires": ["F0_EXECUTION_AUTHORIZATION"],
+      "produces": ["RESOURCE_LAYOUT_EVIDENCE"],
+      "status": "PREPARED"
+    },
+    {
+      "id": "01_sanity_03a_mesh",
+      "kind": "SCIENTIFIC_INPUTS_WITH_AUTOMATIC_TECHNICAL_GATE",
+      "requires": ["F0_EXECUTION_AUTHORIZATION", "RESOURCE_LAYOUT_ACCEPTED"],
+      "produces": ["F1_TECHNICAL_EVIDENCE", "F3A_MESH_SERIES"],
+      "status": "PREPARED"
+    },
+    {
+      "id": "03b_kgrid",
+      "kind": "SCIENTIFIC_NUMERICAL_SERIES",
+      "requires": ["F3A_MESH_ACCEPTED"],
+      "produces": ["F3B_KGRID_SERIES"],
+      "status": "PREPARED_DYNAMIC"
+    }
+  ],
+  "human_scientific_stops": [
+    "RESOURCE_LAYOUT_ACCEPTED after calibration",
+    "F3A_MESH_ACCEPTED before k-grid",
+    "F3B_KGRID_ACCEPTED before basis",
+    "F3_NUMERICAL_POLICY_SIGNED before U/spin",
+    "F4_U_SPIN_POLICY_SIGNED before relaxation",
+    "F5_M1_GEOMETRY_ACCEPTED before electronics and complexes"
+  ],
+  "blocked_phases": {
+    "03c_basis": "stricter PAO basis or waiver not signed",
+    "04_u_spin": "executable DFTU projector/J policy not signed",
+    "05_m1_relax": "force tolerance and constraints not signed",
+    "06_m1_electronics": "accepted relaxed parent and analysis FDFs missing",
+    "07a_m1_ca8w": "complex FDF, +2 convention and lateral-cell policy missing",
+    "07b_m1_mg6w": "complex FDF, +2 convention and lateral-cell policy missing"
+  }
+}
+

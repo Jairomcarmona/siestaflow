@@ -1,0 +1,29 @@
+SystemName Generic XY technical fixture
+SystemLabel generic_xy
+NumberOfAtoms 2
+NumberOfSpecies 2
+%block ChemicalSpeciesLabel
+  1 1 X
+  2 2 Y
+%endblock ChemicalSpeciesLabel
+LatticeConstant 1.0 Ang
+%block LatticeVectors
+  5.0 0.0 0.0
+  0.0 5.0 0.0
+  0.0 0.0 5.0
+%endblock LatticeVectors
+AtomicCoordinatesFormat Ang
+%block AtomicCoordinatesAndAtomicSpecies
+  0.0 0.0 0.0 1
+  1.0 1.0 1.0 2
+%endblock AtomicCoordinatesAndAtomicSpecies
+Mesh.Cutoff 180 Ry
+%block kgrid.MonkhorstPack
+  1 0 0 0.0
+  0 1 0 0.0
+  0 0 1 0.0
+%endblock kgrid.MonkhorstPack
+NetCharge 0
+Spin non-polarized
+MD.TypeOfRun CG
+MD.Steps 0

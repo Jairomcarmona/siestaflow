@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0",
+  "phase_id": "03a_mesh",
+  "campaign_id": "YOLTLA_M1_F3A_MESH",
+  "system_id": "M1_delta_MnO2_neutral_surface_control_v01",
+  "status": "PREPARED",
+  "required_gate": "F2_SANITY_ACCEPTED",
+  "base_fdf": "inputs/base/M1_U0_FM.pilot.NO_PRODUCTION.fdf",
+  "scientific_role": "matched raw numerical sensitivity; not physical energy comparison",
+  "variants": [
+    {
+      "task_id": "m1-mesh-200ry",
+      "system_label": "M1_MESH_200RY",
+      "mesh_ry": 200,
+      "kgrid": [3, 3, 1]
+    },
+    {
+      "task_id": "m1-mesh-250ry",
+      "system_label": "M1_MESH_250RY",
+      "mesh_ry": 250,
+      "kgrid": [3, 3, 1]
+    },
+    {
+      "task_id": "m1-mesh-300ry",
+      "system_label": "M1_MESH_300RY",
+      "mesh_ry": 300,
+      "kgrid": [3, 3, 1]
+    },
+    {
+      "task_id": "m1-mesh-350ry",
+      "system_label": "M1_MESH_350RY",
+      "mesh_ry": 350,
+      "kgrid": [3, 3, 1]
+    }
+  ],
+  "required_artifacts": [],
+  "selection_policy": "human review of consecutive energy-per-atom differences, SCF stability and topology"
+}
+

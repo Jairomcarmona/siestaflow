@@ -1,0 +1,48 @@
+{
+  "schema_version": "1.0",
+  "profile_id": "yoltla_80c_48h_candidate",
+  "profile_status": "UNVERIFIED_BLOCKED",
+  "slurm": {
+    "partition": "CONFIGURE_FROM_REMOTE_EVIDENCE",
+    "account": "vini",
+    "qos": "normal"
+  },
+  "resources": {
+    "nodes": "CONFIGURE_FROM_REMOTE_EVIDENCE",
+    "total_cpus": 80,
+    "memory": "CONFIGURE_FROM_REMOTE_EVIDENCE",
+    "walltime": "48:00:00",
+    "max_parallel_steps": 1,
+    "shutdown_margin_seconds": 1800,
+    "termination_grace_seconds": 120
+  },
+  "runtime": {
+    "module_commands": [],
+    "siesta_executable": "siesta",
+    "required_siesta_version": "5.4.2",
+    "srun_command": ["srun"],
+    "srun_arguments": [],
+    "exclusive": true,
+    "environment": {
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1"
+    }
+  },
+  "task_defaults": {
+    "mpi_processes": 80,
+    "cpus_per_process": 1,
+    "estimated_runtime_seconds": 21600,
+    "max_attempts": 3,
+    "require_scf_converged": true
+  },
+  "required_remote_evidence": [
+    "sinfo partition CPU/node memory and time limits",
+    "scontrol show partition",
+    "sacctmgr association for account and QoS",
+    "Siesta 5.4.2 executable discovery",
+    "srun availability",
+    "small scaling evidence before adopting 80 MPI ranks"
+  ],
+  "evidence_sha256": {}
+}
+

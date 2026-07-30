@@ -1,0 +1,46 @@
+{
+  "schema_version": "2.0",
+  "bundle_id": "00_scaling_calibration",
+  "campaign_id": "YOLTLA_M1_SCALING_20_40_80",
+  "system_id": "M1_delta_MnO2_neutral_surface_control_v01",
+  "status": "PREPARED_TECHNICAL_CALIBRATION",
+  "required_gate": "F0_EXECUTION_AUTHORIZATION",
+  "base_fdf": "inputs/base/M1_U0_FM.pilot.NO_PRODUCTION.fdf",
+  "automatic_parameter_selection": false,
+  "scientific_interpretation_allowed": false,
+  "tasks": [
+    {
+      "task_id": "m1-scaling-20mpi",
+      "system_label": "M1_SCALE_20MPI",
+      "mesh_ry": 250,
+      "kgrid": [3, 3, 1],
+      "mpi_processes": 20,
+      "nodes_required": 1,
+      "depends_on": []
+    },
+    {
+      "task_id": "m1-scaling-40mpi",
+      "system_label": "M1_SCALE_40MPI",
+      "mesh_ry": 250,
+      "kgrid": [3, 3, 1],
+      "mpi_processes": 40,
+      "nodes_required": 1,
+      "depends_on": ["m1-scaling-20mpi"]
+    },
+    {
+      "task_id": "m1-scaling-80mpi",
+      "system_label": "M1_SCALE_80MPI",
+      "mesh_ry": 250,
+      "kgrid": [3, 3, 1],
+      "mpi_processes": 80,
+      "nodes_required": 2,
+      "depends_on": ["m1-scaling-40mpi"]
+    }
+  ],
+  "post_bundle_gate": "RESOURCE_LAYOUT_ACCEPTED",
+  "limitations": [
+    "Representative of the 54-atom static M1 control, not proof for 73/79-atom relaxations.",
+    "Energies may only be compared for numerical identity, never interpreted scientifically."
+  ]
+}
+

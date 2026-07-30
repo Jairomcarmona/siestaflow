@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0",
+  "phase_id": "04_u_spin",
+  "campaign_id": "YOLTLA_M1_F4_U_SPIN",
+  "system_id": "M1_delta_MnO2_neutral_surface_control_v01",
+  "status": "BLOCKED_EXECUTABLE_DFTU_POLICY_UNDEFINED",
+  "required_gate": "F3_NUMERICAL_POLICY_SIGNED",
+  "reason": "The reviewed 3.8/4.0 eV and FM/stripe files are NO_RUN artifacts and still contain projector/J-policy placeholders.",
+  "minimum_runs": 3,
+  "maximum_runs": 5,
+  "automatic_winner_selection": false
+}
+

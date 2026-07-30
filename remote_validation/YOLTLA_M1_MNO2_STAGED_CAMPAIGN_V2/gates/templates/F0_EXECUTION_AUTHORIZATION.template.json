@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "gate_id": "F0_EXECUTION_AUTHORIZATION",
+  "decision": null,
+  "accepted_by": null,
+  "accepted_at": null,
+  "authorized_scope": null,
+  "output_directory": null,
+  "runtime_conditions": [
+    "SIESTA must be exactly 5.4.2",
+    "declared MPI launcher must pass inside-allocation runtime preflight",
+    "only allocated hosts and non-overlapping slots may be used"
+  ],
+  "evidence_sha256": {},
+  "notes": "Use scripts/gatectl.py draft-f0. No acceptance is distributed."
+}

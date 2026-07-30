@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0",
+  "phase_id": "03c_basis",
+  "campaign_id": "YOLTLA_M1_F3C_BASIS",
+  "system_id": "M1_delta_MnO2_neutral_surface_control_v01",
+  "status": "BLOCKED_STRICTER_BASIS_UNDEFINED",
+  "required_gate": "F3B_KGRID_ACCEPTED",
+  "reason": "DZP exists, but no audited stricter PAO basis block or explicit waiver has been signed.",
+  "minimum_runs": 1,
+  "maximum_runs": 2
+}
+

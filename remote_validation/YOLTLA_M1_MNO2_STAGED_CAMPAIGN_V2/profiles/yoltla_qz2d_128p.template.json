@@ -1,0 +1,94 @@
+{
+  "schema_version": "2.0",
+  "profile_id": "yoltla_qz2d_128p_80c_48h_candidate",
+  "profile_status": "CANDIDATE_REQUIRES_REMOTE_VALIDATION",
+  "slurm": {
+    "partition": "qz2d-128p",
+    "account": "vini",
+    "qos": "normal"
+  },
+  "resources": {
+    "nodes": 2,
+    "physical_cpus_per_node": 64,
+    "memory_mb_per_node": 512000,
+    "total_cpus": 80,
+    "tasks_per_node": 40,
+    "walltime": "2-00:00:00",
+    "memory_policy": {
+      "mode": "partition_default",
+      "value": null,
+      "rationale": "The partition is ExclusiveUser with exactly two 512000 MB nodes. V2 omits --mem until current Yoltla policy evidence shows that an explicit request is required; an arbitrary 500G request could change scheduling semantics."
+    },
+    "shutdown_margin_seconds": 1800,
+    "termination_grace_seconds": 120
+  },
+  "modules": {
+    "purge": true,
+    "load": ["siesta/5.4.2"]
+  },
+  "runtime": {
+    "siesta_executable": "siesta",
+    "required_siesta_version": "5.4.2",
+    "launcher": {
+      "backend": "hydra_ssh",
+      "command": ["mpiexec.hydra"],
+      "arguments": [],
+      "bootstrap": "ssh",
+      "affinity_environment_key": "I_MPI_PIN_PROCESSOR_LIST",
+      "remote_validation_status": "REQUIRED"
+    },
+    "environment": {
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1"
+    }
+  },
+  "resource_layouts": {
+    "selected": "dual_40",
+    "selection_status": "PROPOSED_REQUIRES_SCALING_EVIDENCE_AND_HUMAN_ACCEPTANCE",
+    "reason": "dual_40 is the initial throughput hypothesis for 54-79 atom systems; it is not an efficiency claim.",
+    "available": {
+      "serial_80": {
+        "max_parallel_steps": 1,
+        "mpi_processes_per_step": 80,
+        "nodes_per_step": 2
+      },
+      "dual_40": {
+        "max_parallel_steps": 2,
+        "mpi_processes_per_step": 40,
+        "nodes_per_step": 1
+      },
+      "quad_20": {
+        "max_parallel_steps": 4,
+        "mpi_processes_per_step": 20,
+        "nodes_per_step": 1
+      }
+    }
+  },
+  "task_defaults": {
+    "cpus_per_process": 1,
+    "estimated_runtime_seconds": 21600,
+    "max_attempts": 3,
+    "retry_backoff_seconds": 30,
+    "retryable_exit_codes": [124, 137, 143],
+    "require_scf_converged": true
+  },
+  "evidence_sha256": {},
+  "required_remote_evidence": [
+    "sinfo.txt",
+    "scontrol_partition_qz2d-128p.txt",
+    "scontrol_nodes.txt",
+    "sacctmgr_assoc.txt",
+    "sacctmgr_qos.txt",
+    "reservations.txt",
+    "siesta_version.txt",
+    "module_list.txt",
+    "module_avail_siesta.txt",
+    "srun_version.txt",
+    "srun_help.txt",
+    "hydra_version.txt",
+    "hydra_help.txt",
+    "sbatch_test_only.txt",
+    "exact_request.slurm"
+  ]
+}
+

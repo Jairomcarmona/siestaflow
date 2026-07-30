@@ -1,0 +1,75 @@
+{
+  "schema_version": "1.0",
+  "catalog_id": "YOLTLA_SIESTA_5_4_2_20260729",
+  "cluster": "Yoltla",
+  "scheduler": {
+    "implementation": "SLURM",
+    "observed_version": "23.02.3",
+    "submission_policy": "MANUAL_SBATCH_ONLY"
+  },
+  "runtime": {
+    "siesta_module": "siesta/5.4.2",
+    "python_module": "python/3.12",
+    "siesta_version": "5.4.2",
+    "parallelisation": "MPI",
+    "launcher": {
+      "kind": "hydra",
+      "command": ["mpiexec.hydra"],
+      "bootstrap": "ssh",
+      "fabric_uuid_environment": "FI_PSM3_UUID"
+    },
+    "environment": {
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "I_MPI_PIN": "1",
+      "I_MPI_PIN_DOMAIN": "core"
+    }
+  },
+  "profiles": {
+    "tt2d-64p": {
+      "nodes": 2,
+      "ntasks": 64,
+      "ntasks_per_node": 32,
+      "walltime": "2-00:00:00",
+      "traits": ["ttv4", "mem256"],
+      "evidence_status": "REMOTE_MULTI_NODE_SIESTA_EXECUTION_OBSERVED",
+      "evidence_job_ids": ["780169", "780240", "780330"]
+    },
+    "tt2d-80p": {
+      "nodes": 4,
+      "ntasks": 80,
+      "ntasks_per_node": 20,
+      "walltime": "2-00:00:00",
+      "traits": ["ttv3"],
+      "evidence_status": "SCHEDULER_PROFILE_OBSERVED_RUNTIME_NOT_YET_ACCEPTED"
+    },
+    "tt2d-100p": {
+      "nodes": 5,
+      "ntasks": 100,
+      "ntasks_per_node": 20,
+      "walltime": "2-00:00:00",
+      "traits": ["ttv3"],
+      "evidence_status": "SBATCH_TEST_ONLY_ACCEPTED_JOB_PENDING",
+      "evidence_job_ids": ["780348"]
+    },
+    "qz2d-128p": {
+      "nodes": 2,
+      "ntasks": 128,
+      "ntasks_per_node": 64,
+      "walltime": "2-00:00:00",
+      "traits": ["zen3", "mem512"],
+      "evidence_status": "SCHEDULER_ACCEPTED_RUNTIME_CHAIN_NOT_YET_VALIDATED",
+      "evidence_job_ids": ["779797", "779938"]
+    }
+  },
+  "evidence_scope": {
+    "source": "USER_RETURNED_YOLTLA_OUTPUTS_IN_CODEX_SESSION",
+    "observed_through": "2026-07-29",
+    "limitations": [
+      "tt2d-100p job 780348 was pending when recorded",
+      "qz2d-128p has not completed the corrected production chain",
+      "availability and priority remain dynamic scheduler facts"
+    ]
+  }
+}

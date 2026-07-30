@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0",
+  "gate_id": "F3B_KGRID_ACCEPTED",
+  "decision": "PENDING",
+  "accepted_by": null,
+  "accepted_at": null,
+  "evidence_sha256": {},
+  "scope": ["03c_basis"],
+  "selected_mesh_ry": null,
+  "selected_kgrid": null,
+  "criterion": "Two consecutive lateral grids reviewed; kz remains 1; SCF and Mn moments remain coherent."
+}
+

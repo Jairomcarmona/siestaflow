@@ -1,0 +1,1 @@
+{"synthetic":true,"expected_classification":"UNKNOWN_WARNING","expected_gate":"REVIEW","expected_fields":{"normal_termination":true},"forbidden_inferences":["scientific_validity","real_execution","exit_code"]}

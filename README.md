@@ -1,0 +1,37 @@
+# SIESTAFLOW
+
+SIESTAFLOW 0.2 is a declarative, evidence-oriented orchestrator for SIESTA
+campaigns in persistent SLURM allocations. It prepares self-contained packages
+locally; the user transfers and submits them manually. The controller itself
+lives only inside the allocation.
+
+Current engineering state: `V0_2_CONSOLIDATION_ALPHA`. The generic controller
+supports `srun` and the Yoltla-recommended
+`mpiexec.hydra -bootstrap ssh`, explicit multinode placement, concurrent
+allocation waves, dependency DAGs, hash-bound artifact transfers, gate tasks,
+controlled shutdown, resubmission and read-only progress reporting.
+
+The complete local suite passes. Real Yoltla evidence has validated the
+allocation-local execution pattern and Hydra runtime through standalone
+birnessite campaigns. The remaining acceptance boundary is execution of a
+package generated directly by the 0.2 CLI; this distinction is intentionally
+not hidden.
+
+Install for development and run the generic example:
+
+```powershell
+python -m pip install -e .
+python -m siestaflow.cli examples list --json
+python -m siestaflow.cli examples validate generic/minimal_siesta_smoke --json
+python -m siestaflow.cli examples run generic/minimal_siesta_smoke --campaign-id mesh_series --json
+python -m siestaflow.cli campaign progress PATH_TO_PACKAGE --json
+python -m siestaflow.cli remote controller-package campaign.json --output packages --json
+python -m pytest -q
+```
+
+The external package schema is documented in
+[USER_MANUAL.md](docs/user/USER_MANUAL.md), every implemented command in
+[CLI_REFERENCE.md](docs/user/CLI_REFERENCE.md), and Yoltla operational
+boundaries in [YOLTLA_RUNBOOK.md](docs/operations/YOLTLA_RUNBOOK.md).
+Scientific policy remains external data under `examples/`; the core never
+selects a functional, Hubbard U, magnetic state or convergence threshold.

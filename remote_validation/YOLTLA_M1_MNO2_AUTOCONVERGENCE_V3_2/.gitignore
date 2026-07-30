@@ -1,0 +1,7 @@
+runs/
+OUT.*
+ERROR.*
+slurm-*.out
+slurm-*.err
+__pycache__/
+*.pyc

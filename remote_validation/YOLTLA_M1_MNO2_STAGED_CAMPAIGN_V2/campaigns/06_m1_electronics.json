@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0",
+  "phase_id": "06_m1_electronics",
+  "campaign_id": "YOLTLA_M1_F6_ELECTRONICS",
+  "system_id": "M1_delta_MnO2_neutral_surface_control_v01",
+  "status": "BLOCKED_PARENT_AND_ANALYSIS_INPUTS_MISSING",
+  "required_gate": "F5_M1_GEOMETRY_ACCEPTED",
+  "reason": "DOS/PDOS and optional charge/map inputs must be created from the accepted relaxed M1 geometry under the selected F3/F4 policy.",
+  "minimum_runs": 1,
+  "maximum_runs": 3
+}
+

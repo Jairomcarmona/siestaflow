@@ -1,0 +1,122 @@
+{
+  "calculation": {
+    "bands": false,
+    "calculation_type": "single_point",
+    "campaign": false,
+    "charge": 0,
+    "dos": false,
+    "execution_purpose": "TECHNICAL_REMOTE_SIESTA_SMOKE",
+    "geometry_optimization": false,
+    "molecular_dynamics": false,
+    "number_of_atoms": 50,
+    "number_of_species": 1,
+    "optical_properties": false,
+    "pdos": false,
+    "production_calculation": false,
+    "restart": false,
+    "scientific_calculation_performed": false,
+    "scientific_interpretation_allowed": false,
+    "species": [
+      "C"
+    ],
+    "spin_polarized": false,
+    "system": "SURF_Gr5x5_clean_v01"
+  },
+  "fdf": {
+    "authorized_technical_change": {
+      "MD.Steps": {
+        "from": "300",
+        "to": "0"
+      }
+    },
+    "numerical_parameter_origin": "APPROVED_PROJECT_FDF_SEED",
+    "packaged_path": "input/smoke.fdf",
+    "packaged_sha256": "386c83e2f0a9cb3cfb0b0f5de0d02626af9e594bd353c295af1d571f7887aa1e",
+    "renderer": "SiestaEngineAdapter+FDFRenderer",
+    "source_repository_path": "examples/reference_projects/graphene_surf_gr5x5/systems/SURF_Gr5x5_clean_v01.seed.fdf",
+    "source_sha256": "80d14fee65e32bd6e70ed093a096eff19ddd36e4c7378da017f1c9dad9717176",
+    "validator": "SiestaInputValidator",
+    "validator_status": "PASS"
+  },
+  "files": {
+    "EXACT_COMMANDS.md": "f28a4a3459f5ac4647f04eab5e44156d8e9a7c0652b1ff7ae95c2d88d228ec0e",
+    "PSEUDOPOTENTIAL_ATTRIBUTION.md": "ddcc8964bb45974710d8aec15fdeaacc6439b6aa46dfa033b00f26a7db52f393",
+    "README_RUN.md": "24032897b8835c85d5c0664cfedbf4d84c1d623ce5c27ede8f57463e1f972d35",
+    "geometry/SURF_Gr5x5_clean_v01.xyz": "870d92a224662755c3d10ad9d45c4b212a6b4c23f3966558c05cd929cea5c9fb",
+    "input/smoke.fdf": "386c83e2f0a9cb3cfb0b0f5de0d02626af9e594bd353c295af1d571f7887aa1e",
+    "prepare_smoke_job.py": "d704623b35cf1041cbf45a216e4a5d20706850eb9e3b4966ccbd7ea47e299be8",
+    "pseudopotentials/C.psml": "ce0f6a7fd43e70d44018e94286d934e9caadc005e95da87500d85fbe501d4c41",
+    "scripts/collect_results.py": "9c99a00ca0255eda117f199b04f806d182ce442c62ecf8a21f1065d988efc921",
+    "scripts/inspect_job.sh": "9f96c899a8f2f22fe0d91e84394cb87a3e3b8e53f204fe267410d4a0352c983d",
+    "scripts/parse_siesta_result.py": "c9838bfbe284195059437173274801e256dad0a010209a971838175af70ab773",
+    "scripts/run_login_discovery.sh": "c10f2db86ba1ad9ffe293dba9802840f5fe1d45720e4acb2c59095b1c33da475",
+    "scripts/run_siesta_smoke.sh": "e5d50fd919e9b52e8edd2862503cae1b05c76f6dc69867a7d7fa7e06f70fafeb",
+    "scripts/runtime_parser/siestaflow/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "scripts/runtime_parser/siestaflow/engines/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "scripts/runtime_parser/siestaflow/engines/siesta/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "scripts/runtime_parser/siestaflow/engines/siesta/models.py": "565052e1ef64ffba9ed117a2ea5d330488c31066880b3512cceea8077debb0c9",
+    "scripts/runtime_parser/siestaflow/engines/siesta/output_parser.py": "77a24ff96190918b45c3fc9d97ac15e1d2a7bfe96cddb49e71de08945d0b7999",
+    "scripts/runtime_parser/siestaflow/models.py": "5ef4d1aa55c2be0f4904783ab80f12ebab4f865508caed1f08c98bdfda86e0b8",
+    "verify_package.py": "41bb1b389b7814cd136c7e113c7ce99adee2f1396c4c5a27b2a5c1a4bd1575f5"
+  },
+  "geometry": {
+    "atom_order_hash": "5bcc0488cfabaa47b1373039ac3580eb85db8651d5afe9f7255f1d80d428603d",
+    "atoms": 50,
+    "coordinate_semantic_hash": "5c3ebcfa7351d5db6fd5edfb4cc1304760fd49075c2f7c1f74c48f74c3fefeec",
+    "elements": {
+      "C": 50
+    },
+    "identity_status": "GEOMETRY_BYTE_IDENTICAL",
+    "lattice_semantic_hash": "867be32df02a714d099d4bd347d5b41785bc1e7ef95423f87ee97b0881307be5",
+    "origin": "REAL_VALIDATED_PROJECT_GEOMETRY",
+    "packaged_path": "geometry/SURF_Gr5x5_clean_v01.xyz",
+    "packaged_sha256": "870d92a224662755c3d10ad9d45c4b212a6b4c23f3966558c05cd929cea5c9fb",
+    "source_repository_path": "examples/reference_projects/graphene_surf_gr5x5/systems/SURF_Gr5x5_clean_v01.xyz",
+    "source_sha256": "870d92a224662755c3d10ad9d45c4b212a6b4c23f3966558c05cd929cea5c9fb",
+    "system_id": "SURF_Gr5x5_clean_v01"
+  },
+  "package_id": "M3B1_SURF_GR5X5_REAL_SIESTA_SMOKE",
+  "package_type": "REAL_SIESTA_TECHNICAL_SMOKE",
+  "pseudopotential": {
+    "atomic_number": 6,
+    "element": "C",
+    "filename": "C.psml",
+    "format": "psml",
+    "license_or_redistribution_status": "CC-BY-4.0",
+    "packaged_path": "pseudopotentials/C.psml",
+    "packaged_sha256": "ce0f6a7fd43e70d44018e94286d934e9caadc005e95da87500d85fbe501d4c41",
+    "provenance": "PseudoDojo nc-sr-05 PBE stringent PSML; ONCVPSP metadata audited by T04A2/T06F",
+    "psml_metadata": {
+      "atomic_number": 6,
+      "creation_date": "2017-10-31",
+      "creator": "ONCVPSP-3.3.0+psml-3.3.0-73 (scalar-relativistic)",
+      "element": "C"
+    },
+    "redistribution_status": "PERMITTED_WITH_ATTRIBUTION",
+    "source_repository_path": "examples/reference_projects/graphene_surf_gr5x5/pseudopotentials/C.psml",
+    "source_sha256": "ce0f6a7fd43e70d44018e94286d934e9caadc005e95da87500d85fbe501d4c41"
+  },
+  "remote_execution_mode": "HUMAN_OPERATED_EVIDENCE_BOUND",
+  "runtime_gate": {
+    "generated_slurm_distributed": false,
+    "preselected_launcher": null,
+    "preselected_siesta_executable": null,
+    "state": "REMOTE_DISCOVERY_REQUIRED"
+  },
+  "scheduler_profile": {
+    "account": "vini",
+    "cpus_per_task": 1,
+    "launcher_command": null,
+    "memory": null,
+    "module_commands": [],
+    "name": "yoltla-m3b1-runtime-pending",
+    "nodes": 1,
+    "ntasks": 20,
+    "partition": "q1h-20p",
+    "qos": "normal",
+    "signal": "B:USR1@60",
+    "verified_for_siesta": false,
+    "walltime": "00:10:00"
+  },
+  "schema_version": "2.0"
+}

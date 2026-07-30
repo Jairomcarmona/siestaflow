@@ -1,0 +1,45 @@
+{
+  "contains_fdf": false,
+  "contains_geometry": false,
+  "contains_pseudopotentials": false,
+  "expected_pseudopotentials": {
+    "distribution_status": "EXTERNAL_NOT_PACKAGED",
+    "entries": {
+      "Mn.psml": "0b97ccd71456e4a7b28316f78ddb30bb1f6a82d9aba386c7fde78090d31c0dc6",
+      "O.psml": "224ded5c59176d9bcb76d19b7a4a68a48d5dffabf8b262f64d5760250e87c35e"
+    },
+    "status_labels": {
+      "mismatch": "PSEUDOS_MN_O_HASH_MISMATCH",
+      "missing": "PSEUDOS_MN_O_MISSING",
+      "review": "PSEUDOS_MN_O_REVIEW",
+      "verified": "PSEUDOS_MN_O_HASH_VERIFIED"
+    }
+  },
+  "files": {
+    "EXACT_COMMANDS.md": "f4a4c637ff75e179016149ccd90aac9b59d7795f85d9abdfaa3ec2749d62e864",
+    "PROBE_CHECKLIST.md": "e413b365f911599d9ad78f96b2dae4ccad92bef8af270ebc2ba36fa89f351a2c",
+    "README_RUN.md": "2031bfa76e959aaf62c74567dca2746782ca44452658d145e28dbb7847398f22",
+    "collect_probe_results.sh": "a0244c6540d814c6092479227f52ad92f3e207b3b05b082ae131f651c7b7e1ea",
+    "expected_evidence.json": "f0004a4d5c57decfcc30aef680c52cde3c79e4aa96646a787506b57ace2b447d",
+    "inspect_probe_job.sh": "2d4d9833d351f208413221a5d9c7a427569218a302a39784ff3430f33cc61899",
+    "prepare_scheduler_probe.py": "efd301d2b97c9a6d1e274c75761bae226ae9486896bf087fc9a5de30aa3ff643",
+    "run_login_probe.sh": "625e3eef5dafb3976a187bc0ed289dbe88737baa7e93c43414e871212b367e77",
+    "scripts/build_login_summary.py": "33a25e73e42f3ff0cc80b68bfdd8cb0b3e5553ca4b3ee0b85104268e9a86d709",
+    "scripts/collect_bundle.py": "9d94e92aa5a89ff4a8544270233914f95c66f96775fd5b867282193f23407784",
+    "scripts/probe_common.sh": "ddbb4f2e7471a570c8f66242215066c72c229f8f32eb32bcc76756a55285f0d2",
+    "scripts/scheduler_resolution.py": "b89f3a007e1494ec1a1a9e5ed22f8a880f278cecfc0cd1f890cb6715667ab575",
+    "scripts/validate_embedded_python.py": "214ee87f23a8e669f22db56cf4b1826ae7563bff6c471c9e2e70f70c4298fcf6",
+    "scripts/verify_pseudos.py": "ca6231000e893859a34d29287f9f5a0039bc6cde2418ec0e77885457f2f5836a",
+    "submit_environment_probe.slurm": "a54095a3d6922ea0593c7a8193d2dfa1229f8e1398304d4bf4b5fdd6016a13cc",
+    "verify_local_package.py": "6bcd939a1d7917ec8251320f445ed334509c63326910abe0b3a1939c328d5a40"
+  },
+  "package_revision": 3,
+  "package_type": "YOLTLA_REMOTE_ENVIRONMENT_CHARACTERIZATION",
+  "probe_id": "M3_YOLTLA_ENVIRONMENT_PROBE",
+  "remote_execution_mode": "HUMAN_OPERATED_ONLY",
+  "reproducibility_epoch": "M3_STATIC_V3",
+  "scheduler_selection_policy": "UNIQUE_COMPATIBLE_DEFAULT_PARTITION_OR_EVIDENCE_BOUND_HUMAN_SELECTION",
+  "schema_version": "1.0",
+  "scientific_calculation_permitted": false,
+  "supersedes": "M3_STATIC_V2"
+}

@@ -1,0 +1,11 @@
+{
+  "credentials_present": false,
+  "scientific_calculation_performed": false,
+  "source": "SANITIZED_REAL_REMOTE_EVIDENCE",
+  "account": "vini",
+  "partition": "q1h-20p",
+  "qos": "normal",
+  "association_scope": "ACCOUNT_WIDE_ASSOCIATION",
+  "candidate_partitions": ["q1h-20p"],
+  "selection_policy": "UNIQUE_COMPATIBLE_DEFAULT_PARTITION"
+}

@@ -1,0 +1,12 @@
+schema_version: "1.0"
+project_id: graphene_surf_gr5x5_reference
+project_status: EXTERNAL_REFERENCE_PACKAGE
+core_specific_logic: false
+systems:
+  - system_id: SURF_Gr5x5_clean_v01
+    geometry: systems/SURF_Gr5x5_clean_v01.xyz
+    approved_fdf_seed: systems/SURF_Gr5x5_clean_v01.seed.fdf
+    geometry_status: validated
+    upstream_validation: T02_T02R_PASS
+pseudopotential_manifest: pseudopotentials/manifest.yaml
+real_smoke_manifest: smokes/SURF_Gr5x5_clean_v01.real_smoke.json

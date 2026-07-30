@@ -1,0 +1,16 @@
+{
+  "credentials_present": false,
+  "scientific_calculation_performed": false,
+  "source": "SANITIZED_REAL_REMOTE_EVIDENCE",
+  "association": {
+    "account": "vini",
+    "partition": null,
+    "qos": "normal",
+    "scope": "ACCOUNT_WIDE_ASSOCIATION",
+    "evidence_status": "OBSERVED"
+  },
+  "visible_partition": {
+    "name": "q1h-20p",
+    "default": true
+  }
+}

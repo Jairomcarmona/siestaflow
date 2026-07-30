@@ -1,0 +1,51 @@
+{
+  "contains_fdf": false,
+  "contains_geometry": false,
+  "contains_pseudopotentials": false,
+  "expected_pseudopotentials": {
+    "distribution_status": "EXTERNAL_NOT_PACKAGED",
+    "entries": {
+      "Mn.psml": "0b97ccd71456e4a7b28316f78ddb30bb1f6a82d9aba386c7fde78090d31c0dc6",
+      "O.psml": "224ded5c59176d9bcb76d19b7a4a68a48d5dffabf8b262f64d5760250e87c35e"
+    },
+    "status_labels": {
+      "mismatch": "PSEUDOS_MN_O_HASH_MISMATCH",
+      "missing": "PSEUDOS_MN_O_MISSING",
+      "review": "PSEUDOS_MN_O_REVIEW",
+      "verified": "PSEUDOS_MN_O_HASH_VERIFIED"
+    }
+  },
+  "files": {
+    "EXACT_COMMANDS.md": "1ce5ebbb70059b81756ca03166cfe87ee59e5f77f4aea5708e043118aede39c2",
+    "PROBE_CHECKLIST.md": "290480c3ae4af0b6794e8099c348ebd408261983ac441960facf1c77aaf3f18d",
+    "README_RUN.md": "9dd00946986ea6310e01eda2af357a273468daf5950a95871b56a2f7f84894e4",
+    "collect_probe_results.sh": "a0244c6540d814c6092479227f52ad92f3e207b3b05b082ae131f651c7b7e1ea",
+    "expected_evidence.json": "3f295500b4b0a1d5a5cc9478c2d7c2ea28c91930782fc4cfa4986bb54aa217fc",
+    "inspect_probe_job.sh": "2d4d9833d351f208413221a5d9c7a427569218a302a39784ff3430f33cc61899",
+    "prepare_scheduler_probe.py": "ec7d59e70109a349123047446759d017a40187a8618c4cb01b04fd28b9923b43",
+    "run_login_probe.sh": "aad827225f342fa08b90d4856b83efbb07f99714c7da321e395bc3787a811ab2",
+    "scripts/build_login_summary.py": "c713370abaead221225a3fa90d55d7a9c77b1fb06b8146b42e40452d58a8f3e4",
+    "scripts/collect_bundle.py": "49a7ee356bbcc76296db5aa79caaedae4eefb55abaa4f275b01e7bfcb1a59883",
+    "scripts/probe_common.sh": "ddbb4f2e7471a570c8f66242215066c72c229f8f32eb32bcc76756a55285f0d2",
+    "scripts/validate_embedded_python.py": "214ee87f23a8e669f22db56cf4b1826ae7563bff6c471c9e2e70f70c4298fcf6",
+    "scripts/verify_pseudos.py": "ca6231000e893859a34d29287f9f5a0039bc6cde2418ec0e77885457f2f5836a",
+    "submit_environment_probe.slurm": "a54095a3d6922ea0593c7a8193d2dfa1229f8e1398304d4bf4b5fdd6016a13cc",
+    "verify_local_package.py": "9b68b89abc56fdc3316191cf56c72d1e7a2e586e88c7347580c9061d8ff98e34"
+  },
+  "non_siesta_candidate_profile": {
+    "account": "vini",
+    "launcher": "mpiexec.hydra",
+    "nodes": 1,
+    "ntasks": 20,
+    "partition": "q1d-20p",
+    "status": "NON_SIESTA_CANDIDATE_PROFILE_DO_NOT_ADOPT"
+  },
+  "package_revision": 2,
+  "package_type": "YOLTLA_REMOTE_ENVIRONMENT_CHARACTERIZATION",
+  "probe_id": "M3_YOLTLA_ENVIRONMENT_PROBE",
+  "remote_execution_mode": "HUMAN_OPERATED_ONLY",
+  "reproducibility_epoch": "M3_STATIC_V2",
+  "schema_version": "1.0",
+  "scientific_calculation_permitted": false,
+  "supersedes": "M3_STATIC_V1"
+}

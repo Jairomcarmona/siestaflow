@@ -1,0 +1,169 @@
+# NO_PRODUCTION
+# NO_HPC
+# NO_AUTO_RUN
+# PILOT_ONLY
+# M1_ONLY
+# DO_NOT_SUBMIT
+# DO_NOT_EXECUTE_AUTOMATICALLY
+# HUMAN_REVIEW_REQUIRED
+# U0_CONTROL_ONLY
+# MAGNETIC_ORDER_NOT_FINAL
+# NOT_FOR_PUBLICATION
+# NOT_FOR_ENERGY_INTERPRETATION
+#
+# system_id=M1_delta_MnO2_neutral_surface_control_v01
+# candidate_id=M1_U0_FM
+# production_status=NONPRODUCTION_CONTROL_ONLY
+# geometry_source=structures/parents/M1_delta_MnO2_neutral_surface_control_v01.xyz
+# geometry_policy=cell_coordinates_species_and_atom_order_preserved
+# pseudo_family=ONCVPSP/PBE/scalar-relativistic/PSML
+# pseudo_generation_xc=PBE
+# productive_total_energy_xc=vdW-DF2/LMKLL
+# Mn.psml audited
+# O.psml audited
+# U_state=NONPRODUCTION_CONTROL_ONLY
+# U0_CONTROL_WITHOUT_DFTU_BLOCK
+# DFTU_BLOCK_DEFERRED
+# NO_PRODUCTIVE_U_SELECTED
+# magnetic_order=FM_INITIAL_GUESS_ONLY
+# initial_spin_token=manual_supported_symbolic_maximum_positive
+# initial_spin_token_is_not_a_productive_magnetic_moment
+# NO_MAGNETIC_GROUND_STATE_CLAIM
+# dipole_policy=inactive_for_initial_M1_pilot
+# M1_clean_neutral_control
+# constraints_policy=not_applicable_for_initial_single_point_sanity
+# run_policy=static_single_point_sanity_only_MD_Steps_0
+# numeric_seed_status=pilot_not_convergence_tested
+
+SystemName M1 delta MnO2 neutral U0 FM pilot control
+SystemLabel M1_U0_FM_PILOT
+
+NumberOfAtoms 54
+NumberOfSpecies 2
+
+%block ChemicalSpeciesLabel
+  1 25 Mn
+  2  8 O
+%endblock ChemicalSpeciesLabel
+
+LatticeConstant 1.0 Ang
+%block LatticeVectors
+  17.11200000  0.00000000  0.00000000
+  -4.27800000  7.40971335  0.00000000
+   0.00000000  0.00000000 25.00000000
+%endblock LatticeVectors
+
+AtomicCoordinatesFormat Ang
+%block AtomicCoordinatesAndAtomicSpecies
+   0.00000000 0.00000000 12.50000000 1
+   0.00000000 1.64660297 13.44800000 2
+   1.42600000 0.82330148 11.55200000 2
+  -1.42600000 2.46990445 12.50000000 1
+  -1.42600000 4.11650742 13.44800000 2
+  -0.00000000 3.29320594 11.55200000 2
+  -2.85200000 4.93980890 12.50000000 1
+  -2.85200000 6.58641187 13.44800000 2
+  -1.42600000 5.76311039 11.55200000 2
+   2.85200000 0.00000000 12.50000000 1
+   2.85200000 1.64660297 13.44800000 2
+   4.27800000 0.82330148 11.55200000 2
+   1.42600000 2.46990445 12.50000000 1
+   1.42600000 4.11650742 13.44800000 2
+   2.85200000 3.29320594 11.55200000 2
+   0.00000000 4.93980890 12.50000000 1
+   0.00000000 6.58641187 13.44800000 2
+   1.42600000 5.76311039 11.55200000 2
+   5.70400000 0.00000000 12.50000000 1
+   5.70400000 1.64660297 13.44800000 2
+   7.13000000 0.82330148 11.55200000 2
+   4.27800000 2.46990445 12.50000000 1
+   4.27800000 4.11650742 13.44800000 2
+   5.70400000 3.29320594 11.55200000 2
+   2.85200000 4.93980890 12.50000000 1
+   2.85200000 6.58641187 13.44800000 2
+   4.27800000 5.76311039 11.55200000 2
+   8.55600000 0.00000000 12.50000000 1
+   8.55600000 1.64660297 13.44800000 2
+   9.98200000 0.82330148 11.55200000 2
+   7.13000000 2.46990445 12.50000000 1
+   7.13000000 4.11650742 13.44800000 2
+   8.55600000 3.29320594 11.55200000 2
+   5.70400000 4.93980890 12.50000000 1
+   5.70400000 6.58641187 13.44800000 2
+   7.13000000 5.76311039 11.55200000 2
+  11.40800000 0.00000000 12.50000000 1
+  11.40800000 1.64660297 13.44800000 2
+  12.83400000 0.82330148 11.55200000 2
+   9.98200000 2.46990445 12.50000000 1
+   9.98200000 4.11650742 13.44800000 2
+  11.40800000 3.29320594 11.55200000 2
+   8.55600000 4.93980890 12.50000000 1
+   8.55600000 6.58641187 13.44800000 2
+   9.98200000 5.76311039 11.55200000 2
+  14.26000000 0.00000000 12.50000000 1
+  14.26000000 1.64660297 13.44800000 2
+  15.68600000 0.82330148 11.55200000 2
+  12.83400000 2.46990445 12.50000000 1
+  12.83400000 4.11650742 13.44800000 2
+  14.26000000 3.29320594 11.55200000 2
+  11.40800000 4.93980890 12.50000000 1
+  11.40800000 6.58641187 13.44800000 2
+  12.83400000 5.76311039 11.55200000 2
+%endblock AtomicCoordinatesAndAtomicSpecies
+
+# provenance=T04A2_C1_seed_value; pilot only; convergence testing required
+PAO.BasisSize DZP
+PAO.EnergyShift 200 meV
+PAO.SplitNorm 0.15
+Mesh.Cutoff 250 Ry
+
+# productive total-energy route fixed by T06N
+XC.Functional VDW
+XC.Authors LMKLL
+DFTD3 false
+DFTD3.UseXCDefaults false
+
+Spin polarized
+%block DM.InitSpin
+   1 +
+   4 +
+   7 +
+  10 +
+  13 +
+  16 +
+  19 +
+  22 +
+  25 +
+  28 +
+  31 +
+  34 +
+  37 +
+  40 +
+  43 +
+  46 +
+  49 +
+  52 +
+%endblock DM.InitSpin
+
+NetCharge 0
+Slab.DipoleCorrection false
+
+# provenance=T04A2_C1_seed_value; pilot only
+ElectronicTemperature 300 K
+MaxSCFIterations 1000
+SCF.Mixer.Method Pulay
+SCF.Mixer.Weight 0.02
+SCF.Mixer.History 3
+SCF.DM.Tolerance 1.d-4
+
+# provenance=T04A2_C1_seed_value; slab seed; kz fixed to 1
+%block kgrid.MonkhorstPack
+  3 0 0 0.0
+  0 3 0 0.0
+  0 0 1 0.0
+%endblock kgrid.MonkhorstPack
+
+# provenance=SIESTA_5.4.2_manual; zero geometry steps means no relaxation
+MD.TypeOfRun CG
+MD.Steps 0
+MD.VariableCell false

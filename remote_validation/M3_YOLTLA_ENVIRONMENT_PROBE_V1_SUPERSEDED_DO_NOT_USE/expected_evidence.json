@@ -1,0 +1,16 @@
+{
+  "acceptance_requires_real_evidence": true,
+  "probe_id": "M3_YOLTLA_ENVIRONMENT_PROBE",
+  "required_directories": [
+    "login_probe",
+    "scheduler_probe",
+    "siesta_discovery",
+    "mpi_discovery",
+    "slurm_accounting",
+    "filesystem",
+    "pseudo_verification",
+    "stdout",
+    "stderr"
+  ],
+  "scientific_calculation_performed": false
+}

@@ -1,0 +1,40 @@
+{
+  "schema_version": "1.0",
+  "profile_id": "yoltla_observed_20c_1h",
+  "profile_status": "REMOTE_PREFLIGHT_REQUIRED_NOT_PRODUCTION_VERIFIED",
+  "slurm": {
+    "partition": "q1h-20p",
+    "account": "vini",
+    "qos": "normal"
+  },
+  "resources": {
+    "nodes": 1,
+    "total_cpus": 20,
+    "memory": "32G",
+    "walltime": "01:00:00",
+    "max_parallel_steps": 1,
+    "shutdown_margin_seconds": 300,
+    "termination_grace_seconds": 60
+  },
+  "runtime": {
+    "module_commands": [],
+    "siesta_executable": "siesta",
+    "required_siesta_version": "5.4.2",
+    "srun_command": ["srun"],
+    "srun_arguments": [],
+    "exclusive": true,
+    "environment": {
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1"
+    }
+  },
+  "task_defaults": {
+    "mpi_processes": 20,
+    "cpus_per_process": 1,
+    "estimated_runtime_seconds": 2700,
+    "max_attempts": 3,
+    "require_scf_converged": true
+  },
+  "evidence_note": "q1h-20p, account vini, qos normal, one node, 20 CPU and MaxTime 01:00:00 were observed in the technical probe; 32G and scientific fitness still require preflight"
+}
+

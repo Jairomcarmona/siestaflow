@@ -1,0 +1,1 @@
+PartitionName=q1h-20p AllowAccounts=ALL AllowQos=ALL Default=YES State=UP MinNodes=1 MaxNodes=1 MaxTime=01:00:00

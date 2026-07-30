@@ -1,0 +1,58 @@
+{
+  "schema_version": "2.0",
+  "bundle_id": "01_sanity_03a_mesh",
+  "campaign_id": "YOLTLA_M1_F1_F3A_INITIAL_BUNDLE",
+  "system_id": "M1_delta_MnO2_neutral_surface_control_v01",
+  "status": "PREPARED_WITH_AUTOMATIC_TECHNICAL_TRANSITION",
+  "required_gates": [
+    "F0_EXECUTION_AUTHORIZATION",
+    "RESOURCE_LAYOUT_ACCEPTED"
+  ],
+  "base_fdf": "inputs/base/M1_U0_FM.pilot.NO_PRODUCTION.fdf",
+  "tasks": [
+    {
+      "task_id": "m1-u0-fm-sanity",
+      "system_label": "M1_U0_FM_SANITY",
+      "mesh_ry": 250,
+      "kgrid": [3, 3, 1],
+      "depends_on": [],
+      "postcondition": "m1_sanity_automatic_technical_v1"
+    },
+    {
+      "task_id": "m1-mesh-200ry",
+      "system_label": "M1_MESH_200RY",
+      "mesh_ry": 200,
+      "kgrid": [3, 3, 1],
+      "depends_on": ["m1-u0-fm-sanity"]
+    },
+    {
+      "task_id": "m1-mesh-250ry",
+      "system_label": "M1_MESH_250RY",
+      "mesh_ry": 250,
+      "kgrid": [3, 3, 1],
+      "depends_on": ["m1-u0-fm-sanity"]
+    },
+    {
+      "task_id": "m1-mesh-300ry",
+      "system_label": "M1_MESH_300RY",
+      "mesh_ry": 300,
+      "kgrid": [3, 3, 1],
+      "depends_on": ["m1-u0-fm-sanity"]
+    },
+    {
+      "task_id": "m1-mesh-350ry",
+      "system_label": "M1_MESH_350RY",
+      "mesh_ry": 350,
+      "kgrid": [3, 3, 1],
+      "depends_on": ["m1-u0-fm-sanity"]
+    }
+  ],
+  "automatic_transition_scope": [
+    "input/output identity",
+    "54 atoms Mn18O36 and two species",
+    "VDW/LMKLL, D3 off, charge 0, polarized spin, no DFTU",
+    "MD.Steps 0, no geometry update, SCF state and warning capture"
+  ],
+  "post_bundle_gate": "F3A_MESH_ACCEPTED",
+  "automatic_mesh_selection": false
+}

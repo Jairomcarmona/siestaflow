@@ -1,0 +1,7 @@
+{
+  "schema_version": "1.0",
+  "entries": [
+    {"species":"X","filename":"X.psml","format":"psml","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","source":"external","xc_family":null,"relativity":null,"distribution_status":"EXTERNAL_NOT_PACKAGED","location_status":"EXTERNAL_NOT_PACKAGED"},
+    {"species":"Y","filename":"Y.psml","format":"psml","sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","source":"external","xc_family":null,"relativity":null,"distribution_status":"EXTERNAL_NOT_PACKAGED","location_status":"EXTERNAL_NOT_PACKAGED"}
+  ]
+}

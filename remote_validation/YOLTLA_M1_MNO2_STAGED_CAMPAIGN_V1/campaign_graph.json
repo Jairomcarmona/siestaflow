@@ -1,0 +1,86 @@
+{
+  "schema_version": "1.0",
+  "package_id": "YOLTLA_M1_MNO2_STAGED_CAMPAIGN_V1",
+  "execution_policy": {
+    "controller_location": "inside_slurm_batch_allocation",
+    "siesta_launcher": "srun --exclusive",
+    "parallel_steps": 1,
+    "task_order": "declared_order",
+    "automatic_parameter_selection": false,
+    "automatic_sbatch": false
+  },
+  "phases": [
+    {
+      "id": "01_sanity",
+      "depends_on": [],
+      "advance_gate": "F2_SANITY_ACCEPTED",
+      "runs": "1",
+      "status": "PREPARED"
+    },
+    {
+      "id": "03a_mesh",
+      "depends_on": ["F2_SANITY_ACCEPTED"],
+      "advance_gate": "F3A_MESH_ACCEPTED",
+      "runs": "4",
+      "status": "PREPARED"
+    },
+    {
+      "id": "03b_kgrid",
+      "depends_on": ["F3A_MESH_ACCEPTED"],
+      "advance_gate": "F3B_KGRID_ACCEPTED",
+      "runs": "3_or_4",
+      "status": "PREPARED_DYNAMIC"
+    },
+    {
+      "id": "03c_basis",
+      "depends_on": ["F3B_KGRID_ACCEPTED"],
+      "advance_gate": "F3_NUMERICAL_POLICY_SIGNED",
+      "runs": "1_or_2",
+      "status": "BLOCKED_STRICTER_BASIS_UNDEFINED"
+    },
+    {
+      "id": "04_u_spin",
+      "depends_on": ["F3_NUMERICAL_POLICY_SIGNED"],
+      "advance_gate": "F4_U_SPIN_POLICY_SIGNED",
+      "runs": "3_to_5",
+      "status": "BLOCKED_EXECUTABLE_DFTU_POLICY_UNDEFINED"
+    },
+    {
+      "id": "05_m1_relax",
+      "depends_on": ["F4_U_SPIN_POLICY_SIGNED"],
+      "advance_gate": "F5_M1_GEOMETRY_ACCEPTED",
+      "runs": "1_to_3",
+      "status": "BLOCKED_RELAXATION_POLICY_UNDEFINED"
+    },
+    {
+      "id": "06_m1_electronics",
+      "depends_on": ["F5_M1_GEOMETRY_ACCEPTED"],
+      "advance_gate": "F6_M1_ELECTRONICS_ACCEPTED",
+      "runs": "1_to_3",
+      "status": "BLOCKED_PARENT_AND_ANALYSIS_INPUTS_MISSING"
+    },
+    {
+      "id": "07a_m1_ca8w",
+      "depends_on": [
+        "F6_M1_ELECTRONICS_ACCEPTED",
+        "CA8W_PARENT_GEOMETRY_ACCEPTED",
+        "F7_CHARGE_CELL_POLICY_SIGNED"
+      ],
+      "advance_gate": "F7A_M1_CA8W_GEOMETRY_ACCEPTED",
+      "runs": "2_to_3",
+      "status": "BLOCKED_COMPLEX_FDF_AND_POLICIES_MISSING"
+    },
+    {
+      "id": "07b_m1_mg6w",
+      "depends_on": [
+        "F6_M1_ELECTRONICS_ACCEPTED",
+        "MG6W_PARENT_GEOMETRY_ACCEPTED",
+        "F7_CHARGE_CELL_POLICY_SIGNED"
+      ],
+      "advance_gate": "F7B_M1_MG6W_GEOMETRY_ACCEPTED",
+      "runs": "2_to_3",
+      "status": "BLOCKED_COMPLEX_FDF_AND_POLICIES_MISSING"
+    }
+  ]
+}
+

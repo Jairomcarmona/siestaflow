@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "gate_id": "F4_U_SPIN_POLICY_SIGNED",
+  "decision": "PENDING",
+  "accepted_by": null,
+  "accepted_at": null,
+  "evidence_sha256": {},
+  "scope": ["05_m1_relax"],
+  "pilot_u_ev": null,
+  "pilot_spin_pattern": null,
+  "dftu_projector_policy": null,
+  "claim_limit": "Pilot policy only; not a global magnetic ground-state claim."
+}
+

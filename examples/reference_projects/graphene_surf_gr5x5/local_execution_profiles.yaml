@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "profiles": {
+    "local_serial": {
+      "launcher": "direct",
+      "executable": "~/.local/siesta-5.4.2-serial/bin/siesta",
+      "tasks": 1,
+      "environment": {
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1"
+      }
+    },
+    "local_openmpi_2": {
+      "launcher": "mpirun",
+      "executable": "~/.local/siesta-5.4.2-openmpi/bin/siesta",
+      "tasks": 2,
+      "environment": {
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1"
+      }
+    },
+    "local_openmpi_4": {
+      "launcher": "mpirun",
+      "executable": "~/.local/siesta-5.4.2-openmpi/bin/siesta",
+      "tasks": 4,
+      "environment": {
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1"
+      }
+    }
+  }
+}

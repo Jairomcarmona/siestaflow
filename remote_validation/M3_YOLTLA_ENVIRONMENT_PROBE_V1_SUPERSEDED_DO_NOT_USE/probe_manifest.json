@@ -1,0 +1,40 @@
+{
+  "contains_fdf": false,
+  "contains_geometry": false,
+  "contains_pseudopotentials": false,
+  "expected_pseudopotentials": {
+    "Mn.psml": "0b97ccd71456e4a7b28316f78ddb30bb1f6a82d9aba386c7fde78090d31c0dc6",
+    "O.psml": "224ded5c59176d9bcb76d19b7a4a68a48d5dffabf8b262f64d5760250e87c35e",
+    "distribution_status": "EXTERNAL_NOT_PACKAGED"
+  },
+  "files": {
+    "EXACT_COMMANDS.md": "a4496b5ee9955eb6762254f617debc03bdf6296f3d40330c2648a90cd2168575",
+    "PROBE_CHECKLIST.md": "b97af493850ed8105b83e3feb0619cb9d9ea4e61732b85519c040a3c8eea8f85",
+    "README_RUN.md": "d1dfe5d446bc667d4e293f70f811493c3f890d3c477873c9a3409f357e2260e1",
+    "collect_probe_results.sh": "99f7acccb1871a1d0573b840986e29c3f25170fbe5ec9cec1b877e04c80365b1",
+    "expected_evidence.json": "99974d16701f9f32bc6be7a2e9cba6a84616686d4021ca655c1d3a2e63d1cec4",
+    "inspect_probe_job.sh": "4ef3f6bde6c2a4e0da39ef3cc8e17ee965255e98d2d3b2d8b5421afccdfe6706",
+    "prepare_scheduler_probe.py": "511077c97aa03e8cf19f7c0aa5658e550bbfb03db6f7449207450ae0aad0afe9",
+    "run_login_probe.sh": "aad827225f342fa08b90d4856b83efbb07f99714c7da321e395bc3787a811ab2",
+    "scripts/build_login_summary.py": "c713370abaead221225a3fa90d55d7a9c77b1fb06b8146b42e40452d58a8f3e4",
+    "scripts/collect_bundle.py": "7b973201ad71be578d9eee66e8704b9c438eb89d0d52bc43e2c9588dc3326005",
+    "scripts/probe_common.sh": "ec0d6b61124940f50d7479399003907f89195e5226ec8a4069de61a6d894587f",
+    "scripts/verify_pseudos.py": "0dfcbe9ac35c10b3875fd85be9839169fb6b4d5d6c26c7fc7228127e074d5164",
+    "submit_environment_probe.slurm": "a54095a3d6922ea0593c7a8193d2dfa1229f8e1398304d4bf4b5fdd6016a13cc",
+    "verify_local_package.py": "ad1ab6e76e467f594d1f6d4db982d2c6e7d3f937735f2f346cc08ac032fad6e0"
+  },
+  "non_siesta_candidate_profile": {
+    "account": "vini",
+    "launcher": "mpiexec.hydra",
+    "nodes": 1,
+    "ntasks": 20,
+    "partition": "q1d-20p",
+    "status": "NON_SIESTA_CANDIDATE_PROFILE_DO_NOT_ADOPT"
+  },
+  "package_type": "YOLTLA_REMOTE_ENVIRONMENT_CHARACTERIZATION",
+  "probe_id": "M3_YOLTLA_ENVIRONMENT_PROBE",
+  "remote_execution_mode": "HUMAN_OPERATED_ONLY",
+  "reproducibility_epoch": "M3_STATIC_V1",
+  "schema_version": "1.0",
+  "scientific_calculation_permitted": false
+}

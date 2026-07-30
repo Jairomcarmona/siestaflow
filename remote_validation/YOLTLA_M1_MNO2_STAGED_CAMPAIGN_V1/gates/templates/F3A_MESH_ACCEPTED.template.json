@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0",
+  "gate_id": "F3A_MESH_ACCEPTED",
+  "decision": "PENDING",
+  "accepted_by": null,
+  "accepted_at": null,
+  "evidence_sha256": {},
+  "scope": ["03b_kgrid"],
+  "selected_mesh_ry": null,
+  "criterion": "Two consecutive levels reviewed against the signed 1-5 meV/atom pilot tolerance; SCF and topology also reviewed."
+}
+

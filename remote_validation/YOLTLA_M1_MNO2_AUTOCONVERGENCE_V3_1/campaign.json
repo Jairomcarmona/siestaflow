@@ -1,0 +1,115 @@
+{
+  "schema_version": "3.0",
+  "package_id": "YOLTLA_M1_MNO2_AUTOCONVERGENCE_V3_1",
+  "scope": "STATIC_NUMERICAL_BASIS_AND_U_SPIN_TESTS_ONLY",
+  "system": {
+    "system_id": "M1_delta_MnO2_neutral_surface_control_v01",
+    "atoms": 54,
+    "mn_atoms": 18,
+    "species": ["Mn", "O"],
+    "net_charge": 0,
+    "base_fdf": "inputs/base/M1_reference.fdf"
+  },
+  "slurm": {
+    "partition": "qz2d-128p",
+    "account": "vini",
+    "qos": "normal",
+    "nodes": 2,
+    "ntasks": 128,
+    "ntasks_per_node": 64,
+    "cpus_per_task": 1,
+    "walltime": "2-00:00:00"
+  },
+  "runtime": {
+    "module": "siesta/5.4.2",
+    "python_module": "python/3.12",
+    "minimum_python_version": "3.10",
+    "siesta_executable": "siesta",
+    "launcher": "srun",
+    "required_siesta_version": "5.4.2",
+    "environment": {
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1"
+    }
+  },
+  "numerical_policy": {
+    "energy_tolerance_mev_per_atom": 2.0,
+    "magnetic_degeneracy_mev_per_mn": 2.0,
+    "mesh_ry": [200, 250, 300, 350],
+    "mesh_fixed_kgrid": [3, 3, 1],
+    "kgrids": [[2, 2, 1], [3, 3, 1], [4, 4, 1]],
+    "optional_kgrid": [5, 5, 1],
+    "kz_required": 1,
+    "basis_reference": "DZP",
+    "basis_stricter": "EXPLICIT_TZP",
+    "basis_rule": "retain_DZP_only_if_DZP_to_TZP_delta_is_within_tolerance_otherwise_use_TZP",
+    "require_normal_termination": true,
+    "require_scf_converged": true,
+    "failure_policy": "fail_closed"
+  },
+  "basis": {
+    "energy_shift_mev": 200,
+    "split_norm": 0.15,
+    "stricter_definition": {
+      "name": "EXPLICIT_TZP",
+      "manual_basis_size_keyword_not_used": true,
+      "reason": "SIESTA 5.4.2 documents SZ, DZ, SZP and DZP for PAO.BasisSize; triple-zeta is therefore defined explicitly with PAO.Basis.",
+      "pao_basis_lines": [
+        "%block PAO.Basis",
+        "Mn 4",
+        "  n=3 0 3",
+        "    0.0 0.0 0.0",
+        "  n=3 1 3",
+        "    0.0 0.0 0.0",
+        "  n=3 2 3 P 1",
+        "    0.0 0.0 0.0",
+        "  n=4 0 3",
+        "    0.0 0.0 0.0",
+        "O 2",
+        "  n=2 0 3",
+        "    0.0 0.0 0.0",
+        "  n=2 1 3 P 1",
+        "    0.0 0.0 0.0",
+        "%endblock PAO.Basis"
+      ],
+      "pseudo_valence_shells": {
+        "Mn": ["3s2", "3p6", "3d5", "4s2"],
+        "O": ["2s2", "2p4"]
+      }
+    }
+  },
+  "dftu": {
+    "formalism": "Dudarev",
+    "projector_generation_method": 2,
+    "cutoff_norm": 0.9,
+    "threshold_tol": 0.01,
+    "population_tol": 0.001,
+    "correlated_species": "Mn",
+    "principal_quantum_number": 3,
+    "angular_momentum": 2,
+    "j_ev": 0.0,
+    "ueff_ev": [3.8, 4.0],
+    "primary_literature_protocol_ueff_ev": 3.8,
+    "sensitivity_ueff_ev": 4.0,
+    "projector_radius_policy": "automatic_from_DFTU.CutoffNorm",
+    "projector_radius_bohr": 0.0,
+    "fermi_width_bohr": 0.0
+  },
+  "magnetism": {
+    "states": ["FM", "STRIPE_AFM"],
+    "fm_plus_indices": [1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34, 37, 40, 43, 46, 49, 52],
+    "stripe_plus_indices": [1, 4, 7, 19, 22, 25, 37, 40, 43],
+    "stripe_minus_indices": [10, 13, 16, 28, 31, 34, 46, 49, 52],
+    "selection_rule": "select_lower_energy_state_within_each_equal_U_only",
+    "robustness_rule": "orders_selected_at_Ueff_3.8_and_4.0_must_agree",
+    "cross_U_energy_ranking_forbidden": true
+  },
+  "traceability": {
+    "calculation_directory": "runs/autoconvergence/calculations",
+    "stage_directory": "runs/autoconvergence/stages",
+    "global_events": "runs/autoconvergence/events.jsonl",
+    "global_trace_csv": "runs/autoconvergence/traceability.csv",
+    "no_attempt_overwrite": true,
+    "hash_algorithm": "sha256"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0",
+  "status_labels": {
+    "verified": "PSEUDOS_MN_O_HASH_VERIFIED",
+    "missing": "PSEUDOS_MN_O_MISSING",
+    "mismatch": "PSEUDOS_MN_O_HASH_MISMATCH",
+    "review": "PSEUDOS_MN_O_REVIEW"
+  },
+  "classification": "REFERENCE_PROJECT_CONFIGURATION_ONLY"
+}

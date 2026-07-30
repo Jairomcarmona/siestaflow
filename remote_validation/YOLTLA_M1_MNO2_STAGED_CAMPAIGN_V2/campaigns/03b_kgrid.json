@@ -1,0 +1,37 @@
+{
+  "schema_version": "1.0",
+  "phase_id": "03b_kgrid",
+  "campaign_id": "YOLTLA_M1_F3B_KGRID",
+  "system_id": "M1_delta_MnO2_neutral_surface_control_v01",
+  "status": "PREPARED_DYNAMIC",
+  "required_gate": "F3A_MESH_ACCEPTED",
+  "base_fdf": "inputs/base/M1_U0_FM.pilot.NO_PRODUCTION.fdf",
+  "selected_mesh_from_gate": true,
+  "scientific_role": "matched lateral reciprocal-space sensitivity at the accepted mesh",
+  "variants": [
+    {
+      "task_id": "m1-kgrid-2x2x1",
+      "system_label": "M1_KGRID_2X2X1",
+      "kgrid": [2, 2, 1]
+    },
+    {
+      "task_id": "m1-kgrid-3x3x1",
+      "system_label": "M1_KGRID_3X3X1",
+      "kgrid": [3, 3, 1]
+    },
+    {
+      "task_id": "m1-kgrid-4x4x1",
+      "system_label": "M1_KGRID_4X4X1",
+      "kgrid": [4, 4, 1]
+    }
+  ],
+  "optional_variant": {
+    "task_id": "m1-kgrid-5x5x1",
+    "system_label": "M1_KGRID_5X5X1",
+    "kgrid": [5, 5, 1],
+    "requires_explicit_gate_field": "include_optional_5x5x1"
+  },
+  "required_artifacts": [],
+  "selection_policy": "human review; kz must remain 1"
+}
+

@@ -1,0 +1,1 @@
+{"synthetic":true,"expected_classification":"ENVIRONMENT_ERROR","expected_gate":"BLOCKED","expected_fields":{"started":true},"forbidden_inferences":["scientific_validity","real_execution","exit_code"]}

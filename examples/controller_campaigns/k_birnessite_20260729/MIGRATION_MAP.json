@@ -1,0 +1,56 @@
+{
+  "schema_version": "1.0",
+  "migration_id": "K_BIRNESSITE_TO_SIESTAFLOW_0_2",
+  "source_packages": [
+    "YOLTLA_K_BIRNESSITE_AUTOCONV_RELAX_V2_2",
+    "YOLTLA_K_BIRNESSITE_LINEAR_RESPONSE_U_V1_2"
+  ],
+  "target_controller_schema": "2.0",
+  "workflows": {
+    "autoconvergence_relaxation": {
+      "dag": [
+        "preflight",
+        "mesh_series",
+        "mesh_selector_gate",
+        "kgrid_series",
+        "kgrid_selector_gate",
+        "basis_series",
+        "magnetic_series",
+        "magnetic_selector_gate",
+        "interlayer_precondition",
+        "full_fixed_cell",
+        "full_variable_cell",
+        "final_bader",
+        "competing_magnetism"
+      ],
+      "transfers": [
+        "selected STRUCT_OUT -> interlayer_precondition",
+        "stage STRUCT_OUT and DM -> next relaxation stage",
+        "final STRUCT_OUT and DM -> Bader/competitor"
+      ]
+    },
+    "linear_response_u": {
+      "dag": [
+        "fixed_seed_reference_without_u",
+        "bare_response_fanout",
+        "screened_response_fanout",
+        "linearity_gate",
+        "optional_small_shift_fanout",
+        "matrix_inversion_gate",
+        "u_report"
+      ],
+      "parallel_policy": "one 20-rank response calculation per allocated ttv3 node",
+      "scientific_policy_location": "external gate scripts, never core defaults"
+    }
+  },
+  "core_support": {
+    "hydra": "IMPLEMENTED_AND_TESTED",
+    "exclusive_host_fanout": "IMPLEMENTED_AND_TESTED",
+    "dag": "IMPLEMENTED_AND_TESTED",
+    "artifact_transfer": "IMPLEMENTED_AND_TESTED",
+    "gate_tasks": "IMPLEMENTED_AND_TESTED",
+    "progress": "IMPLEMENTED_AND_TESTED",
+    "generic_packager": "IMPLEMENTED_AND_TESTED"
+  },
+  "remote_acceptance": "PENDING_CLI_GENERATED_TWO_STAGE_YOLTLA_RUN"
+}

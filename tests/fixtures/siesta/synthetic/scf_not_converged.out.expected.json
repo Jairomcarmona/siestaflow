@@ -1,0 +1,1 @@
+{"synthetic":true,"expected_classification":"SCF_NOT_CONVERGED","expected_gate":"FAIL","expected_fields":{"scf_started":true,"scf_converged":false},"forbidden_inferences":["scientific_validity","real_execution","exit_code"]}

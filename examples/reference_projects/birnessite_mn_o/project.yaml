@@ -1,0 +1,6 @@
+{
+  "schema_version":"1.0", "project_id":"BIRNESSITE_MN_O_REFERENCE", "title":"Birnessite Mn/O reference package",
+  "engine":"siesta", "systems":["m1_reference"], "campaigns":["mn_o_smoke","m1_sanity","m1_mesh_convergence"],
+  "pseudopotential_manifest":"pseudopotentials/manifest.yaml",
+  "metadata":{"classification":["REFERENCE_PROJECT","NOT_CORE_REQUIREMENT","NO_SCIENTIFIC_INTERPRETATION_FOR_SMOKE"],"fixture":"NON_SCIENTIFIC_TECHNICAL_FIXTURE","scientific_state":"SANITY_READY_PENDING_PREFLIGHT"}
+}

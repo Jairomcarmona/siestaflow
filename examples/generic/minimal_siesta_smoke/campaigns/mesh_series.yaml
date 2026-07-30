@@ -1,0 +1,10 @@
+{
+  "schema_version":"1.0", "campaign_id":"mesh_series", "system_id":"xy_cell", "task_type":"SIESTA_SYNTHETIC_PARAMETER",
+  "parameter":"Mesh.Cutoff", "values":["180 Ry","240 Ry","320 Ry"],
+  "authorization":"authorizations/local.yaml", "policy":"policies/synthetic.yaml",
+  "mode":"sequential", "synthetic_only":true,
+  "cluster_profile":"cluster_profiles/local_preview.yaml",
+  "resources":"resources/minimal.yaml",
+  "gates":{"after_task":["technical_completion","known_warnings"],"after_series":["human_review","parameter_series_completion"]},
+  "metadata":{"gate":"parameter_series_completion"}
+}

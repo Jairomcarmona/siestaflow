@@ -1,0 +1,5 @@
+{
+  "authorization_id":"AUTH_GENERIC_LOCAL", "allowed_task_types":["SIESTA_SYNTHETIC_SMOKE","SIESTA_SYNTHETIC_PARAMETER"],
+  "targets":["xy_cell"], "forbidden_operations":["REAL_ENGINE","SBATCH","SSH","AUTO_RESTART"],
+  "stop_on_review":true, "issued_by":"EXAMPLE_PACKAGE", "valid_days":30
+}

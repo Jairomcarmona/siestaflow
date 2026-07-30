@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "gate_id": "F3_NUMERICAL_POLICY_SIGNED",
+  "decision": "PENDING",
+  "accepted_by": null,
+  "accepted_at": null,
+  "evidence_sha256": {},
+  "scope": ["04_u_spin"],
+  "selected_mesh_ry": null,
+  "selected_kgrid": null,
+  "selected_basis": null,
+  "selected_scf_policy": null
+}
+

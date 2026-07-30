@@ -1,0 +1,1 @@
+{"schema_version":"1.0","campaign_id":"mn_o_smoke","system_id":"m1_reference","task_type":"SIESTA_SYNTHETIC_SMOKE","parameter":null,"values":[],"authorization":"authorizations/m1.yaml","policy":"policies/f0_f12.yaml","mode":"single","synthetic_only":true,"metadata":{"classification":"NON_SCIENTIFIC_TECHNICAL_FIXTURE","publishable_energies":false}}

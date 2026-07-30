@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "gate_id": "RESOURCE_LAYOUT_ACCEPTED",
+  "decision": null,
+  "accepted_by": null,
+  "accepted_at": null,
+  "selected_layout": null,
+  "evidence_sha256": {},
+  "required_review": [
+    "walltime and CPU-time for 20/40/80 MPI",
+    "nodes, placement and affinity",
+    "numerical identity of the technical runs",
+    "limitations for 73/79-atom systems",
+    "reason for the human selection"
+  ],
+  "scientific_interpretation": false
+}

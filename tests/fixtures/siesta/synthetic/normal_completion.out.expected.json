@@ -1,0 +1,1 @@
+{"synthetic":true,"expected_classification":"COMPLETED","expected_gate":"PASS","expected_fields":{"normal_termination":true,"scf_converged":true,"atoms":54,"species":2},"forbidden_inferences":["scientific_validity","real_execution","exit_code"]}

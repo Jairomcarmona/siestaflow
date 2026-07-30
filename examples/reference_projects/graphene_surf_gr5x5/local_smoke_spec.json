@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "input": {
+    "source": "input/smoke.fdf",
+    "destination": "smoke.fdf",
+    "sha256": "386c83e2f0a9cb3cfb0b0f5de0d02626af9e594bd353c295af1d571f7887aa1e"
+  },
+  "resources": [
+    {
+      "source": "pseudos/C.psml",
+      "destination": "C.psml",
+      "sha256": "ce0f6a7fd43e70d44018e94286d934e9caadc005e95da87500d85fbe501d4c41"
+    },
+    {
+      "source": "geometry/SURF_Gr5x5_clean_v01.xyz",
+      "destination": "geometry/SURF_Gr5x5_clean_v01.xyz",
+      "sha256": "870d92a224662755c3d10ad9d45c4b212a6b4c23f3966558c05cd929cea5c9fb"
+    }
+  ],
+  "expected": {
+    "number_of_atoms": 50,
+    "species": ["C"]
+  }
+}

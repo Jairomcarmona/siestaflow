@@ -1,0 +1,222 @@
+{
+  "schema_version": "2.0",
+  "milestone": "LOCAL_REAL_FDF_MPI_SMOKES",
+  "observed_at": "2026-07-22T06:13:54Z",
+  "classification": [
+    "NON_SCIENTIFIC_LOCAL_STATIC_SMOKE",
+    "SCIENTIFIC_INTERPRETATION_FORBIDDEN"
+  ],
+  "status": "LOCAL_REAL_FDF_MPI_SMOKES_COMPLETE",
+  "environment": {
+    "scope": "WSL_LOCAL_ONLY",
+    "host_model": "AMD Ryzen 5 7535HS with Radeon Graphics",
+    "physical_cores": 6,
+    "logical_cores": 12,
+    "threads_per_core": 2,
+    "wsl_mem_total_kib": 7779424,
+    "wsl_mem_available_kib_at_selection": 7215676,
+    "mpi_tasks_selected": 4,
+    "profile": "local_openmpi_4",
+    "launcher": "/usr/bin/mpirun",
+    "launcher_version": "Open MPI 4.1.6",
+    "executable": "/home/jmc/.local/siesta-5.4.2-openmpi/bin/siesta",
+    "engine_version": "SIESTA 5.4.2",
+    "selection_reason": "np=4 uses four of six physical cores, leaves WSL/host headroom, does not consume all 12 logical CPUs, and prior C50 evidence showed np=4 stable and faster than np=2."
+  },
+  "evidence_root": "/home/jmc/siestaflow-local-smoke/LOCAL_REAL_FDF_STATIC_SMOKES",
+  "systems": [
+    {
+      "order": 1,
+      "system_id": "SURF_Gr5x5_2COO_v01",
+      "identity": {
+        "atoms": 56,
+        "species_count": 2,
+        "composition": {"C": 52, "O": 4},
+        "charge": -2.0,
+        "spin": "non-polarized",
+        "geometry_sha256": "dde32c211702868050a9cd38603857d051798ef1e5d3343e76d0068e3fd6c8ff"
+      },
+      "original_fdf": {
+        "path": "../scientific_project_snapshot/fdf/references/SURF_Gr5x5_2COO_v01.fdf",
+        "sha256_before": "614da2b5ad3c05734efade39eed2191d849f36ba44a3eabbd2c940849d49981a",
+        "sha256_after": "614da2b5ad3c05734efade39eed2191d849f36ba44a3eabbd2c940849d49981a",
+        "modified": false
+      },
+      "static_variant": {
+        "path": "/home/jmc/siestaflow-local-smoke/LOCAL_REAL_FDF_STATIC_SMOKES/variants/SURF_Gr5x5_2COO_v01.NON_SCIENTIFIC_LOCAL_STATIC_SMOKE.fdf",
+        "sha256": "83127a6db253a84abbf718424b2e696ac3d2efe5017ca5d4cc1c2a32ed4c849a",
+        "adapter_validation": "PASS",
+        "semantic_diff": {"MD.Steps": {"from": 300, "to": 0}},
+        "unauthorized_diffs": []
+      },
+      "pseudopotentials": {
+        "C.psml": "ce0f6a7fd43e70d44018e94286d934e9caadc005e95da87500d85fbe501d4c41",
+        "O.psml": "224ded5c59176d9bcb76d19b7a4a68a48d5dffabf8b262f64d5760250e87c35e"
+      },
+      "mpi_run": {
+        "run_id": "mpi4-surf-2coo-static-20260722T052222Z",
+        "tasks": 4,
+        "command": ["/usr/bin/time", "-v", "-o", "results/siesta.time", "/usr/bin/mpirun", "-np", "4", "/home/jmc/.local/siesta-5.4.2-openmpi/bin/siesta"],
+        "exit_code": 0,
+        "scf_started": true,
+        "scf_converged": true,
+        "scf_iterations": 84,
+        "normal_termination": true,
+        "raw_termination": "NORMAL_CONVERGED_TERMINATION",
+        "termination": "NORMAL_CONVERGED_TERMINATION",
+        "status": "LOCAL_MPI_SMOKE_CONVERGED",
+        "NaN_detected": false,
+        "fatal_pattern_detected": false,
+        "MPI_failure_detected": false,
+        "elapsed_time_seconds": 1181.39,
+        "max_rss_kbytes": 611292,
+        "stdout": "/home/jmc/siestaflow-local-smoke/LOCAL_REAL_FDF_STATIC_SMOKES/runs/mpi4-surf-2coo-static-20260722T052222Z/results/siesta.out",
+        "stderr": "/home/jmc/siestaflow-local-smoke/LOCAL_REAL_FDF_STATIC_SMOKES/runs/mpi4-surf-2coo-static-20260722T052222Z/results/siesta.err",
+        "summary": "/home/jmc/siestaflow-local-smoke/LOCAL_REAL_FDF_STATIC_SMOKES/runs/mpi4-surf-2coo-static-20260722T052222Z/evidence/summary.json"
+      }
+    },
+    {
+      "order": 2,
+      "system_id": "ADS_Ca8w_v01",
+      "identity": {
+        "atoms": 25,
+        "species_count": 3,
+        "composition": {"Ca": 1, "H": 16, "O": 8},
+        "charge": 2.0,
+        "spin": "non-polarized",
+        "geometry_sha256": "77ae7828a1dec4aeced7f3e17ccdfc4deb187590028eb9b713c52d7976e6702c"
+      },
+      "original_fdf": {
+        "path": "../scientific_project_snapshot/fdf/references/ADS_Ca8w_v01.fdf",
+        "sha256_before": "aea1995b0e55d7fb34be75ad5f4f82b8bc5473e51832711294b71191722e28de",
+        "sha256_after": "aea1995b0e55d7fb34be75ad5f4f82b8bc5473e51832711294b71191722e28de",
+        "modified": false
+      },
+      "static_variant": {
+        "path": "/home/jmc/siestaflow-local-smoke/LOCAL_REAL_FDF_STATIC_SMOKES/variants/ADS_Ca8w_v01.NON_SCIENTIFIC_LOCAL_STATIC_SMOKE.fdf",
+        "sha256": "be5319c6827702c5a6d03cf3667addb3172554697d7acd9f37436788bb577354",
+        "adapter_validation": "PASS",
+        "semantic_diff": {"MD.Steps": {"from": 300, "to": 0}},
+        "unauthorized_diffs": []
+      },
+      "pseudopotentials": {
+        "Ca.psml": "4b3ac07e9b31c0beee38db1103dd0673b8a74ebeb528981792c1066aec03a71c",
+        "H.psml": "f0fe3b58c67bf1b311bae0132dadf0519d3f12e46efc62aad5f1c968d6fd0923",
+        "O.psml": "224ded5c59176d9bcb76d19b7a4a68a48d5dffabf8b262f64d5760250e87c35e"
+      },
+      "mpi_run": {
+        "run_id": "mpi4-ca8w-static-20260722T054250Z",
+        "tasks": 4,
+        "command": ["/usr/bin/time", "-v", "-o", "results/siesta.time", "/usr/bin/mpirun", "-np", "4", "/home/jmc/.local/siesta-5.4.2-openmpi/bin/siesta"],
+        "exit_code": 1,
+        "scf_started": true,
+        "scf_converged": false,
+        "scf_iterations": 10,
+        "normal_termination": false,
+        "raw_termination": "TRUNCATED_OUTPUT",
+        "termination": "CONTROLLED_TECHNICAL_CUTOFF_AFTER_10_SCF_ITERATIONS",
+        "status": "LOCAL_MPI_TECHNICAL_CHAIN_PASS",
+        "NaN_detected": false,
+        "fatal_pattern_detected": false,
+        "MPI_failure_detected": false,
+        "elapsed_time_seconds": 823.84,
+        "max_rss_kbytes": 13696,
+        "max_rss_scope": "GNU_TIME_LAUNCHER_OBSERVATION_AFTER_SIGNAL_NOT_AGGREGATE_RANK_RSS",
+        "stdout": "/home/jmc/siestaflow-local-smoke/LOCAL_REAL_FDF_STATIC_SMOKES/runs/mpi4-ca8w-static-20260722T054250Z/results/siesta.out",
+        "stderr": "/home/jmc/siestaflow-local-smoke/LOCAL_REAL_FDF_STATIC_SMOKES/runs/mpi4-ca8w-static-20260722T054250Z/results/siesta.err",
+        "summary": "/home/jmc/siestaflow-local-smoke/LOCAL_REAL_FDF_STATIC_SMOKES/runs/mpi4-ca8w-static-20260722T054250Z/evidence/summary.json",
+        "cutoff_evidence": "/home/jmc/siestaflow-local-smoke/LOCAL_REAL_FDF_STATIC_SMOKES/runs/mpi4-ca8w-static-20260722T054250Z/evidence/technical_cutoff.json"
+      }
+    },
+    {
+      "order": 3,
+      "system_id": "ADS_Mg6w_v01",
+      "identity": {
+        "atoms": 19,
+        "species_count": 3,
+        "composition": {"H": 12, "Mg": 1, "O": 6},
+        "charge": 2.0,
+        "spin": "non-polarized",
+        "geometry_sha256": "26db05845da24438d7f535570d019e9e9341d009157230b59e1f24d4768405f3"
+      },
+      "original_fdf": {
+        "path": "../scientific_project_snapshot/fdf/references/ADS_Mg6w_v01.fdf",
+        "sha256_before": "219300cb75c5c3fd1848a79590a77a210ce0ae2adb40f1345707761f92a6b3a3",
+        "sha256_after": "219300cb75c5c3fd1848a79590a77a210ce0ae2adb40f1345707761f92a6b3a3",
+        "modified": false
+      },
+      "static_variant": {
+        "path": "/home/jmc/siestaflow-local-smoke/LOCAL_REAL_FDF_STATIC_SMOKES/variants/ADS_Mg6w_v01.NON_SCIENTIFIC_LOCAL_STATIC_SMOKE.fdf",
+        "sha256": "7844389df134d262427a1fe4e8da3861cca88c62543608f7ae9cc7d147867ff1",
+        "adapter_validation": "PASS",
+        "semantic_diff": {"MD.Steps": {"from": 300, "to": 0}},
+        "unauthorized_diffs": []
+      },
+      "pseudopotentials": {
+        "H.psml": "f0fe3b58c67bf1b311bae0132dadf0519d3f12e46efc62aad5f1c968d6fd0923",
+        "Mg.psml": "e4c090b75b21ce5e3cc978e70348388bdab1ed7f9ff4bfd13dc24a1147d32f3b",
+        "O.psml": "224ded5c59176d9bcb76d19b7a4a68a48d5dffabf8b262f64d5760250e87c35e"
+      },
+      "mpi_run": {
+        "run_id": "mpi4-mg6w-static-20260722T055700Z",
+        "tasks": 4,
+        "command": ["/usr/bin/time", "-v", "-o", "results/siesta.time", "/usr/bin/mpirun", "-np", "4", "/home/jmc/.local/siesta-5.4.2-openmpi/bin/siesta"],
+        "exit_code": 1,
+        "scf_started": true,
+        "scf_converged": false,
+        "scf_iterations": 10,
+        "normal_termination": false,
+        "raw_termination": "TRUNCATED_OUTPUT",
+        "termination": "CONTROLLED_TECHNICAL_CUTOFF_AFTER_10_SCF_ITERATIONS",
+        "status": "LOCAL_MPI_TECHNICAL_CHAIN_PASS",
+        "NaN_detected": false,
+        "fatal_pattern_detected": false,
+        "MPI_failure_detected": false,
+        "elapsed_time_seconds": 799.54,
+        "max_rss_kbytes": 13568,
+        "max_rss_scope": "GNU_TIME_LAUNCHER_OBSERVATION_AFTER_SIGNAL_NOT_AGGREGATE_RANK_RSS",
+        "stdout": "/home/jmc/siestaflow-local-smoke/LOCAL_REAL_FDF_STATIC_SMOKES/runs/mpi4-mg6w-static-20260722T055700Z/results/siesta.out",
+        "stderr": "/home/jmc/siestaflow-local-smoke/LOCAL_REAL_FDF_STATIC_SMOKES/runs/mpi4-mg6w-static-20260722T055700Z/results/siesta.err",
+        "summary": "/home/jmc/siestaflow-local-smoke/LOCAL_REAL_FDF_STATIC_SMOKES/runs/mpi4-mg6w-static-20260722T055700Z/evidence/summary.json",
+        "cutoff_evidence": "/home/jmc/siestaflow-local-smoke/LOCAL_REAL_FDF_STATIC_SMOKES/runs/mpi4-mg6w-static-20260722T055700Z/evidence/technical_cutoff.json"
+      }
+    },
+    {
+      "order": 4,
+      "system_id": "M0_MnO2_ideal_layer_GOLDEN_v02",
+      "status": "INPUT_CONFIGURATION_REVIEW_REQUIRED",
+      "executed": false,
+      "reason": "No approved FDF; magnetic policy remains undefined."
+    }
+  ],
+  "prior_serial_run": {
+    "run_id": "surf-2coo-static-20260722T051242Z",
+    "status": "CANCELLED_BY_USER",
+    "eligible_for_mpi_matrix": false,
+    "directory_reused": false,
+    "exit_code": 143,
+    "scf_started": true,
+    "scf_iterations": 21,
+    "elapsed_time_seconds": 464.39,
+    "max_rss_kbytes": 1364292,
+    "cancellation_evidence": "/home/jmc/siestaflow-local-smoke/LOCAL_REAL_FDF_STATIC_SMOKES/runs/surf-2coo-static-20260722T051242Z/evidence/cancellation.json"
+  },
+  "counts": {
+    "static_variants_created": 3,
+    "original_fdfs_modified": 0,
+    "authorized_diffs": 3,
+    "unauthorized_diffs": 0,
+    "mpi_converged_runs": 1,
+    "mpi_technical_chain_passes": 2,
+    "failed_runs": 0,
+    "m0_runs": 0,
+    "remote_jobs_submitted": 0
+  },
+  "verification": {
+    "executor_and_parser_tests": {"passed": 46, "failed": 0, "status": "PASS"},
+    "full_suite": {"passed": 235, "failed": 9, "status": "KNOWN_WSL_BASELINE", "new_failures": 0, "smoke_related_failures": 0}
+  },
+  "aggregate_evidence": "/home/jmc/siestaflow-local-smoke/LOCAL_REAL_FDF_STATIC_SMOKES/mpi_validation_summary.json",
+  "scientific_interpretation_performed": false,
+  "remote_job_submitted": false
+}

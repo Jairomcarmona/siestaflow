@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0",
+  "gate_id": "F0_EXECUTION_AUTHORIZATION",
+  "decision": "PENDING",
+  "accepted_by": null,
+  "accepted_at": null,
+  "evidence_sha256": {},
+  "scope": ["01_sanity"],
+  "notes": "Confirm FDF, PSML, SIESTA 5.4.2, isolated output location and manual run authorization."
+}
+

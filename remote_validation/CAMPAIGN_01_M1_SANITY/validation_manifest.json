@@ -1,0 +1,29 @@
+{
+  "campaign_id": "CAMPAIGN_01_M1_SANITY",
+  "files": {
+    "README_RUN.md": "61ae3a7e5c9ea47614675f49eb4fb1b7d2cdd7d675b5ea026e7529c780526740",
+    "VALIDATION_CHECKLIST.md": "d01d3a0ac5958946816cdc601a2a13720cafd1d0aca060104ae1e4da7bcbb525",
+    "authorization.json": "d03c150ebdf03e079838288fc5d835eb3edba3e1b0f2dc838ad070c49f56b27c",
+    "campaign.yaml": "d37959438cf1664638b5ad200e0d4fbc115d5161386cc8510ea16d448d178aac",
+    "cluster_profile.yaml": "6687efce050dd052e9ad981174eeeb41a4a31f276f9bd16174593c963cfa25f2",
+    "collect_results.sh": "bd1ad529c503ec49b74a6b2c5e9505b2c3f5a8a3293969861c4efecd0e052c43",
+    "engine_profile.yaml": "a8aa368828a45233735200f8a014bd986184578df5ba7f9649c4b3a5bc322d7b",
+    "expected_files.txt": "1cbb61cf87308f2b460a842f2d631bd3ffdc839e219f33c414f346874fbf718a",
+    "inputs/M1_U0_FM.pilot.NO_PRODUCTION.fdf": "714d16dabd1732f0d21ac8d7947abc2d00748fce509b1a052e3e31c2c9ebc35c",
+    "inspect_job.sh": "027a28c61be965ae86a3bace9bdcee6d677c40c11ff4dba29317b571f0a164ee",
+    "preflight.sh": "255823337b7161395516b506d9d601cec10742b59f48238e3e50bf9d439a96b3",
+    "scripts/run_worker.py": "9edc4ab2a6b910aa9823742ba87930d9e85975586dadc56ab6011fb79a5447c8",
+    "submit_campaign.slurm": "00d9572f50749db52830c44a3b8c57ef7f3bb4682b275b31ba0f8e8059cd6c0f"
+  },
+  "input_sha256": "714d16dabd1732f0d21ac8d7947abc2d00748fce509b1a052e3e31c2c9ebc35c",
+  "package_type": "REMOTE_SANITY_PACKAGE_PREVIEW",
+  "pseudopotential_requirements": {
+    "Mn.psml": "0b97ccd71456e4a7b28316f78ddb30bb1f6a82d9aba386c7fde78090d31c0dc6",
+    "O.psml": "224ded5c59176d9bcb76d19b7a4a68a48d5dffabf8b262f64d5760250e87c35e",
+    "distribution_status": "EXTERNAL_NOT_PACKAGED"
+  },
+  "pseudopotentials_included": false,
+  "real_execution_authorized": false,
+  "render_status": "PREVIEW_WITH_UNVERIFIED_PROFILE",
+  "scientific_status": "SANITY_READY_PENDING_PREFLIGHT"
+}

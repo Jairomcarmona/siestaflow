@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "phase_id": "01_sanity",
+  "campaign_id": "YOLTLA_M1_F1_SANITY",
+  "system_id": "M1_delta_MnO2_neutral_surface_control_v01",
+  "status": "PREPARED",
+  "required_gate": "F0_EXECUTION_AUTHORIZATION",
+  "base_fdf": "inputs/base/M1_U0_FM.pilot.NO_PRODUCTION.fdf",
+  "scientific_role": "single-point U0 FM initial-guess sanity only",
+  "variants": [
+    {
+      "task_id": "m1-u0-fm-sanity",
+      "system_label": "M1_U0_FM_SANITY",
+      "mesh_ry": 250,
+      "kgrid": [3, 3, 1]
+    }
+  ],
+  "required_artifacts": [],
+  "forbidden_interpretation": [
+    "production energy",
+    "DOS or PDOS conclusion",
+    "relaxation",
+    "U or magnetic ground-state selection"
+  ]
+}
+

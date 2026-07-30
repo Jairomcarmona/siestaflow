@@ -1,0 +1,31 @@
+{
+  "schema_version": "2.0",
+  "package_id": "YOLTLA_M1_MNO2_STAGED_CAMPAIGN_V2",
+  "package_status": "LOCALLY_AUDITED_REMOTE_EXECUTION_BLOCKED_PENDING_EVIDENCE_AND_F0",
+  "automatic_submission": false,
+  "pseudopotentials_packaged": true,
+  "pseudopotentials": {
+    "Mn.psml": "0b97ccd71456e4a7b28316f78ddb30bb1f6a82d9aba386c7fde78090d31c0dc6",
+    "O.psml": "224ded5c59176d9bcb76d19b7a4a68a48d5dffabf8b262f64d5760250e87c35e"
+  },
+  "preferred_remote_profile_template": "profiles/yoltla_qz2d_128p.template.json",
+  "preferred_allocation": {
+    "partition": "qz2d-128p",
+    "nodes": 2,
+    "total_cpus": 80,
+    "tasks_per_node": 40,
+    "walltime": "2-00:00:00"
+  },
+  "prepared_bundles": [
+    "00_scaling_calibration",
+    "01_sanity_03a_mesh",
+    "03b_kgrid"
+  ],
+  "not_ready_for_sbatch_reasons": [
+    "mutable site profile has not been built and accepted from current evidence",
+    "launcher has not passed the in-allocation remote preflight",
+    "resource layout lacks accepted scaling evidence",
+    "F0 is not accepted",
+    "sbatch --test-only must be repeated immediately before submission"
+  ]
+}

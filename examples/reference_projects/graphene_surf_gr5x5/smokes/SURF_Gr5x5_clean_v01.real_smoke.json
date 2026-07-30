@@ -1,0 +1,54 @@
+{
+  "schema_version": "1.0",
+  "smoke_id": "M3B1_SURF_GR5X5_REAL_SIESTA_SMOKE",
+  "system_id": "SURF_Gr5x5_clean_v01",
+  "geometry": {
+    "path": "systems/SURF_Gr5x5_clean_v01.xyz",
+    "origin": "REAL_VALIDATED_PROJECT_GEOMETRY",
+    "upstream_path": "context/scientific_project_snapshot/structures/parents/SURF_Gr5x5_clean_v01.xyz",
+    "sha256": "870d92a224662755c3d10ad9d45c4b212a6b4c23f3966558c05cd929cea5c9fb",
+    "atoms": 50,
+    "elements": {"C": 50},
+    "charge": 0,
+    "magnetism": "non_spin_polarized",
+    "surface_type": "graphene",
+    "geometry_status": "validated"
+  },
+  "fdf_seed": {
+    "path": "systems/SURF_Gr5x5_clean_v01.seed.fdf",
+    "sha256": "80d14fee65e32bd6e70ed093a096eff19ddd36e4c7378da017f1c9dad9717176",
+    "profile": "C1_RELAX_VDW_DZP_SEED_SIESTA5",
+    "technical_change": {"MD.Steps": 0},
+    "numerical_parameters_origin": "APPROVED_PROJECT_FDF_SEED"
+  },
+  "pseudopotential": {
+    "path": "pseudopotentials/C.psml",
+    "sha256": "ce0f6a7fd43e70d44018e94286d934e9caadc005e95da87500d85fbe501d4c41",
+    "license": "CC-BY-4.0",
+    "redistribution_status": "PERMITTED_WITH_ATTRIBUTION"
+  },
+  "scheduler_profile": {
+    "source": "SANITIZED_REAL_REMOTE_EVIDENCE",
+    "account": "vini",
+    "partition": "q1h-20p",
+    "qos": "normal",
+    "association_scope": "ACCOUNT_WIDE_ASSOCIATION",
+    "selection_policy": "UNIQUE_COMPATIBLE_DEFAULT_PARTITION",
+    "nodes": 1,
+    "ntasks": 20,
+    "cpus_per_task": 1,
+    "memory": null,
+    "walltime": "00:10:00",
+    "verified_for_siesta": false,
+    "launcher": null,
+    "resource_policy": "M3B1R_MPI_RUNTIME_CONFIRMED_GATE_REQUIRED_BEFORE_GENERATION"
+  },
+  "classification": {
+    "execution_purpose": "TECHNICAL_REMOTE_SIESTA_SMOKE",
+    "scientific_calculation_performed": false,
+    "scientific_interpretation_allowed": false,
+    "production_calculation": false,
+    "geometry_optimization": false,
+    "campaign_execution": false
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "source": "SANITIZED_REAL_REMOTE_EVIDENCE",
+  "root_cause": "BASH_SOURCE_RESOLVED_SLURM_SPOOL_COPY",
+  "failed_root": "/var/spool/slurm",
+  "required_root_authority": "SLURM_SUBMIT_DIR",
+  "preserve_as_failed_evidence": true,
+  "approved_execution": false
+}

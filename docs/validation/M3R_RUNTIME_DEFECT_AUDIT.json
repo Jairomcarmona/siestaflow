@@ -1,0 +1,94 @@
+{
+  "schema_version": "1.0",
+  "package_v1": "remote_validation/M3_YOLTLA_ENVIRONMENT_PROBE",
+  "source": "src/siestaflow/remote_environment.py",
+  "audit_status": "ALL_NON_STYLE_FINDINGS_CORRECTED_IN_SOURCE",
+  "components": [
+    {
+      "component": "run_login_probe.sh",
+      "classification": ["OBSERVABILITY_DEFECT", "PORTABILITY_DEFECT"],
+      "findings": ["Optional commands had no execution bound when a scheduler command hung", "Exit-code sidecars existed but timeout behavior was absent"],
+      "correction": "probe_common run_optional uses a configurable 20-second timeout when GNU timeout is available and preserves code 124",
+      "tests": ["test_full_local_runtime_demonstration_with_stubs"]
+    },
+    {
+      "component": "inspect_probe_job.sh",
+      "classification": ["CONFIRMED_RUNTIME_DEFECT", "OBSERVABILITY_DEFECT", "POTENTIAL_RUNTIME_DEFECT"],
+      "findings": ["Defect A: rendered embedded Python had an unterminated string", "squeue/sacct stderr and exit codes were discarded", "terminal state set was incomplete", "unknown states did not request review"],
+      "correction": "Escaped newline in source; capture both channels/codes; exact main row; nine terminal states; unknown-state review",
+      "tests": ["test_embedded_validator_handles_quotes_multiple_blocks_and_failure", "test_inspect_job_runtime_cases", "test_sacct_parser_selects_main_row_and_all_terminal_states"]
+    },
+    {
+      "component": "collect_probe_results.sh",
+      "classification": ["SECURITY_DEFECT"],
+      "findings": ["Traversal guard did not cover terminal /.. or /./ segments"],
+      "correction": "Expanded absolute-path and traversal checks; Python verifier resolves the root and rejects pseudo symlinks",
+      "tests": ["test_pseudopotential_verifier_controlled_states_and_no_mutation"]
+    },
+    {
+      "component": "prepare_scheduler_probe.py",
+      "classification": ["CONFIRMED_RUNTIME_DEFECT", "SECURITY_DEFECT", "POTENTIAL_RUNTIME_DEFECT"],
+      "findings": ["Defect B: outer string consumed the embedded newline escape", "Association values could inject scheduler directives", "Generated output was published without Bash/heredoc validation"],
+      "correction": "Double escape; strict association grammar; temporary render; bash -n and compile-only heredoc gate; atomic replace or removal",
+      "tests": ["test_prepare_generated_slurm_executes_with_stubs", "test_prepare_removes_invalid_generated_candidate"]
+    },
+    {
+      "component": "verify_local_package.py",
+      "classification": ["SECURITY_DEFECT", "POTENTIAL_RUNTIME_DEFECT", "OBSERVABILITY_DEFECT"],
+      "findings": ["V1 checked only checksums and extensions", "No direct/Bash/SLURM/heredoc syntax checks", "No secret, symlink, path, manifest coverage or structure gate"],
+      "correction": "Full V2 hash, manifest, coverage, structure, secret, path and multi-language static verification with explicit markers",
+      "tests": ["test_package_verifier_checks_hashes_runtime_and_structure", "test_package_verifier_detects_secret_and_traversal", "test_package_verifier_detects_new_invalid_python"]
+    },
+    {
+      "component": "submit_environment_probe.slurm",
+      "classification": ["NO_DEFECT"],
+      "findings": ["Inert placeholder exits 2 and performs no submission or scientific action"],
+      "correction": "Retained as the unprepared fail-closed placeholder",
+      "tests": ["test_all_v2_direct_and_embedded_sources_compile_and_shells_parse"]
+    },
+    {
+      "component": "scripts/build_login_summary.py",
+      "classification": ["STYLE_ONLY"],
+      "findings": ["Dense formatting reduces readability but direct Python compiles and controlled input handling is valid"],
+      "correction": "No behavior change required",
+      "tests": ["test_all_v2_direct_and_embedded_sources_compile_and_shells_parse", "test_full_local_runtime_demonstration_with_stubs"]
+    },
+    {
+      "component": "scripts/collect_bundle.py",
+      "classification": ["SECURITY_DEFECT", "PORTABILITY_DEFECT", "POTENTIAL_RUNTIME_DEFECT"],
+      "findings": ["Evidence symlinks were not rejected", "gzip header was nondeterministic despite normalized tar members", "Required summary/stdout/stderr files were incompletely checked", "Staging tree remained after success"],
+      "correction": "Controlled resolution, symlink rejection, exact required files, deterministic gzip mtime, normalized uid/gid/mtime, cleanup and overwrite refusal",
+      "tests": ["test_bundle_collector_runtime_normalizes_archive", "test_bundle_collector_blocks_incomplete_evidence", "test_bundle_collector_refuses_existing_bundle"]
+    },
+    {
+      "component": "scripts/probe_common.sh",
+      "classification": ["OBSERVABILITY_DEFECT"],
+      "findings": ["Optional command runtime was unbounded"],
+      "correction": "Timeout-if-available plus existing stdout/stderr and exit-code preservation",
+      "tests": ["test_full_local_runtime_demonstration_with_stubs"]
+    },
+    {
+      "component": "scripts/verify_pseudos.py",
+      "classification": ["POTENTIAL_RUNTIME_DEFECT", "SECURITY_DEFECT"],
+      "findings": ["Unreadable files collapsed into mismatch without a diagnostic", "Symlink candidates were not explicitly rejected", "Status vocabulary was not externally configurable"],
+      "correction": "Readable-mode/error evidence, unsafe-symlink review, no mutation, and reference-configured M3 status labels",
+      "tests": ["test_pseudopotential_verifier_controlled_states_and_no_mutation"]
+    },
+    {
+      "component": "scripts/validate_embedded_python.py",
+      "classification": ["NO_DEFECT"],
+      "findings": ["New V2 validator compiles all quoted/unquoted PY heredocs without execution"],
+      "correction": "New component",
+      "tests": ["test_embedded_validator_handles_quotes_multiple_blocks_and_failure"]
+    }
+  ],
+  "summary": {
+    "confirmed_runtime_defects": 2,
+    "additional_non_style_findings": 16,
+    "security_findings": 5,
+    "portability_findings": 2,
+    "observability_findings": 4,
+    "style_only": 1,
+    "uncorrected_non_style_findings": 0
+  }
+}
