@@ -24,3 +24,21 @@ M3R adds executed artifact tests: quoted/unquoted multi-heredoc compilation, gen
 Run `python -m pytest -q tests/m3r2` for parser, policy, ambiguity, human-selection, sanitized-evidence, generated-Bash, embedded-Python, and stub-runtime coverage. The full regression is `python -m pytest -q`. Real scheduler commands are deliberately excluded from local tests.
 
 Run `python -m pytest -q -s tests/m3b1` for the `SLURM_SUBMIT_DIR` spool regression, the corrected environment-probe generator, geometry/pseudopotential identity, adapter-rendered single-point FDF, deterministic package, mutable evidence-tree handling, and ZIP tests. Final M3B1 evidence: 11 passed; full suite: 198 passed, 0 failed, 0 errors.
+
+## Optional real local Slurm layer
+
+The default pytest suite remains scheduler-independent. On Windows with
+Ubuntu/WSL2, the opt-in sandbox under `integration/local_slurm/` adds a real
+single-node Slurm layer:
+
+```powershell
+wsl -d Ubuntu -u root --exec bash integration/local_slurm/bootstrap_wsl.sh
+wsl -d Ubuntu --exec bash integration/local_slurm/run_acceptance.sh
+powershell -ExecutionPolicy Bypass -File `
+  integration/local_slurm/run_controller_acceptance.ps1
+```
+
+Only the first command changes the WSL installation. Local passes are labeled
+`LOCAL_SLURM_INTEGRATION_PASS`; they never imply Yoltla runtime or scientific
+acceptance. Exact observed evidence and limitations are recorded in
+`docs/validation/LOCAL_SLURM_WSL_ACCEPTANCE.md`.

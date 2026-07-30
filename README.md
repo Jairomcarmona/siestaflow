@@ -59,3 +59,7 @@ Contract compatibility and plugin rules are documented in
 [CORE_CONTRACTS_1_0.md](docs/design/CORE_CONTRACTS_1_0.md).
 The governing product direction, vocabulary, phases, and acceptance gates are
 defined in [SIESTAFLOW_BACKBONE.md](docs/design/SIESTAFLOW_BACKBONE.md).
+The optional real single-node WSL/Slurm integration layer is documented in
+[integration/local_slurm/README.md](integration/local_slurm/README.md); its
+observed acceptance evidence and strict limits are recorded in
+[LOCAL_SLURM_WSL_ACCEPTANCE.md](docs/validation/LOCAL_SLURM_WSL_ACCEPTANCE.md).
