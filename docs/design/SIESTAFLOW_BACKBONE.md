@@ -233,3 +233,11 @@ diagnóstico de entorno de solo lectura, creación idempotente de proyectos desd
 entradas explícitas y validación explicable bajo Core Contracts. Esta fase no
 autoriza ejecución, no elige parámetros científicos y mantiene obligatoria la
 revisión química de la estructura.
+
+La Fase 6 dispone de una base vertical local para SIESTA 5.4.2: catálogo de
+reglas versionado, perfiles de contexto declarados por el investigador,
+validación FDF explicable y preflight de artefactos externos del DAG. Las
+heurísticas sólo generan `REVIEW`; los fallos automáticos quedan limitados a
+inconsistencias deterministas. Todavía no se considera cerrada la fase ni se
+incrementa la versión: faltan ampliar cobertura y acumular evidencia de
+campañas reales.

@@ -32,13 +32,23 @@ researcher review.
 ```powershell
 python -m siestaflow.cli environment check --siesta siesta --launcher auto --json
 python -m siestaflow.cli input validate C:\source\system.fdf `
-  --pseudo-manifest C:\source\manifest.yaml --require-pseudos --json
+  --pseudo-manifest C:\source\manifest.yaml --require-pseudos `
+  --profile C:\source\validation-profile.json --explain --json
+python -m siestaflow.cli input rules --engine-version 5.4.2
+python -m siestaflow.cli workflow preflight C:\source\workflow.json `
+  --profile C:\source\validation-profile.json --json
 ```
 
 Both commands use the Core Contracts validation report. Findings expose stable
 rule identifiers, severity, scope, evidence and remediation. Environment
 checking is operational only: it does not validate the chemistry, numerical
 settings, scalability or scientific suitability of a calculation.
+
+The SIESTA 5.4.2 contextual validator distinguishes deterministic failures
+from physical or cost reviews. A strict external profile declares periodicity,
+required Bader output and project review limits; no such choice is inferred.
+See `SIESTA_VALIDATION_GUIDE.md` for the profile schema, registered rule
+families and explicit scientific limits.
 
 ## Allocation-controller campaigns
 

@@ -15,6 +15,21 @@
 - `STRUCTURE_CHEMISTRY_REVIEW_REQUIRED`: expected review finding, not proof of
   invalid chemistry. Inspect composition, coordinates, units, periodicity and
   intended connectivity before execution.
+- `KEYWORD_VALUE_INVALID`, `LATTICE_MATRIX_*`, or `KGRID_MATRIX_*`: a
+  deterministic input consistency rule failed. Correct the reported FDF line;
+  do not bypass the finding.
+- `PERIODIC_NET_CHARGE_REVIEW`: the input is not automatically invalid.
+  Document the compensating-background convention, finite-size limitations,
+  and allowed comparisons for the declared periodic model.
+- `D3_PERIODICITY_REVIEW`: declare `DFTD3.Periodic` when the intended periodic
+  axes cannot be safely inferred from a low-dimensional or nonorthogonal cell.
+- `DFTU_LINEAR_RESPONSE_MODE_ACTIVE`: `DFTU.PotentialShift` classifies this as
+  a response calculation; its U entries are perturbations, not a productive
+  Hubbard U.
+- `BADER_OUTPUT_NOT_ENABLED`: the project profile requires Bader data but
+  `SaveBaderCharge` is not true. Enable it only in the authorized output task.
+- `BADER_MESH_CUTOFF_REVIEW`: converge the Bader density grid; the finding is
+  a documented numerical review, not an automatic cutoff selection.
 - Exit `2` with `MISSING_DIRECTORY` or `MISSING_*`: fix the external package path or manifest; no partial package is loaded.
 - `EXAMPLE_BLOCKED_MISSING_PSEUDOS`: provide exactly one matching filename below `--pseudo-root`.
 - `EXAMPLE_BLOCKED_HASH_MISMATCH`: do not replace or download automatically; verify provenance and update only the authorized external manifest.

@@ -30,12 +30,14 @@ def test_cli_reference_matches_implemented_command_tree():
     documented = {
         ("environment", "check"),
         ("project", "init"), ("project", "inspect"), ("project", "validate"), ("project", "load"),
-        ("fdf", "inspect"), ("input", "validate"), ("pseudo", "verify"),
+        ("fdf", "inspect"), ("input", "validate"), ("input", "rules"), ("pseudo", "verify"),
         ("campaign", "create"), ("campaign", "validate"), ("campaign", "simulate"), ("campaign", "status"),
         ("examples", "list"), ("examples", "inspect"), ("examples", "validate"), ("examples", "stage"),
         ("examples", "package"), ("examples", "run"), ("examples", "results", "import"),
         ("remote", "package"), ("remote", "results", "import"),
         ("remote", "environment", "package"), ("remote", "environment", "import"),
+        ("workflow", "validate"), ("workflow", "preflight"), ("workflow", "plan"),
+        ("workflow", "graph"), ("workflow", "compile"),
     }
     text = (REPO / "docs" / "user" / "CLI_REFERENCE.md").read_text(encoding="utf-8")
     assert documented <= implemented
@@ -48,10 +50,12 @@ def test_all_required_documentation_and_primary_links_exist():
         "README.md", "CHANGELOG.md", "CONTRIBUTING.md",
         "docs/user/USER_MANUAL.md", "docs/user/INSTALLATION.md", "docs/user/QUICK_START.md",
         "docs/user/CLI_REFERENCE.md", "docs/user/TROUBLESHOOTING.md",
+        "docs/user/SIESTA_VALIDATION_GUIDE.md",
         "docs/operations/YOLTLA_RUNBOOK.md", "docs/operations/REMOTE_VALIDATION_WORKFLOW.md",
         "docs/operations/RECOVERY_AND_RESUME.md", "docs/scientific/SCIENTIFIC_GOVERNANCE.md",
         "docs/scientific/CAMPAIGN_GATES.md", "docs/developer/DEVELOPER_GUIDE.md",
         "docs/developer/ARCHITECTURE.md", "docs/developer/TESTING.md",
+        "docs/validation/PHASE6_VALIDATION_FOUNDATION_ACCEPTANCE.md",
     )
     assert not [name for name in required if not (REPO / name).is_file()]
     readme = (REPO / "README.md").read_text(encoding="utf-8")

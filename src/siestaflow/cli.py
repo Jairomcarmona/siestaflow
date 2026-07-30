@@ -14,6 +14,8 @@ from .engines.siesta.fdf_parser import FDFParser
 from .engines.siesta.input_validator import SiestaInputValidator
 from .engines.siesta.models import FDFBlock, FDFInclude, FDFScalar, FDFUnknown
 from .engines.siesta.pseudopotentials import PseudopotentialManifest, PseudopotentialVerifier
+from .engines.siesta.validation_catalog import SiestaValidationCatalog
+from .engines.siesta.validation_profile import SiestaValidationProfile
 from .environment_check import EnvironmentChecker, EnvironmentCheckRequest
 from .errors import SiestaFlowError
 from .examples import ExampleRegistry, ExampleService
@@ -27,6 +29,7 @@ from .project_scaffold import (
 from .remote import RemotePackager, RemoteResultImporter
 from .remote_environment import EnvironmentProbePackager, RemoteEnvironmentImporter, RemoteEnvironmentStatus
 from .siesta_campaigns import CampaignDefinition, SiestaCampaignFactory, simulate_definition
+from .siesta_validation import SiestaContextualValidator
 from .execution.allocation_controller import AllocationController, ExecutionStatus
 from .execution.campaign_progress import read_campaign_progress, render_campaign_progress
 from .m4_remote_package import M4RemoteSmokePackager
@@ -39,8 +42,8 @@ from .workflows import (
     workflow_plan,
     write_workflow_lock,
 )
-from .contract_adapters import validation_report_from_siesta
 from .validation_render import render_validation_report
+from .workflow_preflight import WorkflowPreflightValidator
 
 
 def _repo_root() -> Path:
@@ -89,7 +92,28 @@ def build_parser() -> argparse.ArgumentParser:
     inp_validate.add_argument("path", type=Path)
     inp_validate.add_argument("--pseudo-manifest", type=Path)
     inp_validate.add_argument("--require-pseudos", action="store_true")
+    inp_validate.add_argument("--profile", type=Path)
+    inp_validate.add_argument(
+        "--engine-version",
+        choices=("5.4.2",),
+        default="5.4.2",
+    )
+    inp_validate.add_argument(
+        "--explain",
+        action="store_true",
+        help="render evidence and remediation for every finding",
+    )
     inp_validate.add_argument("--json", action="store_true")
+    inp_rules = inp_sub.add_parser(
+        "rules",
+        help="list the versioned built-in SIESTA validation rules",
+    )
+    inp_rules.add_argument(
+        "--engine-version",
+        choices=("5.4.2",),
+        default="5.4.2",
+    )
+    inp_rules.add_argument("--json", action="store_true")
 
     environment = sub.add_parser(
         "environment",
@@ -155,6 +179,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     workflow_validate.add_argument("definition", type=Path)
     workflow_validate.add_argument("--json", action="store_true")
+    workflow_preflight = workflow_sub.add_parser(
+        "preflight",
+        help="validate all external SIESTA FDF inputs in the resolved DAG",
+    )
+    workflow_preflight.add_argument("definition", type=Path)
+    workflow_preflight.add_argument("--profile", type=Path)
+    workflow_preflight.add_argument("--pseudo-manifest", type=Path)
+    workflow_preflight.add_argument(
+        "--require-pseudos",
+        action="store_true",
+    )
+    workflow_preflight.add_argument("--json", action="store_true")
     workflow_plan_parser = workflow_sub.add_parser(
         "plan", help="show the resolved topological execution plan"
     )
@@ -271,6 +307,37 @@ def _dispatch(args: argparse.Namespace) -> int:
             else 0
         )
     if args.domain == "workflow":
+        if args.action == "preflight":
+            profile = (
+                SiestaValidationProfile.load(args.profile)
+                if args.profile
+                else None
+            )
+            manifest = (
+                PseudopotentialManifest.load(args.pseudo_manifest)
+                if args.pseudo_manifest
+                else None
+            )
+            report = WorkflowPreflightValidator().validate(
+                args.definition,
+                profile=profile,
+                pseudopotential_manifest=manifest,
+                require_pseudos=args.require_pseudos,
+            )
+            if args.json:
+                _emit(report, True)
+            else:
+                print(
+                    render_validation_report(
+                        report,
+                        title="WORKFLOW PREFLIGHT",
+                    )
+                )
+            return (
+                2
+                if report.status.value in {"FAIL", "BLOCKED"}
+                else 0
+            )
         compilation = WorkflowCompiler().compile(args.definition)
         if not compilation.valid or compilation.compiled is None:
             _emit_workflow_validation(compilation, args.json)
@@ -366,6 +433,28 @@ def _dispatch(args: argparse.Namespace) -> int:
         document = FDFParser().parse_path(args.path); data = _inspect_data(document); _emit(data, args.json)
         return 2 if any(item["severity"] == "ERROR" for item in data["diagnostics"]) else 0
     if args.domain == "input":
+        if args.action == "rules":
+            catalog = SiestaValidationCatalog.load_default()
+            if catalog.engine_version != args.engine_version:
+                raise ValueError(
+                    f"no rules for SIESTA {args.engine_version}"
+                )
+            summary = catalog.public_summary()
+            if args.json:
+                _emit(summary, True)
+            else:
+                print(
+                    f"SIESTA {catalog.engine_version} VALIDATION RULES "
+                    f"({len(catalog.rules)})"
+                )
+                print(f"RULESET: {catalog.sha256}")
+                for item in summary["rules"]:
+                    print(
+                        f"- {item['rule_id']}@{item['version']}: "
+                        f"{item['summary']}"
+                    )
+                    print(f"  Evidence: {item['reference']}")
+            return 0
         document = FDFParser().parse_path(args.path)
         initial = SiestaInputValidator().validate(document)
         pseudo_result = None
@@ -375,15 +464,24 @@ def _dispatch(args: argparse.Namespace) -> int:
                 manifest,
                 initial.species,
             )
-        result = SiestaInputValidator().validate(
+        profile = (
+            SiestaValidationProfile.load(args.profile)
+            if args.profile
+            else None
+        )
+        catalog = SiestaValidationCatalog.load_default()
+        if catalog.engine_version != args.engine_version:
+            raise ValueError(
+                f"no rules for SIESTA {args.engine_version}"
+            )
+        report = SiestaContextualValidator(
+            catalog=catalog,
+        ).validate(
             document,
             pseudo_result=pseudo_result,
             require_pseudos=args.require_pseudos,
-        )
-        report = validation_report_from_siesta(
-            result,
-            subject_id=result.system_id or args.path.stem,
-            source=str(args.path.resolve()),
+            profile=profile,
+            subject_id=initial.system_id or args.path.stem,
         )
         if args.json:
             _emit(report, True)

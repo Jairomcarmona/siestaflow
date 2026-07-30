@@ -6,6 +6,17 @@ Check the local execution environment without submitting anything:
 python -m siestaflow.cli environment check --siesta siesta --launcher auto --json
 ```
 
+Inspect the versioned SIESTA rules and validate an input without editing it:
+
+```powershell
+python -m siestaflow.cli input rules --engine-version 5.4.2
+python -m siestaflow.cli input validate C:\inputs\system.fdf --explain
+python -m siestaflow.cli workflow preflight C:\inputs\workflow.json --json
+```
+
+`REVIEW` is an alert for researcher judgment; only `FAIL` or `BLOCKED`
+returns exit `2`. None of these commands runs SIESTA or submits a job.
+
 Preview a project package from explicit scientific inputs:
 
 ```powershell

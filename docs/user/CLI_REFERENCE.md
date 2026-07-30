@@ -9,9 +9,11 @@ project inspect PATH [--json]
 project validate PATH [--json]
 project load PATH [--json]
 fdf inspect PATH [--json]
-input validate PATH [--pseudo-manifest PATH] [--require-pseudos] [--json]
+input validate PATH [--pseudo-manifest PATH] [--require-pseudos] [--profile PATH] [--engine-version 5.4.2] [--explain] [--json]
+input rules [--engine-version 5.4.2] [--json]
 pseudo verify MANIFEST [--species SPECIES ...] [--json]
 workflow validate DEFINITION [--json]
+workflow preflight DEFINITION [--profile PATH] [--pseudo-manifest PATH] [--require-pseudos] [--json]
 workflow plan DEFINITION [--json]
 workflow graph DEFINITION [--format {text,mermaid,json}]
 workflow compile DEFINITION --output PATH [--force] [--dry-run] [--json]
@@ -48,9 +50,21 @@ destination. It does not select functionals, Hubbard U, spin, grids,
 pseudopotentials, resources, or convergence thresholds.
 
 `input validate` emits the common explainable validation contract. Each finding
-contains a stable rule code, severity, scope, location where available,
-evidence, and a remediation hint. With `--require-pseudos`, a manifest is
-mandatory and the pseudopotential files and hashes are checked.
+contains a stable rule code, decision, scope, location where available,
+evidence, and a remediation hint. `--profile` adds researcher-declared context
+for periodicity, required outputs, and cost-review limits. `--explain` makes
+the intent explicit; the human renderer always includes evidence and
+remediation. With `--require-pseudos`, a manifest is mandatory and the
+pseudopotential files and hashes are checked.
+
+`input rules` lists the immutable built-in rule catalog, its SIESTA version,
+manual source, per-rule evidence class, and ruleset SHA-256. The initial
+catalog supports SIESTA 5.4.2 only.
+
+`workflow preflight` first compiles and hash-resolves the DAG, then applies the
+same input validator to every external artifact declared as
+`text/x-siesta-fdf` or `application/x-siesta-fdf`. It is read-only, does not
+resolve arbitrary FDF includes, and never authorizes execution.
 
 `remote package` and `remote environment package` generate `PREVIEW` artifacts only and never submit. Environment import returns `0` for review/incomplete and `2` for invalid/failed evidence; only a real complete bundle can become `REMOTE_VERIFIED`.
 
@@ -59,7 +73,8 @@ for a schema-1 or schema-2 allocation-controller campaign. It never calls
 `sbatch`. `campaign worker` is intended to run only inside the generated SLURM
 allocation. `campaign progress` and `watch` are read-only.
 
-The `workflow` command family implements Phase 1 compilation only. Validation,
-planning and graph rendering are read-only. `workflow compile` writes a
-canonical, hash-bound `siestaflow.workflow-lock@1.0` envelope and never
-authorizes or starts execution.
+The `workflow` command family implements compilation plus read-only preflight.
+Validation, preflight, planning and graph rendering are read-only.
+`workflow compile` writes a canonical, hash-bound
+`siestaflow.workflow-lock@1.0` envelope and never authorizes or starts
+execution.

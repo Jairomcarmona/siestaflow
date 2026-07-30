@@ -32,6 +32,15 @@
   Core-Contract input validation with optional pseudopotential verification.
 - Added a real WSL/Slurm integration sandbox and recorded local acceptance
   evidence without treating it as Yoltla or scientific validation.
+- Added the initial Phase 6 SIESTA 5.4.2 validation foundation: a versioned,
+  manual-backed rule catalog, strict researcher context profiles, contextual
+  FDF checks, and a Core Contracts rule-provider capability.
+- Added read-only `input rules` and `workflow preflight` commands and extended
+  `input validate` with engine version, context profile, and explainable
+  output controls. Heuristics remain review-only and never authorize runs.
+- Declared the SIESTA JSON registries as wheel package data so installed
+  distributions carry the same keyword and validation catalogs as source
+  checkouts.
 
 ## 0.2.0 consolidation alpha (2026-07-29)
 
