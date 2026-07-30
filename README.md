@@ -11,6 +11,12 @@ supports `srun` and the Yoltla-recommended
 allocation waves, dependency DAGs, hash-bound artifact transfers, gate tasks,
 controlled shutdown, resubmission and read-only progress reporting.
 
+The extension foundation is `Core Contracts 1.0`: versioned validation,
+artifact, execution, event, and plugin boundaries with canonical SHA-256
+envelopes. This separates future validators, engines, postprocessors, CLIs and
+UIs from implementation details and permits gradual migration through explicit
+adapters.
+
 The complete local suite passes. Real Yoltla evidence has validated the
 allocation-local execution pattern and Hydra runtime through standalone
 birnessite campaigns. The remaining acceptance boundary is execution of a
@@ -35,3 +41,5 @@ The external package schema is documented in
 boundaries in [YOLTLA_RUNBOOK.md](docs/operations/YOLTLA_RUNBOOK.md).
 Scientific policy remains external data under `examples/`; the core never
 selects a functional, Hubbard U, magnetic state or convergence threshold.
+Contract compatibility and plugin rules are documented in
+[CORE_CONTRACTS_1_0.md](docs/design/CORE_CONTRACTS_1_0.md).

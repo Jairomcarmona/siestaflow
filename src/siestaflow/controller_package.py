@@ -68,6 +68,17 @@ class ControllerPackageBuilder:
     def __init__(self, repository_root: Path) -> None:
         self.repository_root = repository_root.resolve()
 
+    def _runtime_files(self) -> tuple[str, ...]:
+        contracts = tuple(
+            path.relative_to(self.repository_root).as_posix()
+            for path in sorted(
+                (self.repository_root / "src/siestaflow/contracts").glob("*.py")
+            )
+        )
+        if not contracts:
+            raise ValueError("core contract runtime sources are missing")
+        return (*self.RUNTIME_FILES, *contracts)
+
     def build(
         self,
         campaign_path: Path,
@@ -109,7 +120,7 @@ class ControllerPackageBuilder:
         files["campaign.yaml"] = campaign_path.read_bytes()
         for relative in protected:
             files[relative] = source_root.joinpath(*_safe(relative).parts).read_bytes()
-        for relative in self.RUNTIME_FILES:
+        for relative in self._runtime_files():
             source = self.repository_root / relative
             if not source.is_file():
                 raise ValueError(f"runtime source is missing: {relative}")

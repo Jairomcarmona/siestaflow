@@ -1,0 +1,115 @@
+"""Public, engine-neutral contracts for SIESTAFLOW extensions."""
+
+from .artifacts import (
+    ArtifactReference,
+    ArtifactRole,
+    ArtifactTransfer,
+    ProvenanceLink,
+    ProvenanceRelation,
+)
+from .catalog import (
+    ARTIFACT_REFERENCE,
+    CORE_CONTRACTS,
+    CORE_CONTRACT_VERSION,
+    EXECUTION_EVIDENCE,
+    EXECUTION_REQUEST,
+    PLUGIN_DESCRIPTOR,
+    VALIDATION_REPORT,
+    WORKFLOW_EVENT,
+    contract_catalog,
+)
+from .events import WorkflowEvent
+from .execution import (
+    ExecutionEvidence,
+    ExecutionRequest,
+    LauncherKind,
+    ResourceRequest,
+)
+from .plugins import (
+    CapabilityDescriptor,
+    CapabilityKind,
+    CapabilityRegistry,
+    Plugin,
+    PluginDescriptor,
+    RegisteredCapability,
+)
+from .serialization import (
+    ContractEnvelope,
+    ContractIntegrityError,
+    canonical_json,
+    canonical_primitive,
+    contract_sha256,
+    validate_extensions,
+)
+from .status import (
+    DECISION_RANK,
+    DecisionStatus,
+    FailureType,
+    TaskState,
+    aggregate_decisions,
+)
+from .validation import (
+    EvidenceClass,
+    FindingScope,
+    RuleDescriptor,
+    ValidationFinding,
+    ValidationReport,
+    ValidationRule,
+    ValidationSubject,
+)
+from .versioning import (
+    ContractCompatibilityError,
+    ContractRef,
+    ContractVersion,
+    require_namespaced_identifier,
+)
+
+__all__ = [
+    "ARTIFACT_REFERENCE",
+    "CORE_CONTRACTS",
+    "CORE_CONTRACT_VERSION",
+    "DECISION_RANK",
+    "EXECUTION_EVIDENCE",
+    "EXECUTION_REQUEST",
+    "PLUGIN_DESCRIPTOR",
+    "VALIDATION_REPORT",
+    "WORKFLOW_EVENT",
+    "ArtifactReference",
+    "ArtifactRole",
+    "ArtifactTransfer",
+    "CapabilityDescriptor",
+    "CapabilityKind",
+    "CapabilityRegistry",
+    "ContractCompatibilityError",
+    "ContractEnvelope",
+    "ContractIntegrityError",
+    "ContractRef",
+    "ContractVersion",
+    "DecisionStatus",
+    "EvidenceClass",
+    "ExecutionEvidence",
+    "ExecutionRequest",
+    "FailureType",
+    "FindingScope",
+    "LauncherKind",
+    "Plugin",
+    "PluginDescriptor",
+    "ProvenanceLink",
+    "ProvenanceRelation",
+    "RegisteredCapability",
+    "ResourceRequest",
+    "RuleDescriptor",
+    "TaskState",
+    "ValidationFinding",
+    "ValidationReport",
+    "ValidationRule",
+    "ValidationSubject",
+    "WorkflowEvent",
+    "aggregate_decisions",
+    "canonical_json",
+    "canonical_primitive",
+    "contract_catalog",
+    "contract_sha256",
+    "require_namespaced_identifier",
+    "validate_extensions",
+]

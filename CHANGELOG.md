@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased — core contracts
+
+- Added engine- and cluster-neutral Core Contracts 1.0 for validation reports,
+  artifact references and transfers, execution requests/evidence, workflow
+  events, and plugin descriptors.
+- Added canonical immutable SHA-256 envelopes, explicit major/minor
+  compatibility, namespaced extensions, strict relative paths, and exact
+  multinode resource invariants.
+- Added an explicit, freezable capability registry for engines, validation
+  rules, launchers, artifact processors, postprocessors, and schedulers.
+- Moved shared task/decision/failure vocabularies into the contract kernel
+  while preserving imports from `siestaflow.models`.
+- Added compatibility adapters for current SIESTA validation/artifact models
+  and allocation-local launcher models.
+
 ## 0.2.0 consolidation alpha (2026-07-29)
 
 - Added the Yoltla Hydra launcher with explicit hosts, ranks-per-node and a

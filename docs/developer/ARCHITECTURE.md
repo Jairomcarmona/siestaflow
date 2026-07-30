@@ -1,7 +1,8 @@
 # Architecture
 
 ```text
-generic kernel
+core contracts (engine/cluster independent)
+  -> generic kernel services
   -> SIESTA engine adapter
   -> generic campaign primitives
   -> allocation-local controller (DAG + transfers + gates)
@@ -10,9 +11,25 @@ generic kernel
   -> external ExamplePackage
 ```
 
-`models`, `authorization`, `campaign`, `gates`, `hpc`, `workspace`, and storage/filesystem modules form the kernel. `engines/siesta` parses, validates, renders controlled variants, audits arbitrary pseudopotentials, and parses output. `project_packages.py` owns schema/path validation. `siesta_campaigns.py` interprets external declarations. `examples.py` exposes discovery, staging, reproducible packaging, simulation, and result import. Remote modules create inert previews and conservatively import evidence.
+`contracts` is the innermost dependency boundary. It defines versioning,
+canonical envelopes, validation, artifacts, execution, events, and explicit
+plugin capabilities. It imports no engine, launcher, cluster, subprocess, or
+storage implementation. `contract_adapters.py` is the compatibility boundary
+for gradual adoption.
+
+`models`, `authorization`, `campaign`, `gates`, `hpc`, `workspace`, and
+storage/filesystem modules form the existing kernel services.
+`engines/siesta` parses, validates, renders controlled variants, audits
+arbitrary pseudopotentials, and parses output. `project_packages.py` owns
+schema/path validation. `siesta_campaigns.py` interprets external declarations.
+`examples.py` exposes discovery, staging, reproducible packaging, simulation,
+and result import. Remote modules create inert previews and conservatively
+import evidence.
 
 Dependency direction is inward toward generic contracts; reference examples may import the runtime, while runtime code never imports examples or reference projects.
+
+The public extension and compatibility policy is specified in
+`docs/design/CORE_CONTRACTS_1_0.md`.
 
 ## Controller schema 2.0
 
