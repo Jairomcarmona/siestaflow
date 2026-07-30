@@ -46,3 +46,5 @@ Scientific policy remains external data under `examples/`; the core never
 selects a functional, Hubbard U, magnetic state or convergence threshold.
 Contract compatibility and plugin rules are documented in
 [CORE_CONTRACTS_1_0.md](docs/design/CORE_CONTRACTS_1_0.md).
+The governing product direction, vocabulary, phases, and acceptance gates are
+defined in [SIESTAFLOW_BACKBONE.md](docs/design/SIESTAFLOW_BACKBONE.md).

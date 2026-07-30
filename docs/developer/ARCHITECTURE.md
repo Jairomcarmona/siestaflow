@@ -30,6 +30,8 @@ Dependency direction is inward toward generic contracts; reference examples may 
 
 The public extension and compatibility policy is specified in
 `docs/design/CORE_CONTRACTS_1_0.md`.
+Project scope, stable vocabulary, construction phases and acceptance
+invariants are governed by `docs/design/SIESTAFLOW_BACKBONE.md`.
 
 ## Controller schema 2.0
 
