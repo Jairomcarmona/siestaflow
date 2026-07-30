@@ -54,3 +54,16 @@ def test_include_is_preserved_but_blocked_without_path_policy():
     result = SiestaInputValidator().validate(FDFParser().parse("%include x.fdf\n"))
     assert result.status.value == "FAIL"  # required blocks are also absent
     assert any(item.code == "UNRESOLVED_INCLUDE" and item.status.value == "BLOCKED" for item in result.findings)
+
+
+def test_documented_density_matrix_restart_keyword_is_recognized(sanity_fdf: Path):
+    source = sanity_fdf.read_text(encoding="utf-8").replace(
+        "MD.Steps 0",
+        "DM.UseSaveDM T\nMD.Steps 0",
+    )
+    result = SiestaInputValidator().validate(FDFParser().parse(source))
+
+    assert not any(
+        item.code == "UNKNOWN_LABEL" and item.label == "DM.UseSaveDM"
+        for item in result.findings
+    )
