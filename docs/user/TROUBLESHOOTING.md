@@ -1,5 +1,20 @@
 # Troubleshooting
 
+- `SIESTA_EXECUTABLE_MISSING` or `SIESTA_IDENTITY_UNCONFIRMED`: load the intended SIESTA
+  module or provide `--siesta` with the verified executable; do not substitute
+  another program that merely accepts `--version`.
+- `LAUNCHER_NOT_FOUND`: select a launcher installed for that environment or
+  correct the module setup. `environment check` never installs software.
+- `SLURM_CLIENT_INCOMPLETE`: required client commands are unavailable; this does
+  not by itself prove that a controller is reachable.
+- `refusing to modify existing non-matching project`: the destination contains
+  a different initialization lock. Use another destination or reconcile the
+  source inputs; existing work is not overwritten.
+- `PSEUDOPOTENTIAL_DECLARATION_MISSING`: add the exact FDF species declarations to
+  the external manifest. No pseudopotential is guessed or downloaded.
+- `STRUCTURE_CHEMISTRY_REVIEW_REQUIRED`: expected review finding, not proof of
+  invalid chemistry. Inspect composition, coordinates, units, periodicity and
+  intended connectivity before execution.
 - Exit `2` with `MISSING_DIRECTORY` or `MISSING_*`: fix the external package path or manifest; no partial package is loaded.
 - `EXAMPLE_BLOCKED_MISSING_PSEUDOS`: provide exactly one matching filename below `--pseudo-root`.
 - `EXAMPLE_BLOCKED_HASH_MISMATCH`: do not replace or download automatically; verify provenance and update only the authorized external manifest.

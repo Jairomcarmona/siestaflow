@@ -14,9 +14,16 @@ from .engines.siesta.fdf_parser import FDFParser
 from .engines.siesta.input_validator import SiestaInputValidator
 from .engines.siesta.models import FDFBlock, FDFInclude, FDFScalar, FDFUnknown
 from .engines.siesta.pseudopotentials import PseudopotentialManifest, PseudopotentialVerifier
+from .environment_check import EnvironmentChecker, EnvironmentCheckRequest
+from .errors import SiestaFlowError
 from .examples import ExampleRegistry, ExampleService
 from .models import AuthorizationEnvelope, CampaignManifest, TaskSpec, primitive
 from .project_packages import ProjectPackageLoader, load_structured
+from .project_scaffold import (
+    ProjectInitRequest,
+    ProjectScaffolder,
+    render_project_init,
+)
 from .remote import RemotePackager, RemoteResultImporter
 from .remote_environment import EnvironmentProbePackager, RemoteEnvironmentImporter, RemoteEnvironmentStatus
 from .siesta_campaigns import CampaignDefinition, SiestaCampaignFactory, simulate_definition
@@ -32,6 +39,8 @@ from .workflows import (
     workflow_plan,
     write_workflow_lock,
 )
+from .contract_adapters import validation_report_from_siesta
+from .validation_render import render_validation_report
 
 
 def _repo_root() -> Path:
@@ -46,6 +55,23 @@ def build_parser() -> argparse.ArgumentParser:
 
     project = sub.add_parser("project")
     project_sub = project.add_subparsers(dest="action", required=True)
+    project_init = project_sub.add_parser(
+        "init",
+        help="create a preparation-only project from real researcher inputs",
+    )
+    project_init.add_argument("path", type=Path)
+    project_init.add_argument("--project-id", required=True)
+    project_init.add_argument("--title")
+    project_init.add_argument("--system-id", required=True)
+    project_init.add_argument("--fdf", type=Path, required=True)
+    project_init.add_argument("--structure", type=Path, required=True)
+    project_init.add_argument(
+        "--pseudo-manifest",
+        type=Path,
+        required=True,
+    )
+    project_init.add_argument("--dry-run", action="store_true")
+    project_init.add_argument("--json", action="store_true")
     for action in ("inspect", "validate", "load"):
         command = project_sub.add_parser(action)
         command.add_argument("path", type=Path)
@@ -61,7 +87,29 @@ def build_parser() -> argparse.ArgumentParser:
     inp_sub = inp.add_subparsers(dest="action", required=True)
     inp_validate = inp_sub.add_parser("validate")
     inp_validate.add_argument("path", type=Path)
+    inp_validate.add_argument("--pseudo-manifest", type=Path)
+    inp_validate.add_argument("--require-pseudos", action="store_true")
     inp_validate.add_argument("--json", action="store_true")
+
+    environment = sub.add_parser(
+        "environment",
+        help="inspect local SIESTA, launcher, Slurm and workspace capabilities",
+    )
+    environment_sub = environment.add_subparsers(dest="action", required=True)
+    environment_check = environment_sub.add_parser("check")
+    environment_check.add_argument("--siesta", default="siesta")
+    environment_check.add_argument(
+        "--launcher",
+        choices=("auto", "direct", "srun", "mpiexec", "mpirun"),
+        default="auto",
+    )
+    environment_check.add_argument("--require-slurm", action="store_true")
+    environment_check.add_argument(
+        "--working-directory",
+        type=Path,
+        default=Path("."),
+    )
+    environment_check.add_argument("--json", action="store_true")
 
     pseudo = sub.add_parser("pseudo")
     pseudo_sub = pseudo.add_subparsers(dest="action", required=True)
@@ -186,12 +234,42 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         return _dispatch(args)
-    except (OSError, ValueError, PermissionError, RuntimeError, KeyError) as exc:
+    except (
+        OSError,
+        ValueError,
+        PermissionError,
+        RuntimeError,
+        KeyError,
+        SiestaFlowError,
+    ) as exc:
         print(f"SIESTAFLOW_ERROR: {exc}", file=sys.stderr)
         return 2
 
 
 def _dispatch(args: argparse.Namespace) -> int:
+    if args.domain == "environment":
+        report = EnvironmentChecker().check(
+            EnvironmentCheckRequest(
+                siesta_executable=args.siesta,
+                launcher=args.launcher,
+                require_slurm=args.require_slurm,
+                working_directory=args.working_directory,
+            )
+        )
+        if args.json:
+            _emit(report, True)
+        else:
+            print(
+                render_validation_report(
+                    report,
+                    title="ENVIRONMENT CHECK",
+                )
+            )
+        return (
+            2
+            if report.status.value in {"FAIL", "BLOCKED"}
+            else 0
+        )
     if args.domain == "workflow":
         compilation = WorkflowCompiler().compile(args.definition)
         if not compilation.valid or compilation.compiled is None:
@@ -252,6 +330,28 @@ def _dispatch(args: argparse.Namespace) -> int:
         )
         return 0
     if args.domain == "project":
+        if args.action == "init":
+            result = ProjectScaffolder().initialize(
+                ProjectInitRequest(
+                    root=args.path,
+                    project_id=args.project_id,
+                    title=args.title or args.project_id,
+                    system_id=args.system_id,
+                    fdf=args.fdf,
+                    structure=args.structure,
+                    pseudopotential_manifest=args.pseudo_manifest,
+                    dry_run=args.dry_run,
+                )
+            )
+            if args.json:
+                _emit(result, True)
+            else:
+                print(render_project_init(result))
+            return (
+                2
+                if result.decision.value in {"FAIL", "BLOCKED"}
+                else 0
+            )
         loader = ProjectPackageLoader()
         if args.action == "inspect":
             data = loader.inspect(args.path)
@@ -266,8 +366,30 @@ def _dispatch(args: argparse.Namespace) -> int:
         document = FDFParser().parse_path(args.path); data = _inspect_data(document); _emit(data, args.json)
         return 2 if any(item["severity"] == "ERROR" for item in data["diagnostics"]) else 0
     if args.domain == "input":
-        result = SiestaInputValidator().validate(FDFParser().parse_path(args.path)); _emit(primitive(result), args.json)
-        return 2 if result.status.value in {"FAIL", "BLOCKED"} else 0
+        document = FDFParser().parse_path(args.path)
+        initial = SiestaInputValidator().validate(document)
+        pseudo_result = None
+        if args.pseudo_manifest:
+            manifest = PseudopotentialManifest.load(args.pseudo_manifest)
+            pseudo_result = PseudopotentialVerifier().verify(
+                manifest,
+                initial.species,
+            )
+        result = SiestaInputValidator().validate(
+            document,
+            pseudo_result=pseudo_result,
+            require_pseudos=args.require_pseudos,
+        )
+        report = validation_report_from_siesta(
+            result,
+            subject_id=result.system_id or args.path.stem,
+            source=str(args.path.resolve()),
+        )
+        if args.json:
+            _emit(report, True)
+        else:
+            print(render_validation_report(report, title="SIESTA INPUT"))
+        return 2 if report.status.value in {"FAIL", "BLOCKED"} else 0
     if args.domain == "pseudo":
         manifest = PseudopotentialManifest.load(args.manifest)
         result = PseudopotentialVerifier().verify(manifest, tuple(args.species or [entry.species for entry in manifest.entries]))

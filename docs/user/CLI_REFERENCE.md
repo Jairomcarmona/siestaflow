@@ -3,11 +3,13 @@
 All commands use `python -m siestaflow.cli [--workspace PATH] [--examples-root PATH]`. Success is exit `0`; invalid input, blocked validation, hash mismatch, or failed evidence is exit `2`. `--dry-run` predicts actions and produces zero filesystem effects.
 
 ```text
+environment check [--siesta PATH_OR_COMMAND] [--launcher {auto,direct,srun,mpiexec,mpirun}] [--require-slurm] [--working-directory PATH] [--json]
+project init PATH --project-id ID --title TITLE --system-id ID --fdf PATH --structure PATH --pseudo-manifest PATH [--dry-run] [--json]
 project inspect PATH [--json]
 project validate PATH [--json]
 project load PATH [--json]
 fdf inspect PATH [--json]
-input validate PATH [--json]
+input validate PATH [--pseudo-manifest PATH] [--require-pseudos] [--json]
 pseudo verify MANIFEST [--species SPECIES ...] [--json]
 workflow validate DEFINITION [--json]
 workflow plan DEFINITION [--json]
@@ -33,6 +35,22 @@ remote results import BUNDLE [--campaign-id ID] [--output PATH] [--dry-run] [--j
 remote environment package [--output PATH] [--pseudo-manifest PATH] [--status-labels PATH] [--dry-run] [--json]
 remote environment import BUNDLE [--output PATH] [--dry-run] [--json]
 ```
+
+`environment check` is read-only. It identifies Python, the requested SIESTA
+executable, MPI capability, the selected launcher, optional SLURM clients, and
+workspace accessibility. It neither submits jobs nor claims scientific
+validity.
+
+`project init` creates a preparation-only ProjectPackage from explicit existing
+files. It preserves their bytes, validates the FDF and species-to-manifest
+coverage, writes an idempotency lock, and refuses conflicting reuse of the
+destination. It does not select functionals, Hubbard U, spin, grids,
+pseudopotentials, resources, or convergence thresholds.
+
+`input validate` emits the common explainable validation contract. Each finding
+contains a stable rule code, severity, scope, location where available,
+evidence, and a remediation hint. With `--require-pseudos`, a manifest is
+mandatory and the pseudopotential files and hashes are checked.
 
 `remote package` and `remote environment package` generate `PREVIEW` artifacts only and never submit. Environment import returns `0` for review/incomplete and `2` for invalid/failed evidence; only a real complete bundle can become `REMOTE_VERIFIED`.
 

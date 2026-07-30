@@ -28,7 +28,8 @@ def _commands(parser: argparse.ArgumentParser, prefix: tuple[str, ...] = ()) -> 
 def test_cli_reference_matches_implemented_command_tree():
     implemented = _commands(build_parser())
     documented = {
-        ("project", "inspect"), ("project", "validate"), ("project", "load"),
+        ("environment", "check"),
+        ("project", "init"), ("project", "inspect"), ("project", "validate"), ("project", "load"),
         ("fdf", "inspect"), ("input", "validate"), ("pseudo", "verify"),
         ("campaign", "create"), ("campaign", "validate"), ("campaign", "simulate"), ("campaign", "status"),
         ("examples", "list"), ("examples", "inspect"), ("examples", "validate"), ("examples", "stage"),

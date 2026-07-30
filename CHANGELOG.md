@@ -27,6 +27,11 @@
 - Added explicit parsing of successful DM restart consumption, allowlisted the
   SIESTA 5.4.2 `BASIS_ENTHALPY` deprecation warning, and made recovery
   re-evaluate incomplete historical attempts without repeating valid work.
+- Added the Phase 2 researcher CLI vertical: read-only environment checks,
+  idempotent preparation-only project initialization, and explainable
+  Core-Contract input validation with optional pseudopotential verification.
+- Added a real WSL/Slurm integration sandbox and recorded local acceptance
+  evidence without treating it as Yoltla or scientific validation.
 
 ## 0.2.0 consolidation alpha (2026-07-29)
 

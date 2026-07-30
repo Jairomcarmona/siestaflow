@@ -37,6 +37,62 @@ _ARTIFACT_ROLE_BY_TYPE = {
     "PSF": ArtifactRole.PSEUDOPOTENTIAL,
 }
 
+_INPUT_HINTS = {
+    "UNKNOWN_LABEL": (
+        "Verify the spelling against the SIESTA manual for the selected "
+        "version; unknown labels are preserved but not trusted."
+    ),
+    "UNRESOLVED_INCLUDE": (
+        "Resolve includes into an authorized package root before execution."
+    ),
+    "INVALID_SPECIES_ROW": "Use: species-index atomic-number chemical-label.",
+    "INVALID_SPECIES_INDEX": "Use a positive integer species index.",
+    "SPECIES_COUNT_MISMATCH": (
+        "Make NumberOfSpecies equal the ChemicalSpeciesLabel row count."
+    ),
+    "ATOM_COUNT_MISMATCH": (
+        "Make NumberOfAtoms equal the coordinate row count."
+    ),
+    "INVALID_COORDINATE_ROW": (
+        "Provide three coordinates followed by a declared species index."
+    ),
+    "INVALID_COORDINATE_SPECIES": "Use an integer species index in each coordinate row.",
+    "UNKNOWN_SPECIES_INDEX": (
+        "Reference only indices declared in ChemicalSpeciesLabel."
+    ),
+    "MISSING_REQUIRED_BLOCK": "Add the named block before preparing execution.",
+    "UNDECLARED_GOVERNED_VALUE": (
+        "Declare the value explicitly so no engine default is silently assumed."
+    ),
+    "INVALID_INTEGER": "Replace the value with an integer accepted by SIESTA.",
+    "PSEUDOPOTENTIAL_AUDIT": (
+        "Resolve every manifest finding and hash mismatch before execution."
+    ),
+    "PSEUDOPOTENTIAL_MANIFEST_REQUIRED": (
+        "Pass a verified pseudopotential manifest covering every species."
+    ),
+    "DUPLICATE_BLOCK": (
+        "Keep one authoritative block or document why repetition is valid."
+    ),
+}
+
+
+def _input_scope(code: str) -> FindingScope:
+    if "PSEUDOPOTENTIAL" in code:
+        return FindingScope.PSEUDOPOTENTIAL
+    if code in {"UNKNOWN_LABEL", "UNRESOLVED_INCLUDE"}:
+        return FindingScope.SYNTAX
+    if code in {"INVALID_INTEGER", "UNDECLARED_GOVERNED_VALUE"}:
+        return FindingScope.NUMERICAL
+    return FindingScope.STRUCTURE
+
+
+def _input_location(evidence: tuple[str, ...]) -> str | None:
+    return next(
+        (item for item in evidence if item.startswith("line:")),
+        None,
+    )
+
 
 def validation_report_from_siesta(
     result: InputValidationResult,
@@ -69,12 +125,13 @@ def validation_report_from_siesta(
                 if "PSEUDOPOTENTIAL" in item.code
                 else EvidenceClass.ENGINE_MANUAL
             ),
-            scope=(
-                FindingScope.PSEUDOPOTENTIAL
-                if "PSEUDOPOTENTIAL" in item.code
-                else FindingScope.STRUCTURE
-            ),
+            scope=_input_scope(item.code),
             subject_id=subject_id,
+            location=_input_location(item.evidence),
+            hint=_INPUT_HINTS.get(
+                item.code,
+                "Inspect the reported value and the corresponding SIESTA manual section.",
+            ),
             evidence=item.evidence,
         )
         for item in result.findings
@@ -184,4 +241,3 @@ def execution_evidence_from_step_outcome(
         artifacts=artifacts,
         metrics=dict(metrics or {}),
     )
-

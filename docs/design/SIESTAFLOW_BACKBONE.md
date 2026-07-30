@@ -227,3 +227,9 @@ La Fase 1 dispone de una implementación vertical local: contrato del DAG,
 validación estructural, resolución de artefactos, orden topológico, plan,
 grafo y `workflow.lock.json` determinista. Su aceptación queda condicionada a
 la suite completa y a revisión antes de conectar el lock con ejecución remota.
+
+La Fase 2 dispone de un corte vertical local orientado al investigador:
+diagnóstico de entorno de solo lectura, creación idempotente de proyectos desde
+entradas explícitas y validación explicable bajo Core Contracts. Esta fase no
+autoriza ejecución, no elige parámetros científicos y mantiene obligatoria la
+revisión química de la estructura.

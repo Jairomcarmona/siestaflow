@@ -8,6 +8,38 @@
 
 A package can live anywhere and contains `project.yaml`, `systems/`, `structures/`, `pseudopotentials/manifest.yaml`, `campaigns/`, `policies/`, `authorizations/`, and `expected_contracts/`. Schema `1.0` accepts arbitrary species strings. Paths are package-relative and traversal is rejected.
 
+Create one from explicit existing inputs:
+
+```powershell
+python -m siestaflow.cli project init C:\projects\my_package `
+  --project-id my_package `
+  --title "My package" `
+  --system-id system_01 `
+  --fdf C:\source\system.fdf `
+  --structure C:\source\system.xyz `
+  --pseudo-manifest C:\source\manifest.yaml `
+  --dry-run --json
+```
+
+Initialization validates before writing, preserves source bytes and records
+their hashes. A matching rerun is idempotent; a different request against the
+same destination is rejected. The generated campaign is preparation-only and
+cannot authorize real execution. Structure chemistry still requires explicit
+researcher review.
+
+## Environment and explainable input checks
+
+```powershell
+python -m siestaflow.cli environment check --siesta siesta --launcher auto --json
+python -m siestaflow.cli input validate C:\source\system.fdf `
+  --pseudo-manifest C:\source\manifest.yaml --require-pseudos --json
+```
+
+Both commands use the Core Contracts validation report. Findings expose stable
+rule identifiers, severity, scope, evidence and remediation. Environment
+checking is operational only: it does not validate the chemistry, numerical
+settings, scalability or scientific suitability of a calculation.
+
 ## Allocation-controller campaigns
 
 Schema `2.0` is the real execution contract. It declares the selected SLURM
