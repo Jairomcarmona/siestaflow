@@ -16,7 +16,17 @@ from .catalog import (
     PLUGIN_DESCRIPTOR,
     VALIDATION_REPORT,
     WORKFLOW_EVENT,
+    WORKFLOW_LOCK,
     contract_catalog,
+)
+from .workflow import (
+    CompiledWorkflow,
+    WorkflowEdge,
+    WorkflowEdgeKind,
+    WorkflowInputBinding,
+    WorkflowOutputPort,
+    WorkflowTaskKind,
+    WorkflowTaskNode,
 )
 from .events import WorkflowEvent
 from .execution import (
@@ -74,6 +84,7 @@ __all__ = [
     "PLUGIN_DESCRIPTOR",
     "VALIDATION_REPORT",
     "WORKFLOW_EVENT",
+    "WORKFLOW_LOCK",
     "ArtifactReference",
     "ArtifactRole",
     "ArtifactTransfer",
@@ -105,6 +116,13 @@ __all__ = [
     "ValidationRule",
     "ValidationSubject",
     "WorkflowEvent",
+    "CompiledWorkflow",
+    "WorkflowEdge",
+    "WorkflowEdgeKind",
+    "WorkflowInputBinding",
+    "WorkflowOutputPort",
+    "WorkflowTaskKind",
+    "WorkflowTaskNode",
     "aggregate_decisions",
     "canonical_json",
     "canonical_primitive",

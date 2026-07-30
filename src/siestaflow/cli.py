@@ -24,6 +24,14 @@ from .execution.allocation_controller import AllocationController, ExecutionStat
 from .execution.campaign_progress import read_campaign_progress, render_campaign_progress
 from .m4_remote_package import M4RemoteSmokePackager
 from .controller_package import ControllerPackageBuilder
+from .workflows import (
+    WorkflowCompiler,
+    render_workflow_graph,
+    render_workflow_plan,
+    workflow_graph,
+    workflow_plan,
+    write_workflow_lock,
+)
 
 
 def _repo_root() -> Path:
@@ -90,6 +98,36 @@ def build_parser() -> argparse.ArgumentParser:
     )
     watch.add_argument("--json", action="store_true")
 
+    workflow = sub.add_parser(
+        "workflow", help="validate and compile scientific workflow DAGs"
+    )
+    workflow_sub = workflow.add_subparsers(dest="action", required=True)
+    workflow_validate = workflow_sub.add_parser(
+        "validate", help="validate schema, artifacts, and graph consistency"
+    )
+    workflow_validate.add_argument("definition", type=Path)
+    workflow_validate.add_argument("--json", action="store_true")
+    workflow_plan_parser = workflow_sub.add_parser(
+        "plan", help="show the resolved topological execution plan"
+    )
+    workflow_plan_parser.add_argument("definition", type=Path)
+    workflow_plan_parser.add_argument("--json", action="store_true")
+    workflow_graph_parser = workflow_sub.add_parser(
+        "graph", help="render dependencies as text, Mermaid, or JSON"
+    )
+    workflow_graph_parser.add_argument("definition", type=Path)
+    workflow_graph_parser.add_argument(
+        "--format", choices=("text", "mermaid", "json"), default="text"
+    )
+    workflow_compile = workflow_sub.add_parser(
+        "compile", help="write a deterministic workflow.lock.json"
+    )
+    workflow_compile.add_argument("definition", type=Path)
+    workflow_compile.add_argument("--output", type=Path, required=True)
+    workflow_compile.add_argument("--force", action="store_true")
+    workflow_compile.add_argument("--dry-run", action="store_true")
+    workflow_compile.add_argument("--json", action="store_true")
+
     examples = sub.add_parser("examples")
     example_sub = examples.add_subparsers(dest="action", required=True)
     example_sub.add_parser("list").add_argument("--json", action="store_true")
@@ -154,6 +192,65 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _dispatch(args: argparse.Namespace) -> int:
+    if args.domain == "workflow":
+        compilation = WorkflowCompiler().compile(args.definition)
+        if not compilation.valid or compilation.compiled is None:
+            _emit_workflow_validation(compilation, args.json)
+            return 2
+        if args.action == "validate":
+            _emit_workflow_validation(compilation, args.json)
+            return 0
+        if args.action == "plan":
+            _emit(
+                workflow_plan(compilation.compiled)
+                if args.json
+                else render_workflow_plan(compilation.compiled),
+                args.json,
+            )
+            return 0
+        if args.action == "graph":
+            if args.format == "json":
+                print(
+                    json.dumps(
+                        workflow_graph(compilation.compiled),
+                        sort_keys=True,
+                        indent=2,
+                        ensure_ascii=False,
+                    )
+                )
+            else:
+                print(
+                    render_workflow_graph(
+                        compilation.compiled, output_format=args.format
+                    )
+                )
+            return 0
+        lock = compilation.lock_dict()
+        if args.dry_run:
+            _emit(
+                {
+                    "status": "DRY_RUN",
+                    "output": str(args.output),
+                    "content_sha256": lock["content_sha256"],
+                    "filesystem_changes": 0,
+                },
+                args.json,
+            )
+            return 0
+        digest = write_workflow_lock(
+            compilation, args.output, overwrite=args.force
+        )
+        _emit(
+            {
+                "status": "WORKFLOW_COMPILED",
+                "output": str(args.output.resolve()),
+                "content_sha256": digest,
+                "task_count": len(compilation.compiled.tasks),
+                "execution_authorized": False,
+            },
+            args.json,
+        )
+        return 0
     if args.domain == "project":
         loader = ProjectPackageLoader()
         if args.action == "inspect":
@@ -336,6 +433,36 @@ def _emit(data: Any, as_json: bool) -> None:
     elif isinstance(payload, dict):
         for key, value in payload.items(): print(f"{key}: {value}")
     else: print(payload)
+
+
+def _emit_workflow_validation(compilation, as_json: bool) -> None:
+    report = primitive(compilation.report)
+    data = {
+        "valid": compilation.valid,
+        "report": report,
+        "workflow_lock_sha256": (
+            compilation.lock_dict()["content_sha256"]
+            if compilation.valid
+            else None
+        ),
+        "execution_authorized": False,
+    }
+    if as_json:
+        print(json.dumps(data, sort_keys=True, indent=2, ensure_ascii=False))
+        return
+    print(
+        f"WORKFLOW VALIDATION: {compilation.report.status.value}  "
+        f"SUBJECT: {compilation.report.subject.subject_id}"
+    )
+    if not compilation.report.findings:
+        print("No structural, graph, resource, or artifact errors detected.")
+    for finding in compilation.report.findings:
+        location = f" ({finding.location})" if finding.location else ""
+        print(f"[{finding.status.value}] {finding.code}{location}")
+        print(f"  {finding.message}")
+        if finding.hint:
+            print(f"  Suggested action: {finding.hint}")
+    print("EXECUTION_AUTHORIZED: NO")
 
 
 if __name__ == "__main__":

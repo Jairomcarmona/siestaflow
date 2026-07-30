@@ -20,6 +20,7 @@ EXECUTION_EVIDENCE = ContractRef(
     "siestaflow.execution-evidence", CORE_CONTRACT_VERSION
 )
 WORKFLOW_EVENT = ContractRef("siestaflow.workflow-event", CORE_CONTRACT_VERSION)
+WORKFLOW_LOCK = ContractRef("siestaflow.workflow-lock", CORE_CONTRACT_VERSION)
 PLUGIN_DESCRIPTOR = ContractRef(
     "siestaflow.plugin-descriptor", CORE_CONTRACT_VERSION
 )
@@ -30,10 +31,10 @@ CORE_CONTRACTS = (
     EXECUTION_REQUEST,
     EXECUTION_EVIDENCE,
     WORKFLOW_EVENT,
+    WORKFLOW_LOCK,
     PLUGIN_DESCRIPTOR,
 )
 
 
 def contract_catalog() -> tuple[ContractRef, ...]:
     return CORE_CONTRACTS
-

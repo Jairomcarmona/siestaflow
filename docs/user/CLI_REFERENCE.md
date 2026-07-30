@@ -9,6 +9,10 @@ project load PATH [--json]
 fdf inspect PATH [--json]
 input validate PATH [--json]
 pseudo verify MANIFEST [--species SPECIES ...] [--json]
+workflow validate DEFINITION [--json]
+workflow plan DEFINITION [--json]
+workflow graph DEFINITION [--format {text,mermaid,json}]
+workflow compile DEFINITION --output PATH [--force] [--dry-run] [--json]
 campaign create --project PATH --campaign-id ID [--dry-run] [--json]
 campaign validate CAMPAIGN [--dry-run] [--json]
 campaign simulate CAMPAIGN [--dry-run] [--json]
@@ -36,3 +40,8 @@ remote environment import BUNDLE [--output PATH] [--dry-run] [--json]
 for a schema-1 or schema-2 allocation-controller campaign. It never calls
 `sbatch`. `campaign worker` is intended to run only inside the generated SLURM
 allocation. `campaign progress` and `watch` are read-only.
+
+The `workflow` command family implements Phase 1 compilation only. Validation,
+planning and graph rendering are read-only. `workflow compile` writes a
+canonical, hash-bound `siestaflow.workflow-lock@1.0` envelope and never
+authorizes or starts execution.

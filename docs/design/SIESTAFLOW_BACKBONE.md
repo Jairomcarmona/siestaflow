@@ -223,5 +223,7 @@ La Fase 0 está implementada en una rama de arquitectura. El controlador actual
 ya proporciona evidencia real sobre Hydra, dependencias, reinicio DM y
 persistencia dentro de una asignación.
 
-El siguiente trabajo recomendado es la Fase 1: definir y compilar el workflow
-tipado antes de ampliar la interfaz o agregar nuevos flujos científicos.
+La Fase 1 dispone de una implementación vertical local: contrato del DAG,
+validación estructural, resolución de artefactos, orden topológico, plan,
+grafo y `workflow.lock.json` determinista. Su aceptación queda condicionada a
+la suite completa y a revisión antes de conectar el lock con ejecución remota.

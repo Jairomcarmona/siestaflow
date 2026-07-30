@@ -14,6 +14,13 @@
   while preserving imports from `siestaflow.models`.
 - Added compatibility adapters for current SIESTA validation/artifact models
   and allocation-local launcher models.
+- Added the Phase 1 typed workflow DAG contract and deterministic compiler,
+  including fail-closed schema/graph/artifact/resource validation, external
+  input hashes, topological planning, text/Mermaid graphs, and canonical
+  `workflow.lock.json` envelopes.
+- Added the `workflow validate`, `workflow plan`, `workflow graph`, and
+  `workflow compile` CLI commands. Compilation explicitly does not authorize
+  execution.
 - Corrected the Yoltla-observed restart-DM false negative: transferred inputs
   now have an immutable pre-execution evidence copy, while the working copy may
   be legitimately replaced by SIESTA and is recorded as a separate output.

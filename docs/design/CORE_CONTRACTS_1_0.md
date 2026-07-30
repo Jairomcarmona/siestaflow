@@ -34,6 +34,7 @@ storage implementation.
 | `siestaflow.execution-request@1.0` | Engine-neutral task and exact resource placement |
 | `siestaflow.execution-evidence@1.0` | Exit evidence, failure class, artifacts and metrics |
 | `siestaflow.workflow-event@1.0` | Append-only monitoring/API/UI event |
+| `siestaflow.workflow-lock@1.0` | Resolved, topologically ordered scientific DAG |
 | `siestaflow.plugin-descriptor@1.0` | Explicit plugin and capability declaration |
 
 `PASS`, `REVIEW`, `BLOCKED`, and `FAIL` are never replaced by booleans.
