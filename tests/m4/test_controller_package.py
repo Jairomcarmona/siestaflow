@@ -105,7 +105,7 @@ def test_controller_package_is_reproducible_and_cleanly_verifies(tmp_path: Path)
     assert "mpiexec.hydra" in (root / "campaign.yaml").read_text()
     submit = (root / "submit.slurm").read_text()
     assert "SIESTAFLOW_SIESTA_MODULE_LOAD_WARNING" in submit
-    assert "siesta --version >&2" in submit
+    assert "SIESTAFLOW_SIESTA_VERSION_PROBE_WARNING" in submit
     assert "python3 scripts/run_worker.py" in submit
 
 
