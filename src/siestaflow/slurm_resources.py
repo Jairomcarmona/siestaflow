@@ -258,7 +258,8 @@ def resolve_candidates(*, profile: Any, snapshot: Mapping[str, Any], required_fe
     for variant in snapshot["partitions"]:
         reasons: list[str] = []; review: list[str] = []
         maximum = walltime_seconds(variant.get("walltime")); requested = walltime_seconds(profile.walltime)
-        if maximum is not None and requested is not None and maximum < requested: reasons.append("INSUFFICIENT_WALLTIME")
+        if maximum is None: review.append("UNKNOWN_REQUIRED_CAPABILITY")
+        elif requested is not None and maximum < requested: reasons.append("INSUFFICIENT_WALLTIME")
         if variant.get("usable_nodes") is not None and int(variant["usable_nodes"]) < profile.nodes: reasons.append("INSUFFICIENT_NODES")
         if variant.get("cpus_per_node") is None: review.append("UNKNOWN_REQUIRED_CAPABILITY")
         elif int(variant["cpus_per_node"]) < int(profile.processes_per_node or profile.total_cpus): reasons.append("INSUFFICIENT_CPUS_PER_NODE")
@@ -272,24 +273,49 @@ def resolve_candidates(*, profile: Any, snapshot: Mapping[str, Any], required_fe
             elif value not in allowed: reasons.append(code)
         if profile.launcher_kind not in {"hydra", "srun"}: reasons.append("LAUNCHER_NOT_SUPPORTED")
         idle = variant.get("idle_nodes")
+        if idle is None: review.append("UNKNOWN_REQUIRED_CAPABILITY")
         if not reasons and idle is not None and int(idle) == 0: state = "COMPATIBLE_NO_CURRENT_IDLE_CAPACITY"; review.append("NO_USABLE_NODES_OBSERVED")
         elif reasons: state = "INCOMPATIBLE"
         elif review: state = "REQUIRES_HUMAN_REVIEW"
         else: state = "COMPATIBLE"
+        cpus_per_node = variant.get("cpus_per_node")
+        reserved_cpus = (profile.nodes * int(cpus_per_node)) if cpus_per_node is not None else None
+        memory_per_node = variant.get("memory_mb")
         candidate = {"candidate_id": str(variant["variant_id"]), "partition": variant["name"], "state": state,
                      "rejection_reasons": sorted(set(reasons)), "review_codes": sorted(set(review)), "idle_nodes": idle,
                      "resources": {"nodes": profile.nodes, "ranks_per_node": profile.processes_per_node, "total_ranks": profile.total_cpus,
                                    "memory": profile.memory, "walltime": profile.walltime, "features": variant.get("features") or []},
-                     "source_variant": variant}
+                     "source_variant": variant,
+                     "score": {
+                         "wasted_cpus": (reserved_cpus - profile.total_cpus) if reserved_cpus is not None else None,
+                         "reserved_cpus": reserved_cpus,
+                         "walltime_slack_seconds": (maximum - requested) if maximum is not None and requested is not None else None,
+                         "memory_excess_mb": (profile.nodes * float(memory_per_node) - profile.nodes * requested_memory) if memory_per_node is not None and requested_memory is not None else None,
+                         "free_nodes": idle,
+                         "uncertainty_count": len(set(review)),
+                     }}
         candidates.append(candidate)
     rank = {"COMPATIBLE": 0, "COMPATIBLE_NO_CURRENT_IDLE_CAPACITY": 1, "REQUIRES_HUMAN_REVIEW": 2, "INCOMPATIBLE": 3}
-    candidates.sort(key=lambda item: (rank[item["state"]], -(item["idle_nodes"] or 0), item["candidate_id"]))
+    def sort_key(item: Mapping[str, Any]) -> tuple[Any, ...]:
+        score = item["score"]
+        unknown = float("inf")
+        return (
+            rank[item["state"]],
+            score["wasted_cpus"] if score["wasted_cpus"] is not None else unknown,
+            score["reserved_cpus"] if score["reserved_cpus"] is not None else unknown,
+            score["walltime_slack_seconds"] if score["walltime_slack_seconds"] is not None else unknown,
+            score["memory_excess_mb"] if score["memory_excess_mb"] is not None else unknown,
+            -(score["free_nodes"] or 0),
+            score["uncertainty_count"],
+            item["candidate_id"],
+        )
+    candidates.sort(key=sort_key)
     for index, item in enumerate(candidates, 1):
         item["rank"] = index
         item["recommendation"] = ("RECOMMENDED_BY_CURRENT_SNAPSHOT" if index == 1 and item["state"] == "COMPATIBLE" else
                                   "COMPATIBLE_ALTERNATIVE" if item["state"] == "COMPATIBLE" else
                                   "COMPATIBLE_WITHOUT_IDLE_CAPACITY" if item["state"] == "COMPATIBLE_NO_CURRENT_IDLE_CAPACITY" else item["state"])
-        item["ranking_reason"] = "deterministic structural fit; not a queue-time prediction"
+        item["ranking_reason"] = "deterministic fit by CPU waste, reservation, walltime, memory, free nodes, and uncertainty; not a queue-time prediction"
     return {"snapshot_sha256": contract_sha256(snapshot), "snapshot_schema_version": snapshot["schema_version"],
             "snapshot_observed_at": snapshot["observed_at"], "candidates": candidates,
             "compatible": [item for item in candidates if item["state"] != "INCOMPATIBLE"],

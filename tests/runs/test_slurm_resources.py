@@ -71,6 +71,22 @@ def test_sjstat_malformed_rows_still_fail_closed() -> None:
     assert rows == [] and diagnostics[0]["code"] == "SJSTAT_ROW_INVALID"
 
 
+def test_ranking_prefers_smaller_confirmed_allocation_and_reviews_unknown_capacity(tmp_path: Path) -> None:
+    profile = SlurmExecutionProfile.load(_profile(tmp_path))
+    snapshot = {
+        "schema_version": "1.0", "scheduler": "slurm", "cluster_id": "x", "observed_at": "2026-08-01T00:00:00Z", "sources": [], "diagnostics": [],
+        "partitions": [
+            {"variant_id": "large:1", "name": "large", "walltime": "01:00:00", "usable_nodes": 2, "idle_nodes": 2, "cpus_per_node": 4, "memory_mb": 8192, "features": [], "accounts": ["vini"], "qos": ["normal"]},
+            {"variant_id": "small:1", "name": "small", "walltime": "00:30:00", "usable_nodes": 2, "idle_nodes": 1, "cpus_per_node": 2, "memory_mb": 8192, "features": [], "accounts": ["vini"], "qos": ["normal"]},
+            {"variant_id": "unknown:1", "name": "unknown", "walltime": None, "usable_nodes": 2, "idle_nodes": None, "cpus_per_node": 2, "memory_mb": 8192, "features": [], "accounts": ["vini"], "qos": ["normal"]},
+        ],
+    }
+    ranked = resolve_candidates(profile=profile, snapshot=snapshot)["candidates"]
+    assert [item["candidate_id"] for item in ranked] == ["small:1", "large:1", "unknown:1"]
+    assert ranked[0]["score"]["wasted_cpus"] == 0
+    assert ranked[2]["state"] == "REQUIRES_HUMAN_REVIEW"
+
+
 def test_resolution_explains_rejection_and_preserves_zero_idle_capacity(tmp_path: Path) -> None:
     profile = SlurmExecutionProfile.load(_profile(tmp_path))
     result = resolve_candidates(profile=profile, snapshot=_snapshot(), required_features=("fast",))
