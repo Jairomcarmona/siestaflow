@@ -250,6 +250,8 @@ def build_parser() -> argparse.ArgumentParser:
     run_prepare.add_argument("--account")
     run_prepare.add_argument("--qos")
     run_prepare.add_argument("--walltime")
+    run_prepare.add_argument("--required-feature", action="append", default=[])
+    run_prepare.add_argument("--compatibility-evidence", type=Path)
     run_prepare.add_argument("--dry-run", action="store_true")
     run_prepare.add_argument("--json", action="store_true")
     run_candidates = prepared_run_sub.add_parser(
@@ -515,7 +517,7 @@ def _dispatch(args: argparse.Namespace) -> int:
                 if not args.confirm:
                     raise ValueError("candidate selection requires explicit --confirm")
                 snapshot, _ = load_snapshot(args.snapshot)
-                candidates = resolve_candidates(profile=profile, snapshot=snapshot)
+                candidates = resolve_candidates(profile=profile, snapshot=snapshot, required_features=tuple(args.required_feature))
                 chosen = next((item for item in candidates["candidates"] if item["candidate_id"] == args.candidate), None)
                 if chosen is None or chosen["state"] == "INCOMPATIBLE":
                     raise ValueError("selected candidate is not compatible with the snapshot")
@@ -538,14 +540,33 @@ def _dispatch(args: argparse.Namespace) -> int:
             elif all(item is not None for item in manual):
                 if not args.confirm:
                     raise ValueError("manual resource selection requires explicit --confirm")
+                if args.snapshot is None or args.compatibility_evidence is None:
+                    raise ValueError("manual compatibility selection requires --snapshot and --compatibility-evidence")
+                snapshot, snapshot_sha = load_snapshot(args.snapshot)
+                compatible_variants = [
+                    item for item in snapshot["partitions"]
+                    if item["name"] == args.partition
+                    and (item.get("min_nodes") is None or args.nodes >= int(item["min_nodes"]))
+                    and (item.get("max_nodes") is None or args.nodes <= int(item["max_nodes"]))
+                    and item.get("cpus_per_node") is not None and int(item["cpus_per_node"]) >= args.ranks_per_node
+                    and set(args.required_feature).issubset(set(item.get("features") or ()))
+                ]
+                if not compatible_variants:
+                    raise ValueError("manual selection is not supported by snapshot node, CPU, or feature evidence")
+                evidence = load_structured(args.compatibility_evidence)
+                if evidence.get("schema_version") != "1.0" or not set(args.required_feature).issubset(set(evidence.get("compatible_features", []))):
+                    raise ValueError("execution compatibility evidence does not support required features")
+                if set(args.required_feature) & set(evidence.get("incompatible_features", [])):
+                    raise ValueError("execution compatibility evidence marks required feature incompatible")
                 resolved_profile = profile.resolved(partition=args.partition, account=args.account, qos=args.qos, nodes=args.nodes,
                                                     ranks_per_node=args.ranks_per_node, walltime=args.walltime)
-                resolution = {"resolution_mode": "MANUAL_OVERRIDE", "snapshot_schema_version": None, "snapshot_sha256": None,
-                              "snapshot_observed_at": None, "candidate_id": None, "selected_partition": args.partition, "selected_account": args.account,
+                resolution = {"resolution_mode": "MANUAL_COMPATIBILITY_OVERRIDE", "snapshot_schema_version": snapshot["schema_version"], "snapshot_sha256": snapshot_sha,
+                              "snapshot_observed_at": snapshot["observed_at"], "candidate_id": None, "selected_partition": args.partition, "selected_account": args.account,
                               "selected_qos": args.qos, "selected_nodes": args.nodes, "selected_ranks_per_node": args.ranks_per_node,
-                              "selected_total_ranks": args.nodes * args.ranks_per_node, "selected_walltime": args.walltime, "selected_features": [],
-                              "selection_status": "MANUAL_SELECTION_CONFIRMED", "selection_reason": "explicit human resource override", "human_confirmed": True,
-                              "resolution_timestamp": utc_now(), "pending_fields": ["ADMINISTRATIVE_AUTHORIZATION_NOT_VERIFIED"]}
+                              "selected_total_ranks": args.nodes * args.ranks_per_node, "selected_walltime": args.walltime, "selected_features": sorted(set(args.required_feature)),
+                              "selection_status": "MANUAL_COMPATIBILITY_SELECTION_CONFIRMED", "selection_reason": "explicit human selection validated against snapshot and execution compatibility evidence", "human_confirmed": True,
+                              "resolution_timestamp": utc_now(), "compatibility_evidence_sha256": sha256_file(args.compatibility_evidence), "task_placement_policy": "FULL_ALLOCATION_REMAP",
+                              "pending_fields": []}
             result = RunPreparer(_repo_root()).prepare(
                 RunPreparationRequest(
                     workflow_lock=args.workflow_lock,
@@ -557,6 +578,7 @@ def _dispatch(args: argparse.Namespace) -> int:
                     resolved_profile=resolved_profile,
                     execution_resolution=resolution,
                     cluster_snapshot=args.snapshot,
+                    compatibility_evidence=args.compatibility_evidence,
                 )
             )
             _emit(result, args.json)

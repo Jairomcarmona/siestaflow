@@ -201,6 +201,7 @@ def build_snapshot(*, cluster_id: str, observed_at: str, sinfo: str = "", scontr
                                "usable_nodes": row.get("total_nodes"), "idle_nodes": row.get("idle_nodes"), "cpus_per_node": row.get("cpus_per_node"),
                                "memory_mb": row.get("memory_mb"), "features": row.get("features", []), "node_type": None,
                                "default_partition": bool(row.get("default_partition", False)),
+                               "min_nodes": policy.get("min_nodes"), "max_nodes": policy.get("max_nodes"),
                                "accounts": accounts, "qos": qos, "sources": sorted({str(item.get("source")) for item in (row, policy) if item}),
                                "unknown_fields": sorted(key for key, value in {"idle_nodes": row.get("idle_nodes"), "cpus_per_node": row.get("cpus_per_node"), "memory_mb": row.get("memory_mb")}.items() if value is None)})
     return {"schema_version": SNAPSHOT_SCHEMA_VERSION, "scheduler": "slurm", "cluster_id": cluster_id,

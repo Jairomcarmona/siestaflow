@@ -80,6 +80,7 @@ class RunPreparationRequest:
     resolved_profile: SlurmExecutionProfile | None = None
     execution_resolution: Mapping[str, Any] | None = None
     cluster_snapshot: Path | None = None
+    compatibility_evidence: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -218,6 +219,11 @@ class RunPreparer:
                 if not snapshot_path.is_file():
                     raise ValueError(f"cluster snapshot is missing: {snapshot_path}")
                 provenance["cluster-snapshot.json"] = snapshot_path
+            if request.compatibility_evidence is not None:
+                evidence_path = request.compatibility_evidence.expanduser().resolve()
+                if not evidence_path.is_file():
+                    raise ValueError(f"compatibility evidence is missing: {evidence_path}")
+                provenance["execution-compatibility.json"] = evidence_path
             package = ControllerPackageBuilder(self.repository_root).build(
                 campaign_path,
                 request.output_root,
@@ -353,13 +359,16 @@ class RunPreparer:
                 raise ValueError(
                     f"task rank placement mismatch: {task.task_id}"
                 )
-            if profile.launcher_kind == "hydra" and (
-                profile.processes_per_node != ppn
-            ):
-                raise ValueError(
-                    f"task and Hydra profile processes_per_node disagree: "
-                    f"{task.task_id}"
-                )
+            if profile.launcher_kind == "hydra" and profile.processes_per_node != ppn:
+                if ranks != profile.total_cpus:
+                    raise ValueError(
+                        f"task and Hydra profile processes_per_node disagree: "
+                        f"{task.task_id}"
+                    )
+                # The workflow retains its scientific resource declaration;
+                # a full-allocation run may remap the same rank count across
+                # the resolved Slurm allocation without changing the DAG.
+                nodes = profile.nodes
             if cpus != 1:
                 raise ValueError(
                     "prepared Slurm packages currently require "

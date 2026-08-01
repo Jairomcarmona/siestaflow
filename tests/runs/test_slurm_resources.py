@@ -140,3 +140,20 @@ def test_candidate_requires_confirmation_and_produces_distinct_packages(tmp_path
     assert RunInspector().inspect(package_a).status == "PREPARED_RUN_VERIFIED"
     resolution = json.loads((package_a / "run.lock.json").read_text())["payload"]["metadata"]["execution_resolution"]
     assert {"ACCOUNT_AUTHORIZATION_UNKNOWN", "QOS_AUTHORIZATION_UNKNOWN"}.issubset(resolution["pending_fields"])
+
+
+def test_manual_compatible_remap_preserves_workflow_rank_count(tmp_path: Path) -> None:
+    source = tmp_path / "source"; source.mkdir()
+    definition = _sources(source)
+    compilation = WorkflowCompiler().compile(definition)
+    lock = tmp_path / "workflow.lock.json"; write_workflow_lock(compilation, lock)
+    profile = _profile(tmp_path)
+    snapshot = tmp_path / "snapshot.json"
+    write_snapshot({"schema_version": "1.0", "scheduler": "slurm", "cluster_id": "x", "observed_at": "2026-08-01T00:00:00Z", "sources": [], "diagnostics": [], "partitions": [{"variant_id": "p:1", "name": "p", "walltime": "01:00:00", "min_nodes": 4, "max_nodes": 4, "usable_nodes": 4, "idle_nodes": 4, "cpus_per_node": 20, "memory_mb": 8192, "features": ["tested"], "accounts": ["vini"], "qos": ["normal"]}]}, snapshot)
+    evidence = tmp_path / "compatibility.json"
+    evidence.write_text(json.dumps({"schema_version": "1.0", "compatible_features": ["tested"], "incompatible_features": ["other"]}), encoding="utf-8")
+    assert main(["run", "prepare", str(lock), "--source-root", str(source), "--profile", str(profile), "--snapshot", str(snapshot), "--compatibility-evidence", str(evidence), "--partition", "p", "--nodes", "4", "--ranks-per-node", "1", "--account", "vini", "--qos", "normal", "--walltime", "00:30:00", "--required-feature", "tested", "--confirm", "--output", str(tmp_path / "out"), "--run-id", "remap", "--json"]) == 0
+    package = tmp_path / "out" / "remap"
+    campaign = json.loads((package / "campaign.yaml").read_text())
+    assert all(item["nodes"] == 4 and item["mpi_processes"] == 4 for item in campaign["tasks"])
+    assert (package / "execution-compatibility.json").is_file()
