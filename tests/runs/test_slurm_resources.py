@@ -157,3 +157,16 @@ def test_manual_compatible_remap_preserves_workflow_rank_count(tmp_path: Path) -
     campaign = json.loads((package / "campaign.yaml").read_text())
     assert all(item["nodes"] == 4 and item["mpi_processes"] == 4 for item in campaign["tasks"])
     assert (package / "execution-compatibility.json").is_file()
+
+
+def test_manual_selection_requires_live_capacity_and_complete_partition_constraints(tmp_path: Path) -> None:
+    source = tmp_path / "source"; source.mkdir()
+    compilation = WorkflowCompiler().compile(_sources(source))
+    lock = tmp_path / "workflow.lock.json"; write_workflow_lock(compilation, lock)
+    profile = _profile(tmp_path)
+    snapshot = tmp_path / "snapshot.json"
+    write_snapshot({"schema_version": "1.0", "scheduler": "slurm", "cluster_id": "x", "observed_at": "2026-08-01T00:00:00Z", "sources": [], "diagnostics": [], "partitions": [{"variant_id": "p:1", "name": "p", "walltime": "00:10:00", "min_nodes": 4, "max_nodes": 4, "usable_nodes": 4, "idle_nodes": 0, "cpus_per_node": 20, "memory_mb": 8192, "features": ["tested"], "accounts": ["vini"], "qos": ["normal"]}]}, snapshot)
+    evidence = tmp_path / "compatibility.json"
+    evidence.write_text(json.dumps({"schema_version": "1.0", "compatible_features": ["tested"], "incompatible_features": []}), encoding="utf-8")
+    result = main(["run", "prepare", str(lock), "--source-root", str(source), "--profile", str(profile), "--snapshot", str(snapshot), "--compatibility-evidence", str(evidence), "--partition", "p", "--nodes", "4", "--ranks-per-node", "1", "--account", "vini", "--qos", "normal", "--walltime", "00:30:00", "--required-feature", "tested", "--confirm", "--output", str(tmp_path / "out"), "--run-id", "remap", "--json"])
+    assert result == 2

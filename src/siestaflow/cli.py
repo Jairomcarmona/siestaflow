@@ -41,9 +41,11 @@ from .slurm_resources import (
     build_snapshot,
     discover_snapshot,
     load_snapshot,
+    memory_megabytes,
     resolve_candidates,
     sha256_file,
     utc_now,
+    walltime_seconds,
     write_snapshot,
 )
 from .workflows import (
@@ -543,6 +545,8 @@ def _dispatch(args: argparse.Namespace) -> int:
                 if args.snapshot is None or args.compatibility_evidence is None:
                     raise ValueError("manual compatibility selection requires --snapshot and --compatibility-evidence")
                 snapshot, snapshot_sha = load_snapshot(args.snapshot)
+                required_memory = memory_megabytes(profile.memory)
+                required_walltime = walltime_seconds(args.walltime)
                 compatible_variants = [
                     item for item in snapshot["partitions"]
                     if item["name"] == args.partition
@@ -550,9 +554,14 @@ def _dispatch(args: argparse.Namespace) -> int:
                     and (item.get("max_nodes") is None or args.nodes <= int(item["max_nodes"]))
                     and item.get("cpus_per_node") is not None and int(item["cpus_per_node"]) >= args.ranks_per_node
                     and set(args.required_feature).issubset(set(item.get("features") or ()))
+                    and item.get("idle_nodes") is not None and int(item["idle_nodes"]) > 0
+                    and (required_memory is None or item.get("memory_mb") is None or int(item["memory_mb"]) >= required_memory)
+                    and (required_walltime is None or walltime_seconds(item.get("walltime")) is None or walltime_seconds(item.get("walltime")) >= required_walltime)
+                    and (item.get("accounts") is None or args.account in item["accounts"])
+                    and (item.get("qos") is None or args.qos in item["qos"])
                 ]
                 if not compatible_variants:
-                    raise ValueError("manual selection is not supported by snapshot node, CPU, or feature evidence")
+                    raise ValueError("manual selection is not supported by snapshot resource, authorization, or feature evidence")
                 evidence = load_structured(args.compatibility_evidence)
                 if evidence.get("schema_version") != "1.0" or not set(args.required_feature).issubset(set(evidence.get("compatible_features", []))):
                     raise ValueError("execution compatibility evidence does not support required features")

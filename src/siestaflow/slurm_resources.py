@@ -102,6 +102,7 @@ def parse_scontrol_partitions(text: str, *, source: str = "scontrol show partiti
             continue
         values[name] = {"state": fields.get("State"), "walltime": fields.get("MaxTime"),
                         "min_nodes": _int(fields.get("MinNodes")), "max_nodes": _int(fields.get("MaxNodes")),
+                        "exclusive_user": fields.get("ExclusiveUser", "NO").upper() == "YES",
                         "accounts": _restriction(fields.get("AllowAccounts")), "qos": _restriction(fields.get("AllowQos")),
                         "source": source, "line": line_no}
     return values, diagnostics
@@ -202,6 +203,7 @@ def build_snapshot(*, cluster_id: str, observed_at: str, sinfo: str = "", scontr
                                "memory_mb": row.get("memory_mb"), "features": row.get("features", []), "node_type": None,
                                "default_partition": bool(row.get("default_partition", False)),
                                "min_nodes": policy.get("min_nodes"), "max_nodes": policy.get("max_nodes"),
+                               "exclusive_user": policy.get("exclusive_user"),
                                "accounts": accounts, "qos": qos, "sources": sorted({str(item.get("source")) for item in (row, policy) if item}),
                                "unknown_fields": sorted(key for key, value in {"idle_nodes": row.get("idle_nodes"), "cpus_per_node": row.get("cpus_per_node"), "memory_mb": row.get("memory_mb")}.items() if value is None)})
     return {"schema_version": SNAPSHOT_SCHEMA_VERSION, "scheduler": "slurm", "cluster_id": cluster_id,
