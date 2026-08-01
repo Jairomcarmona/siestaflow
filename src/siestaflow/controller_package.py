@@ -308,9 +308,6 @@ if ! command -v {siesta_executable} >/dev/null 2>&1; then
   echo "SIESTAFLOW_SIESTA_EXECUTABLE_UNAVAILABLE: {siesta_executable}" >&2
   exit 127
 fi
-if ! {siesta_executable} --version >&2; then
-  echo "SIESTAFLOW_SIESTA_VERSION_PROBE_WARNING: singleton MPI version probe returned nonzero" >&2
-fi
 {environment_text}
 export PYTHONPATH="$ROOT/runtime"
 export PYTHONDONTWRITEBYTECODE=1
