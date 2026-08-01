@@ -20,3 +20,4 @@ compatibilidad y migración antes de solicitar aceptación humana.
 ## Índice
 
 - [ADR-0001 — Una base de código y una ruta canónica de ejecución](0001-single-codebase-canonical-execution-path.md)
+- [ADR-0002 — Resolución flexible y confirmada de recursos Slurm](0002-flexible-slurm-resource-resolution.md)

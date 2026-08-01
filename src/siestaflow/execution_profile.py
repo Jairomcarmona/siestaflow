@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -290,6 +290,33 @@ class SlurmExecutionProfile:
     @property
     def sha256(self) -> str:
         return contract_sha256(self.to_dict())
+
+    def resolved(
+        self,
+        *,
+        partition: str,
+        account: str,
+        qos: str,
+        nodes: int,
+        ranks_per_node: int,
+        walltime: str,
+    ) -> "SlurmExecutionProfile":
+        """Return an immutable run-specific profile without changing science."""
+        if self.launcher_kind == "hydra":
+            processes_per_node: int | None = ranks_per_node
+        else:
+            processes_per_node = self.processes_per_node
+        return replace(
+            self,
+            profile_id=f"{self.profile_id}-resolved",
+            partition=partition,
+            account=account,
+            qos=qos,
+            nodes=nodes,
+            total_cpus=nodes * ranks_per_node,
+            walltime=walltime,
+            processes_per_node=processes_per_node,
+        )
 
 
 def _validate_module_command(command: str) -> None:

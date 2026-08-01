@@ -105,6 +105,22 @@ class RunInspector:
         compiled = tuple(task.task_id for task in workflow.tasks)
         if run.task_ids != compiled or run.task_ids != configured:
             raise ValueError("run task identities disagree across contracts")
+        resolution = run.metadata.get("execution_resolution")
+        if isinstance(resolution, Mapping) and resolution.get("resolution_mode") != "PROFILE_ALREADY_RESOLVED":
+            resolution_path = _safe_path(root, "execution-resolution.json")
+            persisted = json.loads(resolution_path.read_text(encoding="utf-8"))
+            if persisted != resolution or resolution.get("human_confirmed") is not True:
+                raise ValueError("resolved execution confirmation is not immutable")
+            expected = {
+                "selected_partition": profile.partition,
+                "selected_account": profile.account,
+                "selected_qos": profile.qos,
+                "selected_nodes": profile.nodes,
+                "selected_total_ranks": profile.total_cpus,
+                "selected_walltime": profile.walltime,
+            }
+            if any(resolution.get(key) != value for key, value in expected.items()):
+                raise ValueError("resolved execution and submit configuration disagree")
 
         progress = read_campaign_progress(root)
         return PreparedRunInspection(

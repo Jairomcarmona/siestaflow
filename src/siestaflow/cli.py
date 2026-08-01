@@ -36,6 +36,16 @@ from .m4_remote_package import M4RemoteSmokePackager
 from .controller_package import ControllerPackageBuilder
 from .run_inspection import RunInspector
 from .run_preparation import RunPreparer, RunPreparationRequest
+from .execution_profile import SlurmExecutionProfile
+from .slurm_resources import (
+    build_snapshot,
+    discover_snapshot,
+    load_snapshot,
+    resolve_candidates,
+    sha256_file,
+    utc_now,
+    write_snapshot,
+)
 from .workflows import (
     WorkflowCompiler,
     render_workflow_graph,
@@ -231,8 +241,42 @@ def build_parser() -> argparse.ArgumentParser:
     run_prepare.add_argument("--profile", type=Path, required=True)
     run_prepare.add_argument("--output", type=Path, required=True)
     run_prepare.add_argument("--run-id", required=True)
+    run_prepare.add_argument("--snapshot", type=Path)
+    run_prepare.add_argument("--candidate")
+    run_prepare.add_argument("--confirm", action="store_true")
+    run_prepare.add_argument("--partition")
+    run_prepare.add_argument("--nodes", type=int)
+    run_prepare.add_argument("--ranks-per-node", type=int)
+    run_prepare.add_argument("--account")
+    run_prepare.add_argument("--qos")
+    run_prepare.add_argument("--walltime")
     run_prepare.add_argument("--dry-run", action="store_true")
     run_prepare.add_argument("--json", action="store_true")
+    run_candidates = prepared_run_sub.add_parser(
+        "candidates", help="rank Slurm snapshot candidates without submission"
+    )
+    run_candidates.add_argument("--workflow", type=Path, required=True)
+    run_candidates.add_argument("--profile", type=Path, required=True)
+    run_candidates.add_argument("--snapshot", type=Path, required=True)
+    run_candidates.add_argument("--json", action="store_true")
+    run_discover = prepared_run_sub.add_parser(
+        "discover", help="capture a read-only Slurm capability snapshot"
+    )
+    run_discover.add_argument("--cluster-id", required=True)
+    run_discover.add_argument("--output", type=Path, required=True)
+    run_discover.add_argument("--json", action="store_true")
+    run_import = prepared_run_sub.add_parser(
+        "snapshot-import", help="import saved read-only scheduler command output"
+    )
+    run_import.add_argument("--cluster-id", required=True)
+    run_import.add_argument("--output", type=Path, required=True)
+    run_import.add_argument("--sinfo", type=Path)
+    run_import.add_argument("--scontrol-partitions", type=Path)
+    run_import.add_argument("--scontrol-nodes", type=Path)
+    run_import.add_argument("--sacctmgr", type=Path)
+    run_import.add_argument("--sjstat", type=Path)
+    run_import.add_argument("--observed-at", default=None)
+    run_import.add_argument("--json", action="store_true")
     for action in ("inspect", "status", "resume"):
         command = prepared_run_sub.add_parser(action)
         command.add_argument("package", type=Path)
@@ -429,7 +473,73 @@ def _dispatch(args: argparse.Namespace) -> int:
         )
         return 0
     if args.domain == "run":
+        if args.action == "discover":
+            snapshot = discover_snapshot(cluster_id=args.cluster_id)
+            digest = write_snapshot(snapshot, args.output)
+            _emit({"status": "SLURM_SNAPSHOT_CAPTURED", "output": str(args.output.resolve()), "sha256": digest, "snapshot": snapshot}, args.json)
+            return 0
+        if args.action == "snapshot-import":
+            def read(path: Path | None) -> str:
+                return path.read_text(encoding="utf-8") if path else ""
+            snapshot = build_snapshot(
+                cluster_id=args.cluster_id, observed_at=args.observed_at or utc_now(),
+                sinfo=read(args.sinfo), scontrol_partitions=read(args.scontrol_partitions),
+                scontrol_nodes=read(args.scontrol_nodes), sacctmgr=read(args.sacctmgr), sjstat=read(args.sjstat),
+            )
+            digest = write_snapshot(snapshot, args.output)
+            _emit({"status": "SLURM_SNAPSHOT_IMPORTED", "output": str(args.output.resolve()), "sha256": digest, "snapshot": snapshot}, args.json)
+            return 0
+        if args.action == "candidates":
+            # Loading the workflow proves this is attached to a canonical lock;
+            # it does not add execution data to that scientific contract.
+            from .workflows import load_workflow_lock
+            load_workflow_lock(args.workflow)
+            snapshot, _ = load_snapshot(args.snapshot)
+            result = resolve_candidates(profile=SlurmExecutionProfile.load(args.profile), snapshot=snapshot)
+            result["workflow_lock_path"] = str(args.workflow.resolve())
+            result["snapshot_sha256"] = sha256_file(args.snapshot)
+            _emit(result, args.json)
+            return 0
         if args.action == "prepare":
+            profile = SlurmExecutionProfile.load(args.profile)
+            manual = (args.partition, args.nodes, args.ranks_per_node, args.account, args.qos, args.walltime)
+            if args.candidate and any(item is not None for item in manual):
+                raise ValueError("candidate selection and manual resource overrides are exclusive")
+            if any(item is not None for item in manual) and not all(item is not None for item in manual):
+                raise ValueError("manual selection requires partition, nodes, ranks-per-node, account, qos, and walltime")
+            resolved_profile = None
+            resolution = None
+            if args.candidate:
+                if args.snapshot is None:
+                    raise ValueError("candidate selection requires --snapshot")
+                if not args.confirm:
+                    raise ValueError("candidate selection requires explicit --confirm")
+                snapshot, _ = load_snapshot(args.snapshot)
+                candidates = resolve_candidates(profile=profile, snapshot=snapshot)
+                chosen = next((item for item in candidates["candidates"] if item["candidate_id"] == args.candidate), None)
+                if chosen is None or chosen["state"] == "INCOMPATIBLE":
+                    raise ValueError("selected candidate is not compatible with the snapshot")
+                resources = chosen["resources"]
+                resolved_profile = profile.resolved(partition=chosen["partition"], account=profile.account, qos=profile.qos,
+                                                    nodes=resources["nodes"], ranks_per_node=resources["ranks_per_node"], walltime=resources["walltime"])
+                resolution = {"resolution_mode": "SNAPSHOT_CANDIDATE", "snapshot_schema_version": snapshot["schema_version"],
+                              "snapshot_sha256": sha256_file(args.snapshot), "snapshot_observed_at": snapshot["observed_at"],
+                              "candidate_id": chosen["candidate_id"], "selected_partition": chosen["partition"], "selected_account": profile.account,
+                              "selected_qos": profile.qos, "selected_nodes": resources["nodes"], "selected_ranks_per_node": resources["ranks_per_node"],
+                              "selected_total_ranks": resources["total_ranks"], "selected_walltime": resources["walltime"], "selected_features": resources["features"],
+                              "selection_status": chosen["recommendation"], "selection_reason": chosen["ranking_reason"], "human_confirmed": True,
+                              "resolution_timestamp": utc_now(), "pending_fields": chosen["review_codes"]}
+            elif all(item is not None for item in manual):
+                if not args.confirm:
+                    raise ValueError("manual resource selection requires explicit --confirm")
+                resolved_profile = profile.resolved(partition=args.partition, account=args.account, qos=args.qos, nodes=args.nodes,
+                                                    ranks_per_node=args.ranks_per_node, walltime=args.walltime)
+                resolution = {"resolution_mode": "MANUAL_OVERRIDE", "snapshot_schema_version": None, "snapshot_sha256": None,
+                              "snapshot_observed_at": None, "candidate_id": None, "selected_partition": args.partition, "selected_account": args.account,
+                              "selected_qos": args.qos, "selected_nodes": args.nodes, "selected_ranks_per_node": args.ranks_per_node,
+                              "selected_total_ranks": args.nodes * args.ranks_per_node, "selected_walltime": args.walltime, "selected_features": [],
+                              "selection_status": "MANUAL_SELECTION_CONFIRMED", "selection_reason": "explicit human resource override", "human_confirmed": True,
+                              "resolution_timestamp": utc_now(), "pending_fields": ["ADMINISTRATIVE_AUTHORIZATION_NOT_VERIFIED"]}
             result = RunPreparer(_repo_root()).prepare(
                 RunPreparationRequest(
                     workflow_lock=args.workflow_lock,
@@ -438,6 +548,9 @@ def _dispatch(args: argparse.Namespace) -> int:
                     output_root=args.output,
                     run_id=args.run_id,
                     dry_run=args.dry_run,
+                    resolved_profile=resolved_profile,
+                    execution_resolution=resolution,
+                    cluster_snapshot=args.snapshot,
                 )
             )
             _emit(result, args.json)

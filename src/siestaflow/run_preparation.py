@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -76,6 +77,9 @@ class RunPreparationRequest:
     output_root: Path
     run_id: str
     dry_run: bool = False
+    resolved_profile: SlurmExecutionProfile | None = None
+    execution_resolution: Mapping[str, Any] | None = None
+    cluster_snapshot: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -117,7 +121,13 @@ class RunPreparer:
             raise ValueError(f"workflow source root is not a directory: {source_root}")
 
         envelope, workflow = load_workflow_lock(lock_path)
-        profile = SlurmExecutionProfile.load(profile_path)
+        profile = request.resolved_profile or SlurmExecutionProfile.load(profile_path)
+        resolution = dict(request.execution_resolution or {
+            "resolution_mode": "PROFILE_ALREADY_RESOLVED",
+            "human_confirmed": None,
+            "selection_status": "PROFILE_ALREADY_RESOLVED",
+        })
+        source_identity = self._source_identity()
         artifacts = {item.artifact_id: item for item in workflow.external_artifacts}
         resolved_sources: dict[str, Path] = {}
         for artifact in workflow.external_artifacts:
@@ -176,6 +186,8 @@ class RunPreparer:
                 ),
                 "validation_review_codes": review_codes,
                 "manual_submission_required": True,
+                "execution_resolution": resolution,
+                "source_identity": source_identity,
             },
         )
         run_envelope = prepared.envelope()
@@ -186,6 +198,8 @@ class RunPreparer:
             campaign_path.write_bytes(campaign_bytes)
             normalized_profile = staging / "execution-profile.json"
             normalized_profile.write_bytes(_json_bytes(profile.to_dict()))
+            resolution_path = staging / "execution-resolution.json"
+            resolution_path.write_bytes(_json_bytes(resolution))
             run_lock = staging / "run.lock.json"
             run_lock.write_bytes(_json_bytes(run_envelope.to_dict()))
             for relative, source in protected_sources.items():
@@ -193,15 +207,22 @@ class RunPreparer:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(source, target)
 
+            provenance = {
+                "workflow.lock.json": lock_path,
+                "execution-profile.json": normalized_profile,
+                "run.lock.json": run_lock,
+                "execution-resolution.json": resolution_path,
+            }
+            if request.cluster_snapshot is not None:
+                snapshot_path = request.cluster_snapshot.expanduser().resolve()
+                if not snapshot_path.is_file():
+                    raise ValueError(f"cluster snapshot is missing: {snapshot_path}")
+                provenance["cluster-snapshot.json"] = snapshot_path
             package = ControllerPackageBuilder(self.repository_root).build(
                 campaign_path,
                 request.output_root,
                 dry_run=request.dry_run,
-                provenance_files={
-                    "workflow.lock.json": lock_path,
-                    "execution-profile.json": normalized_profile,
-                    "run.lock.json": run_lock,
-                },
+                provenance_files=provenance,
             )
         status = (
             "DRY_RUN_NO_SIDE_EFFECTS"
@@ -227,6 +248,21 @@ class RunPreparer:
             ),
             validation_review_codes=review_codes,
         )
+
+    def _source_identity(self) -> dict[str, Any]:
+        """Capture repository identity without making Git a runtime dependency."""
+        def run(*args: str) -> str | None:
+            result = subprocess.run(
+                ["git", *args], cwd=self.repository_root,
+                text=True, capture_output=True, check=False,
+            )
+            return result.stdout.strip() if result.returncode == 0 else None
+        commit = run("rev-parse", "HEAD")
+        dirty = run("status", "--porcelain")
+        return {
+            "source_commit": commit,
+            "source_tree_dirty": None if dirty is None else bool(dirty),
+        }
 
     def _validate_fdf_inputs(
         self,
