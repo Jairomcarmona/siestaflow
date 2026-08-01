@@ -254,7 +254,18 @@ class ControllerPackageBuilder:
         modules = runtime.get("module_commands", [])
         if not isinstance(modules, list):
             raise ValueError("runtime.module_commands must be a list")
-        module_lines = "\n".join(map(str, modules)) or ": # no modules configured"
+        rendered_modules: list[str] = []
+        for command in map(str, modules):
+            if re.fullmatch(r"\s*module\s+load\s+siesta(?:/[^\s]+)?\s*", command):
+                rendered_modules.append(
+                    f'if ! {command}; then\n'
+                    '  echo "SIESTAFLOW_SIESTA_MODULE_LOAD_WARNING: continuing to executable verification" >&2\n'
+                    'fi'
+                )
+            else:
+                rendered_modules.append(command)
+        module_lines = "\n".join(rendered_modules) or ": # no modules configured"
+        siesta_executable = _directive(runtime["siesta_executable"], "siesta_executable")
         launcher = runtime.get("launcher", {})
         ppn = launcher.get("processes_per_node") if isinstance(launcher, dict) else None
         placement = (
@@ -293,6 +304,11 @@ set -euo pipefail
 ROOT="$(cd "${{SLURM_SUBMIT_DIR:?SLURM_SUBMIT_DIR required}}" && pwd -P)"
 cd "$ROOT"
 {module_lines}
+if ! command -v {siesta_executable} >/dev/null 2>&1; then
+  echo "SIESTAFLOW_SIESTA_EXECUTABLE_UNAVAILABLE: {siesta_executable}" >&2
+  exit 127
+fi
+{siesta_executable} --version >&2
 {environment_text}
 export PYTHONPATH="$ROOT/runtime"
 export PYTHONDONTWRITEBYTECODE=1

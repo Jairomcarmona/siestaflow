@@ -103,7 +103,10 @@ def test_controller_package_is_reproducible_and_cleanly_verifies(tmp_path: Path)
     assert result.returncode == 0, result.stderr
     assert "SIESTAFLOW_CONTROLLER_PACKAGE_VERIFIED" in result.stdout
     assert "mpiexec.hydra" in (root / "campaign.yaml").read_text()
-    assert "python3 scripts/run_worker.py" in (root / "submit.slurm").read_text()
+    submit = (root / "submit.slurm").read_text()
+    assert "SIESTAFLOW_SIESTA_MODULE_LOAD_WARNING" in submit
+    assert "siesta --version >&2" in submit
+    assert "python3 scripts/run_worker.py" in submit
 
 
 def test_controller_package_dry_run_and_cli_have_no_submission(tmp_path: Path):
