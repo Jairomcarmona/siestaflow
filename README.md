@@ -6,7 +6,10 @@ locally; the user transfers and submits them manually. The controller itself
 lives only inside the allocation.
 
 Current engineering state: `V0_2_CONSOLIDATION_ALPHA`, with the binding gate
-`LOCAL_ACCEPTANCE_PASS / REMOTE_TWO_STAGE_ACCEPTANCE_PENDING`. The generic
+`REMOTE_TWO_STAGE_ACCEPTANCE_PASS / ADVERSARIAL_MATRIX_PENDING`. Yoltla job
+`781100` completed the canonical parent → verified DM transfer → restart child
+path; the complete Phase 3 transition still requires its remote adversarial
+matrix and formal audit. The generic
 controller supports `srun` and the Yoltla-recommended
 `mpiexec.hydra -bootstrap ssh`, explicit multinode placement, concurrent
 allocation waves, dependency DAGs, hash-bound artifact transfers, gate tasks,

@@ -1,6 +1,6 @@
 # Phase 3 prepared-run vertical acceptance
 
-Status: `LOCAL_VERTICAL_PASS_REMOTE_ACCEPTANCE_PENDING`.
+Status: `REMOTE_TWO_STAGE_ACCEPTANCE_PASS_ADVERSARIAL_MATRIX_PENDING`.
 
 The implemented slice connects the deterministic workflow DAG to the existing
 persistent-allocation controller without granting execution authority.
@@ -26,9 +26,24 @@ Accepted locally:
 - coherence verification across the resolution, resolved profile, campaign and
   generated `submit.slurm`.
 
+Accepted remotely:
+
+- canonical `run prepare` package execution on Yoltla as job `781100`;
+- Hydra MPI placement across `tt[30-33]` with one rank per node;
+- parent normal termination and SCF convergence;
+- parent DM production and immutable SHA-256-bound transfer evidence;
+- child restart with `dm_read_attempted=true` and `dm_read_succeeded=true`;
+- child normal termination and SCF convergence;
+- final reconciliation as `COMPLETED`, `2/2`, with Slurm exit `0:0`.
+
+The primary record is
+[`PHASE3_YOLTLA_REMOTE_ACCEPTANCE_781100.md`](PHASE3_YOLTLA_REMOTE_ACCEPTANCE_781100.md).
+
 Not yet accepted:
 
-- real Yoltla execution of a package generated directly by `run prepare`;
+- remote adversarial acceptance for parent failure, altered transfer hash,
+  absent DM, recoverable interruption and independent-task resource
+  non-overlap;
 - execution adapters for non-SIESTA task capabilities;
 - automatic scheduler submission or queue selection;
 - automatic scientific parameter selection;
@@ -52,5 +67,6 @@ siestaflow run prepare workflow.lock.json --source-root source \
 Neither mode executes `sbatch`; unknown authorization stays visible for remote
 `sbatch --test-only` review.
 
-The feature remains within version `0.2.0`. Remote evidence is required before
-declaring this phase complete or changing the package version.
+The feature remains within version `0.2.0`. The positive remote path is
+accepted; the complete phase remains open until the adversarial matrix,
+independent audit and human phase-transition acceptance are recorded.

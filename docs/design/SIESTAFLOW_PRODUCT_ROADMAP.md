@@ -2,7 +2,7 @@
 
 Estado del roadmap: 2026-08-01
 Estado del software: SIESTAFLOW 0.2 alpha
-Estado vinculante: `LOCAL_ACCEPTANCE_PASS / REMOTE_TWO_STAGE_ACCEPTANCE_PENDING`
+Estado vinculante: `REMOTE_TWO_STAGE_ACCEPTANCE_PASS / ADVERSARIAL_MATRIX_PENDING`
 
 Este documento registra estado mutable, prioridades y dependencias. Los
 principios estables pertenecen a
@@ -11,8 +11,9 @@ principios estables pertenecen a
 
 ## Prioridad y dependencia crítica
 
-La prioridad operativa es cerrar el gate remoto de Fase 3. El orden vinculante
-es:
+El camino remoto positivo de Fase 3 fue completado por el job Yoltla `781100`.
+La prioridad operativa restante es completar la matriz adversarial remota. La
+trayectoria positiva verificada fue:
 
 ```text
 workflow.lock.json
@@ -37,7 +38,7 @@ amplía el alcance científico para sustituir la aceptación pendiente.
 | 0 — Contratos | `LOCAL_VERTICAL_IMPLEMENTED` | Core Contracts 1.0, envelopes, artefactos, ejecución, eventos, validación, plugins y adaptadores | política completa de migraciones y prueba de que nuevos adaptadores no fuerzan cambios independientes |
 | 1 — Compilador | `LOCAL_VERTICAL_IMPLEMENTED` | DAG tipado, validación, resolución, orden topológico, plan, grafo y `workflow.lock.json` determinista | derivación universal desde la representación canónica y migración de rutas paralelas |
 | 2 — Experiencia | `PARTIAL_LOCAL_ACCEPTANCE` | `environment check`, `project init`, validación explicable, plan y grafo | importar un cálculo existente hasta un WorkflowDefinition canónico sin reconstruir contratos internos |
-| 3 — Ejecutor | `LOCAL_ACCEPTANCE_PASS / REMOTE_TWO_STAGE_ACCEPTANCE_PENDING` | `run prepare`, `run.lock.json`, perfil Slurm externo, paquete autocontenido, AllocationController, transferencias y planificación de resume | ejecución limpia canónica padre → DM → hijo en Yoltla y matriz adversarial remota |
+| 3 — Ejecutor | `REMOTE_TWO_STAGE_ACCEPTANCE_PASS / ADVERSARIAL_MATRIX_PENDING` | job Yoltla `781100`: paquete canónico, Hydra multinodo, padre → DM con SHA-256 → lectura confirmada → hijo, reconciliación `2/2` | matriz adversarial remota y aceptación humana formal de la transición |
 | 4 — DAG adaptativo | `PARTIAL_NONCANONICAL_SLICES` | campañas, sweeps sintéticos y gates existen en rutas previas o ejemplos | integrar sweep/selection/fan-in y `converge_then_relax` en la representación y runtime canónicos |
 | 5 — Portabilidad HPC | `PARTIAL_EVIDENCE` | launchers Hydra/srun, perfiles, probes de entorno y colocación | flujo completo de perfil aceptado, multinodo, continuación entre asignaciones y equivalencia de backends |
 | 6 — Validación | `LOCAL_FOUNDATION_ACCEPTED` | catálogo SIESTA 5.4.2, contexto declarado, preflight y reglas versionadas | ampliar cobertura y campañas reales; resolver mediante ADR la separación entre severidad diagnóstica y estados contractuales |
@@ -70,7 +71,7 @@ Los hitos son cortes verticales, no equivalencias automáticas con fases:
 
 | Versión objetivo | Corte utilizable | Gate mínimo |
 |---|---|---|
-| 0.2 alpha | fundamento de ejecución padre → DM → hijo | aceptación local vigente y aceptación canónica remota pendiente |
+| 0.2 alpha | fundamento de ejecución padre → DM → hijo | aceptación canónica remota positiva vigente; matriz adversarial pendiente |
 | 0.3 alpha | campaña autónoma de convergencia y selección | Fase 3 cerrada y selección canónica con procedencia |
 | 0.4 alpha | convergencia → relajación escalonada → validación → tabla | Fases 4 y 7 integradas para ese flujo |
 | 0.5 alpha/beta | continuación y robustez HPC | evidencia multinodo, recuperación entre asignaciones y perfiles aceptados |

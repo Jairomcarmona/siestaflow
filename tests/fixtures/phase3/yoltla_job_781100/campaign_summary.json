@@ -1,0 +1,44 @@
+{
+  "campaign_id": "phase3-yoltla-ttv3-mem128-r4-0a51e51",
+  "completed_tasks": 2,
+  "job_id": "781100",
+  "launcher_kind": "hydra",
+  "login_node_persistent_process_required": false,
+  "remaining_seconds": 172744.33934307098,
+  "shutdown_reason": null,
+  "status": "COMPLETED",
+  "system_id": "phase3-yoltla-two-stage-acceptance-r4",
+  "tasks": {
+    "01_parent": {
+      "attempts": 1,
+      "depends_on": [],
+      "hosts": [
+        "tt30",
+        "tt31",
+        "tt32",
+        "tt33"
+      ],
+      "last_attempt": "attempt-0001",
+      "reason": "exit, termination, manifest, hashes and artifacts verified",
+      "result_manifest_sha256": "2d2ad8114e46eaa5b1433b8c33026ed4b3ac6c0fd96cbb0d4a28166c9cb80721",
+      "status": "COMPLETED"
+    },
+    "02_restart_from_parent_dm": {
+      "attempts": 1,
+      "depends_on": [
+        "01_parent"
+      ],
+      "hosts": [
+        "tt30",
+        "tt31",
+        "tt32",
+        "tt33"
+      ],
+      "last_attempt": "attempt-0001",
+      "reason": "exit, termination, manifest, hashes and artifacts verified",
+      "result_manifest_sha256": "bef93198d200f3f8846582820e12c47e2b64e46488c3c58913f3ebac891e1249",
+      "status": "COMPLETED"
+    }
+  },
+  "total_tasks": 2
+}

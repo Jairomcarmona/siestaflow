@@ -2,6 +2,10 @@
 
 ## Unreleased — governance and roadmap
 
+- Incorporated sanitized real Yoltla evidence for job `781100`, which completed
+  the canonical four-node parent → SHA-256-bound DM transfer → verified restart
+  child path with exit `0:0`; Phase 3 remains open for its remote adversarial
+  matrix and formal transition audit.
 - Formalized one source tree and the canonical
   `WorkflowDefinition → workflow.lock.json → run prepare → AllocationController`
   route while classifying older campaign, preview, smoke and evidence paths.

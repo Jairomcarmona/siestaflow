@@ -2,7 +2,7 @@
 
 Fecha de corte documental: 2026-08-01
 
-Estado: `LOCAL_ACCEPTANCE_PASS / REMOTE_TWO_STAGE_ACCEPTANCE_PENDING`
+Estado: `REMOTE_TWO_STAGE_ACCEPTANCE_PASS / ADVERSARIAL_MATRIX_PENDING`
 
 Este estado es vinculante hasta que exista un expediente remoto canónico. La
 arquitectura estable está en
@@ -24,7 +24,8 @@ arquitectura estable está en
 
 ## Validación local vigente
 
-- Suite autocontenida del repositorio: `343 passed` el 2026-08-01.
+- Suite autocontenida del repositorio: `353 passed` el 2026-08-01 tras
+  incorporar la evidencia remota de `781100`.
 - La aceptación WSL/Slurm registrada es integración local realista y permanece
   separada de Yoltla.
 - `pyproject.toml` declara setuptools, Python >= 3.11, la CLI y package data.
@@ -34,7 +35,7 @@ Los conteos de pruebas en expedientes históricos describen su propio corte y no
 son el estado vigente. Una nueva modificación debe volver a ejecutar los gates
 en lugar de reutilizar este conteo.
 
-## Aceptación remota pendiente
+## Aceptación remota positiva comprobada
 
 La Fase 3 sólo puede cerrarse con una ejecución limpia generada directamente
 por la ruta canónica:
@@ -52,15 +53,17 @@ workflow.lock.json
 → reconciliación final e importación de evidencia
 ```
 
-La evidencia remota versionada no contiene actualmente el par
-`workflow.lock.json`/`run.lock.json` de esa trayectoria. Existen paquetes,
-probes y referencias históricas de Yoltla que informan compatibilidad y
-defectos observados, pero no sustituyen este gate. No se declara cerrada la
-Fase 3.
+El job Yoltla `781100` completó esta trayectoria con estado `COMPLETED`, exit
+`0:0`, cuatro nodos `tt[30-33]`, launcher Hydra y dos tareas completadas en su
+primer intento. El padre produjo la DM, el controlador verificó y conservó su
+transferencia por SHA-256 y el hijo registró lectura satisfactoria de la DM.
+El expediente y el subconjunto sanitizado están en
+[`PHASE3_YOLTLA_REMOTE_ACCEPTANCE_781100.md`](../validation/PHASE3_YOLTLA_REMOTE_ACCEPTANCE_781100.md).
 
-La matriz posterior también debe cubrir padre fallido, hash alterado, DM
+La Fase 3 completa todavía no se declara cerrada. La matriz posterior debe
+cubrir padre fallido, hash alterado, DM
 ausente, interrupción recuperable y tareas independientes sin solapamiento de
-recursos.
+recursos, seguida de auditoría independiente y aceptación humana formal.
 
 ## Empaquetado y trazabilidad
 
@@ -87,6 +90,7 @@ hace push como parte de esta auditoría documental.
 
 ```text
 Fase 3
-→ paquete generado por run prepare
-→ aceptación limpia padre → DM → hijo en Yoltla
+→ matriz adversarial remota
+→ auditoría independiente
+→ aceptación humana de la transición
 ```

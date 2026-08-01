@@ -1,0 +1,35 @@
+* Directory : <REDACTED_YOLTLA_RUN_ROOT>/work/02_restart_from_parent_dm/attempt-0001
+reinit: Reading from standard input
+SystemName Phase 3 technical acceptance restart
+DM.UseSaveDM T
+reinit: System Name: Phase 3 technical acceptance restart
+initatom: Reading input for the pseudopotentials and atomic orbitals ----------
+Reading pseudopotential information in PSML from:
+read_vps: Pseudopotential generation method:
+read_vps: ONCVPSP-3.Hamann's oncvpsp
+read_vps: Pseudopotential includes a core correction:
+read_vps: Pseudo-core for xc-correction
+Reading KB projs from C psml data
+redata: Mix DM or H after convergence               =   F
+redata: Mix DM in first SCF step                    =   T
+redata: New DM Occupancy tolerance                  = 0.000000000001
+redata: DM Mixing Weight for Kicks                  =     0.5000
+redata: Require DM convergence for SCF              =   T
+redata: DM tolerance for SCF                        =     0.000100
+redata: Require EDM convergence for SCF             =   F
+redata: EDM tolerance for SCF                       =     0.001000 eV
+redata: Use continuation files for DM               =   T
+DM_history_depth set to one: no extrapolation allowed by default for geometry relaxation
+Size of DM history Fstack: 1
+ts: Save DM and EDM matrices                        =    F
+new_DM -- step:     1
+Initializing Density Matrix...
+Attempting to read DM from file... Succeeded...
+DM from file:
+<dSpData2D:IO-DM: phase3_acceptance.DM
+  <sparsity:IO-DM: phase3_acceptance.DM
+DM to be used:
+        iscf     Eharris(eV)        E_KS(eV)     FreeEng(eV)     dDmax    Ef(eV) dHmax(eV)
+SCF Convergence by DM+H criterion
+max |DM_out - DM_in|         :     0.0000801808
+Using DM_out to compute the final energy and forces

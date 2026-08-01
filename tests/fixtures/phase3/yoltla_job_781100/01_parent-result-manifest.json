@@ -1,0 +1,42 @@
+{
+  "artifacts": {
+    "command.json": "d20e9807bb03422e997d67613c0efd035ec31abce646474b3b9eb12b3fa7ab31",
+    "exit_code.json": "81868a6e94ffc0178bf833deb1c9013d9fab4ee95ddb876a5e8ec4f1d26376d2",
+    "phase3_acceptance.DM": "e9ef987afddcbe4ce76b8548919c5792e9214328f0dd27b0a0380d86181eed0a",
+    "stderr.txt": "e33f8390d230fd142c5957cdd6a23a9863a3f2bfe5433e7618e8931b1c5b4d8f",
+    "stdout.txt": "47983194471339b97b470d3ca22772751d10c467e4697fcb7c77fa9755c463b8",
+    "timing.json": "771748d380fbbcbdc74d4db40600797cd0ea86f394e39bfed0a4aac43a721198"
+  },
+  "attempt_id": "attempt-0001",
+  "campaign_id": "phase3-yoltla-ttv3-mem128-r4-0a51e51",
+  "exit_code": 0,
+  "input_hashes": {
+    "protected/01_parent/fdf/01_parent.fdf": "c21253783f48e6511c6a4fe772406bc3a85fd320181bf6386947329693afdad6",
+    "protected/01_parent/pseudo/C.psml": "ce0f6a7fd43e70d44018e94286d934e9caadc005e95da87500d85fbe501d4c41"
+  },
+  "job_id": "781100",
+  "normal_termination": true,
+  "parser_benign_warnings": [
+    "WARNING: BASIS_ENTHALPY and BASIS_HARRIS_ENTHALPY files are deprecated. They will be removed in future releases."
+  ],
+  "parser_classification": "UNKNOWN_WARNING",
+  "parser_warnings": [
+    "xc_check: WARNING: Pseudopotential generated with GGA PBE functional",
+    "# WARNING: This information might be incomplete!",
+    "************************ Begin: TS CHECKS AND WARNINGS ************************",
+    "************************ End: TS CHECKS AND WARNINGS **************************",
+    "WARNING: BASIS_ENTHALPY and BASIS_HARRIS_ENTHALPY files are deprecated. They will be removed in future releases."
+  ],
+  "restart_evidence": {
+    "dm_read_attempted": false,
+    "dm_read_succeeded": false
+  },
+  "scf_converged": true,
+  "scf_started": true,
+  "schema_version": "1.0",
+  "system_id": "phase3-yoltla-two-stage-acceptance-r4",
+  "task_id": "01_parent",
+  "task_kind": "siesta",
+  "terminated_by_controller": false,
+  "transferred_inputs": []
+}

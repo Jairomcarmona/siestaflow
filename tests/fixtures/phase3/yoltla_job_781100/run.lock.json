@@ -1,0 +1,59 @@
+{
+  "content_sha256": "5cf56deed1a3685e6292aeb9b194935bbd6937c1cea804f231b0eebc0c1beedc",
+  "contract": {
+    "name": "siestaflow.run-lock",
+    "version": "1.0"
+  },
+  "extensions": {},
+  "payload": {
+    "controller_campaign_sha256": "b656826ed83a360b890b446497434da1f0a33e5f72c635bc89a6ff8b600e2014",
+    "execution_authorized": false,
+    "execution_profile_id": "yoltla-ttv3-mem128-r4-resolved",
+    "execution_profile_sha256": "0232801ef3957dcc2a296f6e89f0af24075da94fbc3aebc9d6f2716a14a8d948",
+    "metadata": {
+      "execution_resolution": {
+        "candidate_id": null,
+        "compatibility_evidence_sha256": "ff2fb9493f33f16d5d3996bbb8d415a12b86a39468cfb896fb8b2d399015eba9",
+        "human_confirmed": true,
+        "pending_fields": [],
+        "resolution_mode": "MANUAL_COMPATIBILITY_OVERRIDE",
+        "resolution_timestamp": "2026-08-01T23:11:56Z",
+        "selected_account": "vini",
+        "selected_features": [
+          "ttv3"
+        ],
+        "selected_nodes": 4,
+        "selected_partition": "tt2d-80p",
+        "selected_qos": "normal",
+        "selected_ranks_per_node": 1,
+        "selected_total_ranks": 4,
+        "selected_walltime": "2-00:00:00",
+        "selection_reason": "explicit human selection validated against snapshot and execution compatibility evidence",
+        "selection_status": "MANUAL_COMPATIBILITY_SELECTION_CONFIRMED",
+        "snapshot_observed_at": "2026-08-01T20:56:47Z",
+        "snapshot_schema_version": "1.0",
+        "snapshot_sha256": "9ce7f6af65d4755281f8765799741659c606a3748c9e8d2fcafb9cacc9fc8e3f",
+        "task_placement_policy": "FULL_ALLOCATION_REMAP"
+      },
+      "manual_submission_required": true,
+      "source_identity": {
+        "source_commit": "0a51e51e74decfba6de11a740c47c5770f45770a",
+        "source_tree_dirty": false
+      },
+      "validation_review_codes": [],
+      "validation_status": "PASS"
+    },
+    "project_id": "siestaflow-phase3-acceptance",
+    "run_id": "phase3-yoltla-ttv3-mem128-r4-0a51e51",
+    "schema_version": "1.0",
+    "submission_performed": false,
+    "target": "slurm",
+    "task_ids": [
+      "01_parent",
+      "02_restart_from_parent_dm"
+    ],
+    "workflow_id": "phase3-yoltla-two-stage-acceptance-r4",
+    "workflow_lock_sha256": "bdd26b75f5a719069232499b2172fe3d1ff592a54df71d0234144a88e0e63f70"
+  },
+  "producer": "siestaflow.run-preparer"
+}
