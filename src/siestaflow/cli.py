@@ -520,6 +520,12 @@ def _dispatch(args: argparse.Namespace) -> int:
                 if chosen is None or chosen["state"] == "INCOMPATIBLE":
                     raise ValueError("selected candidate is not compatible with the snapshot")
                 resources = chosen["resources"]
+                source_variant = chosen["source_variant"]
+                pending_fields = list(chosen["review_codes"])
+                if source_variant.get("accounts") is None:
+                    pending_fields.append("ACCOUNT_AUTHORIZATION_UNKNOWN")
+                if source_variant.get("qos") is None:
+                    pending_fields.append("QOS_AUTHORIZATION_UNKNOWN")
                 resolved_profile = profile.resolved(partition=chosen["partition"], account=profile.account, qos=profile.qos,
                                                     nodes=resources["nodes"], ranks_per_node=resources["ranks_per_node"], walltime=resources["walltime"])
                 resolution = {"resolution_mode": "SNAPSHOT_CANDIDATE", "snapshot_schema_version": snapshot["schema_version"],
@@ -528,7 +534,7 @@ def _dispatch(args: argparse.Namespace) -> int:
                               "selected_qos": profile.qos, "selected_nodes": resources["nodes"], "selected_ranks_per_node": resources["ranks_per_node"],
                               "selected_total_ranks": resources["total_ranks"], "selected_walltime": resources["walltime"], "selected_features": resources["features"],
                               "selection_status": chosen["recommendation"], "selection_reason": chosen["ranking_reason"], "human_confirmed": True,
-                              "resolution_timestamp": utc_now(), "pending_fields": chosen["review_codes"]}
+                              "resolution_timestamp": utc_now(), "pending_fields": sorted(set(pending_fields))}
             elif all(item is not None for item in manual):
                 if not args.confirm:
                     raise ValueError("manual resource selection requires explicit --confirm")

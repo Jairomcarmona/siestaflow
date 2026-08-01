@@ -81,7 +81,11 @@ def test_candidate_requires_confirmation_and_produces_distinct_packages(tmp_path
     assert compilation.valid
     lock = tmp_path / "workflow.lock.json"; write_workflow_lock(compilation, lock)
     profile = _profile(tmp_path)
-    snapshot = tmp_path / "snapshot.json"; write_snapshot(_snapshot(), snapshot)
+    snapshot_data = _snapshot()
+    for variant in snapshot_data["partitions"]:
+        variant["accounts"] = None
+        variant["qos"] = None
+    snapshot = tmp_path / "snapshot.json"; write_snapshot(snapshot_data, snapshot)
     common = ["run", "prepare", str(lock), "--source-root", str(source), "--profile", str(profile), "--snapshot", str(snapshot)]
     assert main([*common, "--candidate", "alpha:1", "--output", str(tmp_path / "no-confirm"), "--run-id", "no-confirm", "--json"]) == 2
     assert main([*common, "--candidate", "alpha:1", "--confirm", "--output", str(tmp_path / "out-a"), "--run-id", "resolved-a", "--json"]) == 0
@@ -97,3 +101,5 @@ def test_candidate_requires_confirmation_and_produces_distinct_packages(tmp_path
     assert (package_a / "protected" / "parent" / "fdf" / "parent.fdf").read_bytes() == (package_b / "protected" / "parent" / "fdf" / "parent.fdf").read_bytes()
     assert json.loads((package_a / "campaign.yaml").read_text()) ["tasks"][1]["transfers"] == json.loads((package_b / "campaign.yaml").read_text())["tasks"][1]["transfers"]
     assert RunInspector().inspect(package_a).status == "PREPARED_RUN_VERIFIED"
+    resolution = json.loads((package_a / "run.lock.json").read_text())["payload"]["metadata"]["execution_resolution"]
+    assert {"ACCOUNT_AUTHORIZATION_UNKNOWN", "QOS_AUTHORIZATION_UNKNOWN"}.issubset(resolution["pending_fields"])
