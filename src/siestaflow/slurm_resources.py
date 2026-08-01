@@ -51,7 +51,7 @@ def walltime_seconds(value: str | None) -> int | None:
 def memory_megabytes(value: str | int | None) -> int | None:
     if value is None:
         return None
-    match = re.fullmatch(r"([0-9]+)([KMGT]?)", str(value).strip(), re.I)
+    match = re.fullmatch(r"([0-9]+)([KMGT]?)(?:B)?", str(value).strip(), re.I)
     if match is None:
         return None
     number, unit = int(match.group(1)), match.group(2).upper()
@@ -138,24 +138,44 @@ def parse_sacctmgr_associations(text: str, *, source: str = "sacctmgr show assoc
 
 
 def parse_sjstat_c(text: str, *, source: str = "sjstat -c") -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Parse a portable pipe fixture; unknown columns remain unknown.
-
-    ``sjstat`` is optional.  Deployments can map its output to this stable
-    six-column form: partition|state|nodes|idle_nodes|cpus_per_node|memory_mb|features.
-    """
+    """Parse optional ``sjstat -c`` capacity rows without cluster constants."""
     rows: list[dict[str, Any]] = []
     diagnostics: list[dict[str, Any]] = []
     for line_no, raw in enumerate(text.splitlines(), 1):
-        if not raw.strip() or raw.lstrip().startswith("#"):
+        stripped = raw.strip()
+        if not stripped or stripped.startswith("#"):
             continue
-        fields = [item.strip() for item in raw.split("|")]
-        if len(fields) < 6 or not fields[0]:
+        if (
+            stripped.casefold() == "scheduling pool data:"
+            or set(stripped) == {"-"}
+            or stripped.casefold().startswith("pool ")
+        ):
+            continue
+        if "|" in stripped:  # Backward-compatible normalized fixture form.
+            fields = [item.strip() for item in stripped.split("|")]
+            if len(fields) < 6 or not fields[0]:
+                diagnostics.append({"code": "SJSTAT_ROW_INVALID", "source": source, "line": line_no})
+                continue
+            rows.append({"partition": fields[0].removesuffix("*"), "default_partition": fields[0].endswith("*"),
+                         "state": fields[1] or None, "total_nodes": _int(fields[2]), "usable_nodes": _int(fields[2]),
+                         "idle_nodes": _int(fields[3]), "cpus_per_node": _int(fields[4]), "memory_mb": _int(fields[5]),
+                         "features": sorted(filter(None, fields[6].split(","))) if len(fields) > 6 else [],
+                         "source": source, "line": line_no})
+            continue
+        fields = stripped.split()
+        if len(fields) != 7:
             diagnostics.append({"code": "SJSTAT_ROW_INVALID", "source": source, "line": line_no})
             continue
-        rows.append({"partition": fields[0], "state": fields[1] or None, "total_nodes": _int(fields[2]),
-                     "idle_nodes": _int(fields[3]), "cpus_per_node": _int(fields[4]), "memory_mb": _int(fields[5]),
-                     "features": sorted(filter(None, fields[6].split(","))) if len(fields) > 6 else [],
-                     "source": source, "line": line_no})
+        memory = memory_megabytes(fields[1])
+        cpus, total, usable, free = (_int(item) for item in fields[2:6])
+        if memory is None or None in {cpus, total, usable, free}:
+            diagnostics.append({"code": "SJSTAT_ROW_INVALID", "source": source, "line": line_no})
+            continue
+        name = fields[0].removesuffix("*")
+        rows.append({"partition": name, "default_partition": fields[0].endswith("*"), "state": None,
+                     "total_nodes": total, "usable_nodes": usable, "idle_nodes": free,
+                     "cpus_per_node": cpus, "memory_mb": memory,
+                     "features": sorted(filter(None, fields[6].split(","))), "source": source, "line": line_no})
     return rows, diagnostics
 
 
@@ -180,6 +200,7 @@ def build_snapshot(*, cluster_id: str, observed_at: str, sinfo: str = "", scontr
                                "walltime": row.get("walltime") or policy.get("walltime"), "total_nodes": row.get("total_nodes"),
                                "usable_nodes": row.get("total_nodes"), "idle_nodes": row.get("idle_nodes"), "cpus_per_node": row.get("cpus_per_node"),
                                "memory_mb": row.get("memory_mb"), "features": row.get("features", []), "node_type": None,
+                               "default_partition": bool(row.get("default_partition", False)),
                                "accounts": accounts, "qos": qos, "sources": sorted({str(item.get("source")) for item in (row, policy) if item}),
                                "unknown_fields": sorted(key for key, value in {"idle_nodes": row.get("idle_nodes"), "cpus_per_node": row.get("cpus_per_node"), "memory_mb": row.get("memory_mb")}.items() if value is None)})
     return {"schema_version": SNAPSHOT_SCHEMA_VERSION, "scheduler": "slurm", "cluster_id": cluster_id,

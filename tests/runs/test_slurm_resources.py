@@ -22,6 +22,9 @@ from siestaflow.run_inspection import RunInspector
 from siestaflow.workflows import WorkflowCompiler, load_run_lock, write_workflow_lock
 
 
+SJSTAT_FIXTURE = Path(__file__).parents[1] / "fixtures" / "slurm" / "yoltla_sjstat_c.txt"
+
+
 def _snapshot() -> dict:
     return build_snapshot(
         cluster_id="arbitrary-cluster",
@@ -48,6 +51,24 @@ def test_snapshot_is_serializable_and_names_are_data(tmp_path: Path) -> None:
     assert digest == actual and loaded == snapshot
     rows, diagnostics = parse_sjstat_c("any-name|up|2|0|64|256000|x\n")
     assert diagnostics == [] and rows[0]["partition"] == "any-name"
+
+
+def test_real_yoltla_sjstat_rows_are_parsed_as_capacity_variants() -> None:
+    text = SJSTAT_FIXTURE.read_text(encoding="utf-8")
+    rows, diagnostics = parse_sjstat_c(text)
+    assert diagnostics == []
+    assert len(rows) == 40  # The supplied capture has 40 data rows and 4 headers.
+    assert next(item for item in rows if item["partition"] == "tt2d-64p")["idle_nodes"] == 0
+    assert [item["idle_nodes"] for item in rows if item["partition"] == "tt2d-80p"] == [11, 3]
+    assert next(item for item in rows if item["partition"] == "qz2d-64p")["idle_nodes"] == 14
+    default = next(item for item in rows if item["partition"] == "q1h-20p")
+    assert default["default_partition"] is True and default["memory_mb"] == 64152
+    assert rows == parse_sjstat_c(text)[0]
+
+
+def test_sjstat_malformed_rows_still_fail_closed() -> None:
+    rows, diagnostics = parse_sjstat_c("bad 128Mb twenty 1 1 1 traits\n")
+    assert rows == [] and diagnostics[0]["code"] == "SJSTAT_ROW_INVALID"
 
 
 def test_resolution_explains_rejection_and_preserves_zero_idle_capacity(tmp_path: Path) -> None:
