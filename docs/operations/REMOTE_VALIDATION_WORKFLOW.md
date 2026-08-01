@@ -6,7 +6,7 @@ For the M3 environment probe, package revision V2 is mandatory. Its verifier add
 
 ```powershell
 python -m siestaflow.cli --workspace .work remote package cutoff_sweep --output .work\remote --dry-run --json
-python -m siestaflow.cli --workspace .work remote results import C:\evidence\results --campaign-id cutoff_sweep --output .work\imports\cutoff_sweep --dry-run --json
+python -m siestaflow.cli --workspace .work remote results import evidence/results --campaign-id cutoff_sweep --output .work/imports/cutoff_sweep --dry-run --json
 ```
 
 Expected package state is `PREVIEW_WITH_UNVERIFIED_PROFILE`. A synthetic result can validate parser/gate behavior but always records `SYNTHETIC_BUNDLE_NOT_REAL_EVIDENCE`. Scientific authorization is independent.

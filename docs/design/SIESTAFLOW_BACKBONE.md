@@ -1,250 +1,249 @@
 # SIESTAFLOW — columna vertebral del proyecto
 
-Estado: guía arquitectónica viva  
-Versión del documento: 1.0  
-Software de referencia actual: SIESTAFLOW 0.2.0 alpha
+Estado: documento rector estable
+Software de referencia: SIESTAFLOW 0.2 alpha
 
-## 1. Misión
+El estado operativo vigente se mantiene en
+[`SIESTAFLOW_0_2_RELEASE_STATUS.md`](SIESTAFLOW_0_2_RELEASE_STATUS.md) y la
+secuencia de entrega en
+[`SIESTAFLOW_PRODUCT_ROADMAP.md`](SIESTAFLOW_PRODUCT_ROADMAP.md). Este
+documento define la misión, los límites y los invariantes que no deben
+depender de un corte temporal.
+
+## 1. Misión y autoridad científica
 
 SIESTAFLOW transforma una intención científica declarada en un workflow DFT
-autocontenido, verificable y reproducible para entornos HPC.
+autocontenido, verificable y reproducible para entornos HPC. Representa
+dependencias científicas mediante un DAG tipado, transfiere artefactos con
+procedencia, ejecuta decisiones numéricas previamente autorizadas y conserva
+evidencia suficiente para explicar cada resultado.
 
-No es un generador de scripts Bash. Su valor está en:
-
-- representar dependencias científicas mediante un DAG tipado;
-- transferir geometrías, parámetros y checkpoints con trazabilidad;
-- automatizar decisiones numéricas previamente autorizadas;
-- aprovechar una asignación Slurm sin intervención continua;
-- detectar errores antes de consumir cómputo;
-- conservar evidencia suficiente para reproducir y explicar cada resultado.
-
-El investigador conserva siempre la autoridad sobre las decisiones físicas.
+El investigador conserva la autoridad sobre funcionales, Hubbard U, carga,
+spin, modelos, criterios de convergencia y validez científica. Una terminación
+técnica correcta no equivale a aceptación científica.
 
 ## 2. Límites
 
 SIESTAFLOW no debe:
 
-- elegir silenciosamente funcionales, Hubbard U, carga, spin o modelos;
-- presentar una heurística como una ley física;
-- modificar parámetros científicos durante una recuperación técnica;
-- declarar validez científica basándose sólo en que un proceso terminó;
-- depender de Codex, internet o un daemon en el nodo de login;
-- ocultar los comandos, entradas o transformaciones ejecutadas.
+- elegir silenciosamente parámetros o modelos científicos;
+- presentar heurísticas como leyes físicas;
+- modificar la física durante una recuperación técnica;
+- inferir validez científica de un código de salida;
+- depender de Codex, internet, una base de datos externa o un daemon en login;
+- instalar MPI, SIESTA o bibliotecas del sistema en el cluster;
+- ocultar comandos, entradas, transformaciones o evidencia;
+- mantener dos implementaciones de producción con semánticas distintas.
 
 ## 3. Vocabulario estable
 
-- **Project**: investigación completa y sus políticas.
+- **Project**: investigación, fuentes y políticas bajo autoridad humana.
+- **WorkflowDefinition**: DAG científico declarativo todavía no bloqueado.
+- **Workflow**: DAG resuelto y tipado.
 - **Campaign**: conjunto relacionado de cálculos o barridos.
-- **Workflow**: DAG científico declarativo.
 - **Task**: nodo tipado del DAG.
-- **Run**: ejecución concreta de un workflow resuelto.
+- **Run**: ejecución concreta derivada de un workflow bloqueado.
 - **Attempt**: intento individual de una tarea.
 - **Artifact**: entrada o resultado con identidad, tipo, hash y procedencia.
 - **Dependency**: relación de control o transferencia de datos.
 - **Checkpoint**: estado reutilizable para continuar una tarea.
-- **Evidence**: registro verificable de una ejecución o decisión.
+- **Evidence**: registro verificable de ejecución o decisión.
+- **Execution profile**: configuración de recursos y launcher revisada para un
+  entorno concreto.
 - **Executor**: adaptador que ejecuta tareas en un entorno determinado.
 
-## 4. Arquitectura
+## 4. Una base de código, varias distribuciones
+
+Existe una sola base de código. De ella se derivan:
+
+1. una instalación editable para desarrollo;
+2. una wheel o sdist instalable para authoring local;
+3. un paquete remoto autocontenido y mínimo para HPC;
+4. plugins externos futuros cuando exista un contrato público adecuado.
+
+Estas son formas de distribución, no ediciones, forks ni implementaciones
+independientes. La distribución Python se gobierna mediante `pyproject.toml`,
+`build`, wheel/sdist y `pip` o `pipx` cuando corresponda. CMake sólo sería
+admisible si se incorporara un componente nativo propio que necesitara
+compilación y un ADR justificara la decisión.
+
+## 5. Superficies local y remota
+
+### Authoring local
+
+La superficie local importa y valida entradas, compila el DAG, genera locks,
+prepara paquetes e inspecciona evidencia y resultados. Puede ofrecer
+dependencias opcionales de usuario que no formen parte del runtime remoto.
+
+### Runtime remoto
+
+El runtime planifica dentro de una asignación, lanza MPI, transfiere
+artefactos, evalúa gates autorizados, persiste intentos, recupera estado y
+produce evidencia. Debe ser pequeño, autocontenido y operar sin internet,
+Codex, servicios externos, instalación global persistente ni procesos
+permanentes en el nodo de login.
+
+## 6. Trayectoria canónica
+
+La única trayectoria objetivo de producción es:
 
 ```text
-CLI o futura interfaz gráfica
-        ↓
-Servicios de aplicación
-        ↓
-Compilador de workflows
-        ↓
-Contratos del núcleo
-        ↓
-Plugins y adaptadores
-        ↓
-SIESTA / Slurm / Hydra / posprocesadores
+Project
+→ WorkflowDefinition
+→ workflow.lock.json
+→ run.lock.json
+→ paquete autocontenido
+→ AllocationController dentro de Slurm
+→ Evidence / Results
 ```
 
-Las dependencias apuntan hacia los contratos del núcleo. La CLI, SIESTA,
-Slurm y los plugins no deben acoplarse entre sí directamente.
+El compilador es la autoridad para la representación bloqueada y `run prepare`
+es el puente hacia el paquete remoto. Las rutas históricas pueden conservarse
+como compatibilidad, prueba o evidencia, pero no pueden mantener reglas
+distintas de validación, transferencia, persistencia, recuperación o éxito.
+Su clasificación vigente y el plan de migración están en el roadmap y en
+[`ADR-0001`](../adr/0001-single-codebase-canonical-execution-path.md).
 
-La CLI local puede priorizar usabilidad. El runtime remoto debe mantenerse
-pequeño, autocontenido y con dependencias mínimas.
+La integración `Project → WorkflowDefinition` todavía puede requerir authoring
+explícito; no se considera completa por la mera existencia de ProjectPackage.
 
-## 5. DAG científico
+## 7. DAG científico
 
-Tipos iniciales de tarea:
+Los tipos iniciales son `calculation`, `transformation`, `validation`, `sweep`,
+`selection`, `checkpoint`, `postprocess`, `comparison`, `export` y `external`.
+Las aristas transportan control o artefactos tipados. La expansión dinámica
+debe ser declarada, determinista, acotada y materializada antes de ejecución en
+`workflow.lock.json`.
 
-- `calculation`
-- `transformation`
-- `validation`
-- `sweep`
-- `selection`
-- `checkpoint`
-- `postprocess`
-- `comparison`
-- `export`
-- `external`
+## 8. Descubrimiento de entornos HPC
 
-Las aristas transportan control o artefactos tipados. Un workflow dinámico
-puede expandirse únicamente mediante reglas declaradas, deterministas y
-acotadas. Antes de ejecutarse se materializa como `workflow.lock.json`.
+El descubrimiento sigue una promoción explícita:
 
-## 6. Ciclo de uso objetivo
-
-```bash
-siestaflow environment check
-siestaflow project init
-siestaflow input validate --explain
-siestaflow workflow validate
-siestaflow workflow plan
-siestaflow workflow graph
-siestaflow workflow build
-siestaflow run submit
-siestaflow run status
-siestaflow run diagnose
-siestaflow run resume
-siestaflow artifact lineage
-siestaflow results compare
+```text
+DISCOVER → PROBE → CANDIDATE_PROFILE → HUMAN_REVIEW → ACCEPTED_PROFILE
 ```
 
-Todos los comandos relevantes deben ofrecer:
+Puede observar módulos, Python, SIESTA y su versión, launchers MPI, `srun`,
+`mpiexec.hydra`, partición, cuenta, QoS, rutas compartidas, scratch, variables
+y capacidad multinodo. No elige módulos silenciosamente, no modifica la
+sesión del usuario, no ejecuta `module purge` fuera de un shell aislado, no
+supone equivalencia entre launchers y no promueve un perfil sin evidencia de
+una prueba Slurm. Esta capacidad pertenece conceptualmente a la Fase 5.
 
-- ayuda comprensible;
-- salida humana y `--json`;
-- `--dry-run` cuando exista una mutación;
-- códigos de salida estables;
-- acciones idempotentes cuando sea posible;
-- explicación y remediación de errores.
-
-## 7. Fases de construcción
+## 9. Fases y criterios de cierre
 
 ### Fase 0 — Contratos del núcleo
 
-Contratos versionados para validación, artefactos, ejecución, eventos y
-plugins. Compatibilidad mediante adaptadores.
+Contratos versionados para artefactos, ejecución, eventos, plugins,
+validadores, extractores, transformaciones, compatibilidad y migraciones.
 
-**Cierre:** las capas superiores dependen de contratos, no de implementaciones.
+**Cierre:** las capas superiores dependen de contratos públicos y un adaptador
+nuevo no obliga a modificar capas independientes.
 
-### Fase 1 — Compilador de workflows
+### Fase 1 — Compilador y representación canónica
 
-Modelo formal del DAG, tareas tipadas, validación estructural, resolución de
-dependencias y generación determinista de `workflow.lock.json`.
+DAG tipado, expansión determinista, orden topológico, artefactos,
+`workflow.lock.json`, hash reproducible y migraciones de esquema.
 
-**Cierre:** una misma definición produce el mismo DAG y el mismo hash.
+**Cierre:** toda ejecución de producción deriva de la misma representación
+bloqueada y no existen rutas paralelas con semánticas divergentes.
 
-### Fase 2 — CLI para investigadores
+### Fase 2 — Experiencia inicial del investigador
 
-`environment check`, `project init`, validación explicable, planificación y
-representación del grafo.
+Diagnóstico de entorno, inicialización e importación futura de cálculos,
+validación explicable, vista previa, grafo, planificación, salida humana y
+`--json`, sin exigir edición de contratos internos. Las tareas externas
+requieren un mecanismo de escape explícito.
 
-**Cierre:** un proyecto básico puede prepararse sin editar JSON manualmente.
+**Cierre:** un cálculo SIESTA existente puede convertirse en un workflow básico
+sin reconstruir manualmente contratos internos.
 
 ### Fase 3 — Ejecutor autocontenido
 
-Ejecución concurrente, artefactos, checkpoints, intentos, reanudación,
-shutdown controlado, diagnóstico y reconciliación.
+Ejecución concurrente, artefactos, checkpoints, intentos, reanudación, señales,
+shutdown controlado, diagnóstico y reconciliación dentro de una asignación.
 
-**Cierre:** el workflow padre → reinicio DM pasa una prueba real en Yoltla.
+**Cierre:** un paquete limpio generado por `run prepare` completa en Yoltla el
+flujo padre → DM verificada → transferencia → evidencia de lectura → hijo →
+reconciliación, sin daemon ni internet. Las pruebas de fallo, hash alterado, DM
+ausente, interrupción y recursos no solapados forman la matriz de aceptación.
 
-### Fase 4 — DAG adaptativo
+### Fase 4 — DAG adaptativo y campañas científicas
 
-Barridos, selectores matemáticos, fan-out/fan-in, convergencia adaptativa y
-recuperaciones previamente autorizadas.
+Barridos, selectores, fan-out/fan-in, propagación, recuperaciones autorizadas,
+`converge_then_relax`, criterios con unidades y estabilidad consecutiva. Se
+distinguen convergencia SCF, numérica y geométrica.
 
-**Cierre:** un parámetro convergido se selecciona y propaga sin intervención
-manual y con procedencia completa.
+**Cierre:** un parámetro convergido se selecciona y propaga, la relajación
+escalonada se ejecuta y el resultado final se valida con procedencia completa.
 
-### Fase 5 — Optimización HPC
+### Fase 5 — Optimización y portabilidad HPC
 
-Perfiles de cluster, Slurm/Hydra, distribución interna de recursos,
-aprovechamiento del walltime y continuación entre asignaciones.
+Perfiles, probes, Slurm, Hydra, `srun`, colocación, MPI/OpenMP futuro, memoria,
+walltime, continuación entre asignaciones y backends intercambiables. Parsl no
+es una decisión tomada; cualquier evaluación requiere ADR y comparación
+reproducible con el backend nativo.
 
-**Cierre:** un DAG heterogéneo utiliza correctamente una asignación real.
+**Cierre:** un DAG heterogéneo utiliza correctamente una asignación real,
+continúa entre asignaciones y conserva equivalencia contractual entre backends
+autorizados.
 
 ### Fase 6 — Validación científica extensible
 
-Reglas versionadas para FDF, pseudopotenciales, geometrías, periodicidad,
-carga, spin, Hubbard, convergencia y posprocesamiento.
+Reglas versionadas con aplicabilidad, evidencia, severidad, remediación, falsos
+positivos y pruebas. La presentación diagnóstica debe distinguir `ERROR`,
+`WARNING`, `REVIEW` e `INFO` sin confundirla con el estado contractual de una
+decisión; cualquier cambio del vocabulario contractual existente requiere ADR,
+compatibilidad y migración.
 
-**Cierre:** toda regla declara alcance, evidencia, severidad y remediación.
+**Cierre:** la cobertura y la evidencia de campañas reales son suficientes para
+el alcance declarado; una base vertical local no cierra la fase.
 
 ### Fase 7 — Resultados y publicación
 
-Linaje, comparaciones, tablas, reportes metodológicos y exportación de
-evidencia para tesis y artículos.
+Linaje, tablas, comparaciones, exportación, reportes metodológicos, métricas,
+versiones, hashes, decisiones, recursos, geometrías, energía, fuerzas, SCF e
+iteraciones.
 
-**Cierre:** un resultado puede rastrearse hasta sus entradas y decisiones.
+**Cierre:** el investigador consulta y exporta un resultado sin reconstruir la
+historia desde archivos dispersos.
 
-## 8. Invariantes
+### Fase 8 — Distribución y adopción
+
+Wheel/sdist, instalación editable y limpia, `pipx` cuando proceda, CI Linux,
+licencia, changelog, tutorial, esquemas públicos, compatibilidad, ejemplos y
+validación por usuarios externos.
+
+**Cierre:** investigadores externos instalan SIESTAFLOW y completan un flujo
+documentado sin asistencia directa del autor. Esta fase no bloquea la
+aceptación técnica remota de la Fase 3.
+
+## 10. Invariantes
 
 1. Ningún resultado se identifica sólo por su nombre de archivo.
 2. Toda transferencia conserva hash, origen y destino.
-3. Una entrada transferida y un archivo de trabajo mutable son artefactos
+3. La evidencia transferida y la copia de trabajo mutable son artefactos
    distintos.
 4. Ninguna tarea dependiente inicia antes de validar sus padres.
 5. Ninguna recuperación cambia la física sin autorización explícita.
 6. La terminación normal no implica validez científica.
-7. Las decisiones automáticas registran regla, versión, métricas y evidencia.
-8. La evidencia histórica no se reescribe; una reclasificación es un evento.
-9. El paquete remoto funciona sin procesos persistentes en el login.
+7. Toda decisión automática registra regla, versión, métricas y evidencia.
+8. La evidencia histórica es append-only; una reclasificación es un evento.
+9. El runtime remoto no mantiene procesos en login.
 10. Un cambio incompatible requiere migración o nueva versión contractual.
+11. Un paquete formal se vincula a locks, perfil, fuente y estado de limpieza.
+12. La aceptación local nunca se presenta como aceptación de Yoltla.
 
-## 9. Criterio para aceptar funcionalidades
+## 11. Entrada al núcleo y gobernanza
 
-Una funcionalidad entra al núcleo sólo si:
+Una funcionalidad entra al núcleo sólo si evita un error costoso o trabajo
+repetitivo, posee un contrato independiente del motor o cluster, puede probarse
+determinísticamente, conserva trazabilidad, ofrece diagnóstico y no introduce
+decisiones científicas ocultas. En caso contrario permanece como plugin,
+ejemplo o política de proyecto.
 
-- evita un error costoso o elimina trabajo manual repetitivo;
-- tiene un contrato independiente del motor o cluster;
-- puede probarse de forma determinista;
-- conserva trazabilidad;
-- ofrece diagnóstico comprensible;
-- no introduce una decisión científica oculta.
-
-Si no cumple estos puntos, debe permanecer como plugin, ejemplo o política del
-proyecto.
-
-## 10. Proceso de entrega
-
-Cada fase sigue el mismo ciclo:
-
-1. especificación y contratos;
-2. implementación mínima vertical;
-3. pruebas unitarias;
-4. prueba integral local;
-5. paquete autocontenido;
-6. prueba real en HPC;
-7. registro de errores observados;
-8. aceptación explícita;
-9. publicación de versión cuando exista evidencia suficiente.
-
-No se incrementa una versión únicamente porque el código compile o las pruebas
-locales pasen.
-
-## 11. Estado inmediato
-
-La Fase 0 está implementada en una rama de arquitectura. El controlador actual
-ya proporciona evidencia real sobre Hydra, dependencias, reinicio DM y
-persistencia dentro de una asignación.
-
-La Fase 1 dispone de una implementación vertical local: contrato del DAG,
-validación estructural, resolución de artefactos, orden topológico, plan,
-grafo y `workflow.lock.json` determinista. Su aceptación queda condicionada a
-la suite completa y a revisión antes de conectar el lock con ejecución remota.
-
-La Fase 2 dispone de un corte vertical local orientado al investigador:
-diagnóstico de entorno de solo lectura, creación idempotente de proyectos desde
-entradas explícitas y validación explicable bajo Core Contracts. Esta fase no
-autoriza ejecución, no elige parámetros científicos y mantiene obligatoria la
-revisión química de la estructura.
-
-La Fase 3 dispone de un corte vertical local que adapta
-`workflow.lock.json` a un paquete Slurm autocontenido mediante un perfil de
-ejecución externo. Conserva destinos exactos, convierte dependencias en
-transferencias verificadas, registra `run.lock.json` y permite
-`prepare/inspect/status/resume` sin enviar trabajos. Su aceptación HPC sigue
-pendiente; no se incrementa versión hasta acumular evidencia real.
-
-La Fase 6 dispone de una base vertical local para SIESTA 5.4.2: catálogo de
-reglas versionado, perfiles de contexto declarados por el investigador,
-validación FDF explicable y preflight de artefactos externos del DAG. Las
-heurísticas sólo generan `REVIEW`; los fallos automáticos quedan limitados a
-inconsistencias deterministas. Todavía no se considera cerrada la fase ni se
-incrementa la versión: faltan ampliar cobertura y acumular evidencia de
-campañas reales.
+Cada cambio sigue especificación humana, implementación, pruebas
+proporcionales al riesgo, auditoría independiente cuando corresponda, revisión
+humana y commit o rechazo. Las reglas completas de Git, ADR, aceptación,
+trazabilidad y releases están en
+[`DEVELOPMENT_GOVERNANCE.md`](../developer/DEVELOPMENT_GOVERNANCE.md).

@@ -5,8 +5,9 @@ campaigns in persistent SLURM allocations. It prepares self-contained packages
 locally; the user transfers and submits them manually. The controller itself
 lives only inside the allocation.
 
-Current engineering state: `V0_2_CONSOLIDATION_ALPHA`. The generic controller
-supports `srun` and the Yoltla-recommended
+Current engineering state: `V0_2_CONSOLIDATION_ALPHA`, with the binding gate
+`LOCAL_ACCEPTANCE_PASS / REMOTE_TWO_STAGE_ACCEPTANCE_PENDING`. The generic
+controller supports `srun` and the Yoltla-recommended
 `mpiexec.hydra -bootstrap ssh`, explicit multinode placement, concurrent
 allocation waves, dependency DAGs, hash-bound artifact transfers, gate tasks,
 controlled shutdown, resubmission and read-only progress reporting.
@@ -87,6 +88,13 @@ Contract compatibility and plugin rules are documented in
 [CORE_CONTRACTS_1_0.md](docs/design/CORE_CONTRACTS_1_0.md).
 The governing product direction, vocabulary, phases, and acceptance gates are
 defined in [SIESTAFLOW_BACKBONE.md](docs/design/SIESTAFLOW_BACKBONE.md).
+Current priorities and route classifications are in
+[SIESTAFLOW_PRODUCT_ROADMAP.md](docs/design/SIESTAFLOW_PRODUCT_ROADMAP.md), and
+Git, review, ADR, traceability and release rules are in
+[DEVELOPMENT_GOVERNANCE.md](docs/developer/DEVELOPMENT_GOVERNANCE.md).
+Architecture decisions are indexed under [docs/adr](docs/adr/README.md), and
+phase evidence starts from
+[PHASE_ACCEPTANCE_TEMPLATE.md](docs/validation/PHASE_ACCEPTANCE_TEMPLATE.md).
 The optional real single-node WSL/Slurm integration layer is documented in
 [integration/local_slurm/README.md](integration/local_slurm/README.md); its
 observed acceptance evidence and strict limits are recorded in

@@ -45,6 +45,7 @@ convergence or scientific validity.
 
 ## Acceptance boundary
 
-This is a local engineering acceptance of the Phase 2 CLI vertical. It is not
-an execution acceptance and it does not connect `workflow.lock.json` to a real
-engine. That connection remains a later gated phase.
+This is a local engineering acceptance of the Phase 2 CLI vertical. Phase 2
+itself does not grant execution authority. The separately accepted local
+Phase 3 prepared-run slice now connects `workflow.lock.json` to the allocation
+controller, but its Yoltla acceptance remains pending.

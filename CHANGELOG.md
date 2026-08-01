@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — governance and roadmap
+
+- Formalized one source tree and the canonical
+  `WorkflowDefinition → workflow.lock.json → run prepare → AllocationController`
+  route while classifying older campaign, preview, smoke and evidence paths.
+- Added proportional Git/review/testing governance, ADR policy, phase acceptance
+  records, traceability requirements and explicit dirty-tree handling.
+- Added the product roadmap and Phase 8 distribution/adoption gate without
+  changing version 0.2.0 or the pending Yoltla Phase 3 status.
+
 ## Unreleased — core contracts
 
 - Added engine- and cluster-neutral Core Contracts 1.0 for validation reports,
