@@ -2,7 +2,7 @@
 
 Fecha de corte documental: 2026-08-01
 
-Estado: `REMOTE_RUNTIME_DEBT_REMEDIATED / HUMAN_DECISION_PENDING`
+Estado: `PHASE3_TECHNICAL_ACCEPTED / SCIENTIFIC_VALIDATION_OUT_OF_SCOPE`
 
 Este estado es vinculante hasta que exista un expediente remoto canónico. La
 arquitectura estable está en
@@ -24,8 +24,8 @@ arquitectura estable está en
 
 ## Validación local vigente
 
-- Suite autocontenida del repositorio: `353 passed` el 2026-08-01 tras
-  incorporar la evidencia remota de `781100`.
+- Suite autocontenida del repositorio: `355 passed` el 2026-08-01 tras
+  incorporar las evidencias remotas de remediación.
 - La aceptación WSL/Slurm registrada es integración local realista y permanece
   separada de Yoltla.
 - `pyproject.toml` declara setuptools, Python >= 3.11, la CLI y package data.
@@ -70,10 +70,10 @@ disjuntos para tareas independientes. El expediente está en
 La auditoría independiente del commit `cf62127` emitió
 `CONDITIONALLY_APPROVED`. Sus límites de runtime se remediaron con evidencia
 bruta de la matriz `781106`, señal Slurm real y nueva asignación `781111` /
-`781113`, y colocación física `srun` `781115`. La Fase 3 todavía no se declara
-cerrada: queda la decisión humana identificada de la transición. El dictamen
-está en
-[`PHASE3_INDEPENDENT_AUDIT_CF62127.md`](../validation/PHASE3_INDEPENDENT_AUDIT_CF62127.md).
+`781113`, y colocación física `srun` `781115`. Jairo Carmona declaró la
+aceptación humana de transición el 2026-08-01; por ello la Fase 3 queda cerrada
+como aceptación técnica. El expediente vinculante es
+[`PHASE3_TRANSITION_ACCEPTANCE_2026-08-01.md`](../validation/PHASE3_TRANSITION_ACCEPTANCE_2026-08-01.md).
 
 ## Empaquetado y trazabilidad
 
@@ -99,6 +99,6 @@ hace push como parte de esta auditoría documental.
 ## Próximo gate
 
 ```text
-Fase 3
-→ aceptación humana de la transición
+Fase 3 cerrada técnicamente
+→ Fase 4: DAG adaptativo canónico
 ```

@@ -2,6 +2,11 @@
 
 ## Unreleased — governance and roadmap
 
+- Closed Phase 3 as a technical engineering acceptance after Jairo Carmona's
+  declared human transition acceptance. The dedicated record links the
+  canonical positive run, adversarial evidence, real Slurm signal/recovery and
+  physical placement evidence; it explicitly excludes scientific validation,
+  version promotion, tagging and push.
 - Incorporated raw Yoltla evidence archives for jobs `781106`, `781111`,
   `781113` and `781115`: full adversarial provenance, real Slurm `SIGUSR1`
   recovery across allocations, and physical disjoint concurrent `srun`
