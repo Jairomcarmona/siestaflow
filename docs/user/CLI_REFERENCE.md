@@ -12,12 +12,19 @@ fdf inspect PATH [--json]
 input validate PATH [--pseudo-manifest PATH] [--require-pseudos] [--profile PATH] [--engine-version 5.4.2] [--explain] [--json]
 input rules [--engine-version 5.4.2] [--json]
 pseudo verify MANIFEST [--species SPECIES ...] [--json]
+workflow recipes [--json]
+workflow recipe RECIPE_ID [--json]
+workflow create INTENT --output PATH [--dry-run] [--json]
+workflow compose INTENT --output PATH [--dry-run] [--json]
 workflow validate DEFINITION [--json]
 workflow preflight DEFINITION [--profile PATH] [--pseudo-manifest PATH] [--require-pseudos] [--json]
 workflow plan DEFINITION [--json]
 workflow graph DEFINITION [--format {text,mermaid,json}]
 workflow compile DEFINITION --output PATH [--force] [--dry-run] [--json]
 run prepare WORKFLOW_LOCK --source-root PATH --profile EXECUTION_PROFILE --output PATH --run-id ID [--dry-run] [--json]
+run candidates --workflow WORKFLOW_LOCK --profile EXECUTION_PROFILE --snapshot SNAPSHOT [--json]
+run discover --cluster-id ID --output SNAPSHOT [--json]
+run snapshot-import --cluster-id ID --output SNAPSHOT [--sinfo FILE] [--scontrol-partitions FILE] [--scontrol-nodes FILE] [--sacctmgr FILE] [--sjstat FILE] [--observed-at TIMESTAMP] [--json]
 run inspect PACKAGE [--json]
 run status PACKAGE [--json]
 run resume PACKAGE [--previous-job-terminal] [--json]
@@ -86,6 +93,12 @@ Validation, preflight, planning and graph rendering are read-only.
 `siestaflow.workflow-lock@1.0` envelope and never authorizes or starts
 execution.
 
+`workflow recipes` lists the registered scientific recipes; `workflow recipe`
+describes one recipe; `workflow create` materializes an explicit scientific
+intent as a canonical definition; and `workflow compose` creates a selected
+modular composition. They do not choose scientific values on the researcher's
+behalf.
+
 `run prepare` is the strict bridge from a compiled workflow to the persistent
 allocation controller. It rechecks workflow-lock integrity, external artifact
 size and SHA-256, SIESTA FDF preflight, task placement, allocation fit, and the
@@ -101,6 +114,14 @@ mutable progress. `run resume` only prints a fail-closed resubmission plan; it
 never contacts Slurm or invokes `sbatch`. A noninitial resubmission requires
 the researcher to confirm scheduler evidence with `--previous-job-terminal`;
 the flag records that assertion but still performs no submission.
+
+`run discover` captures read-only scheduler capability data on a cluster.
+`run snapshot-import` combines saved scheduler output, including optional
+site-specific capacity evidence such as `sjstat -c`, into a hash-bound
+snapshot. `run candidates` ranks snapshot variants deterministically; it is
+not a queue-time predictor and never submits work. A confirmed snapshot
+candidate or a compatibility-evidence-bound manual resolution is then supplied
+to `run prepare`.
 
 `results dos-pdos` is a read-only consumer for a completed, canonical prepared
 run that declares exactly one DOS/PDOS-producing task. It first applies the

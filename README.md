@@ -79,7 +79,9 @@ python -m pytest -q
 
 The external package schema is documented in
 [USER_MANUAL.md](docs/user/USER_MANUAL.md), every implemented command in
-[CLI_REFERENCE.md](docs/user/CLI_REFERENCE.md), and Yoltla operational
+[CLI_REFERENCE.md](docs/user/CLI_REFERENCE.md). The end-to-end researcher
+route is in [CANONICAL_CLI_TUTORIAL.md](docs/user/CANONICAL_CLI_TUTORIAL.md),
+and Yoltla operational
 boundaries in [YOLTLA_RUNBOOK.md](docs/operations/YOLTLA_RUNBOOK.md).
 Workflow schema 1.0 is documented in
 [WORKFLOW_GUIDE.md](docs/user/WORKFLOW_GUIDE.md).
