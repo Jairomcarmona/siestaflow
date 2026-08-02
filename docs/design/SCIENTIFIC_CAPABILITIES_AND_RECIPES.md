@@ -100,7 +100,8 @@ puede llegar a SIESTA tras compilar y usar `run prepare` con un perfil explícit
 
 `siestaflow.recipe.siesta.dos-pdos` materializa una tarea SIESTA de análisis
 aislada, con un FDF y pseudopotenciales PSML declarados por el investigador. El
-FDF debe declarar explícitamente `MD.TypeOfRun SinglePoint` y un único bloque
+FDF debe declarar explícitamente `MD.TypeOfRun CG` junto con `MD.NumCGSteps 0`,
+y un único bloque
 cerrado `ProjectedDensityOfStates`; sus energías ordenadas, anchura positiva,
 número de puntos mayor que uno y unidad `eV` se validan como contrato de
 ejecución. La receta no elige esos valores, no crea una k-grid, no reescribe el

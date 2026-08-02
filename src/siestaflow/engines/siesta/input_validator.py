@@ -86,11 +86,7 @@ class SiestaInputValidator:
             if not document.scalars(declared):
                 findings.append(ValidationFinding("UNDECLARED_GOVERNED_VALUE", DecisionStatus.REVIEW, f"{declared} is not explicitly declared; no default assumed"))
         step_labels = ("MD.Steps", "MD.NumCGSteps")
-        single_point = (
-            len(document.scalars("MD.TypeOfRun")) == 1
-            and document.scalars("MD.TypeOfRun")[0].value.casefold() == "singlepoint"
-        )
-        if not single_point and not any(document.scalars(label) for label in step_labels):
+        if not any(document.scalars(label) for label in step_labels):
             findings.append(ValidationFinding(
                 "UNDECLARED_GOVERNED_VALUE", DecisionStatus.REVIEW,
                 "MD.Steps or MD.NumCGSteps is not explicitly declared; no default assumed",

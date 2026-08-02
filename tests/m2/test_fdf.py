@@ -6,7 +6,6 @@ from siestaflow.engines.siesta.fdf_parser import FDFParser
 from siestaflow.engines.siesta.input_validator import SiestaInputValidator
 from siestaflow.engines.siesta.models import FDFInclude, FDFUnknown
 
-from tests.validation_fixture import BASE_FDF
 
 
 def test_round_trip_preserves_comments_blocks_includes_unknown_and_windows_eol():
@@ -96,11 +95,31 @@ def test_cg_steps_are_recognized_as_the_explicit_relaxation_step_limit(sanity_fd
     )
 
 
-def test_single_point_does_not_require_an_md_step_limit_and_recognizes_pdos():
-    source = BASE_FDF.replace("MD.TypeOfRun CG\nMD.Steps 0", """MD.TypeOfRun SinglePoint
+def test_projected_density_of_states_is_recognized():
+    source = """SystemName DOS fixture
+SystemLabel dos_fixture
+NumberOfAtoms 1
+NumberOfSpecies 1
+%block ChemicalSpeciesLabel
+  1 6 C
+%endblock ChemicalSpeciesLabel
+LatticeConstant 1.0 Ang
+%block LatticeVectors
+  8.0 0.0 0.0
+  0.0 8.0 0.0
+  0.0 0.0 8.0
+%endblock LatticeVectors
+AtomicCoordinatesFormat Ang
+%block AtomicCoordinatesAndAtomicSpecies
+  0.0 0.0 0.0 1
+%endblock AtomicCoordinatesAndAtomicSpecies
+NetCharge 0
+Spin non-polarized
+MD.TypeOfRun CG
+MD.NumCGSteps 0
 %block ProjectedDensityOfStates
   EF -10.0 10.0 0.20 301 eV
-%endblock ProjectedDensityOfStates""")
+%endblock ProjectedDensityOfStates"""
     result = SiestaInputValidator().validate(FDFParser().parse(source))
 
     assert result.status.value == "PASS"

@@ -665,8 +665,11 @@ class DOSPDOSTaskBuilder:
         blocks = document.blocks("ProjectedDensityOfStates")
         if len(labels) != 1:
             raise ValueError("dos_pdos requires exactly one SystemLabel")
-        if len(run_type) != 1 or run_type[0].value.casefold() != "singlepoint":
-            raise ValueError("dos_pdos requires explicit MD.TypeOfRun SinglePoint")
+        steps = document.scalars("MD.NumCGSteps")
+        if len(run_type) != 1 or run_type[0].value.casefold() != "cg":
+            raise ValueError("dos_pdos requires explicit MD.TypeOfRun CG")
+        if len(steps) != 1 or steps[0].value != "0":
+            raise ValueError("dos_pdos requires explicit MD.NumCGSteps 0")
         if len(blocks) != 1 or not blocks[0].closed:
             raise ValueError("dos_pdos requires exactly one closed ProjectedDensityOfStates block")
         rows = [line.split("#", 1)[0].strip().split() for line in blocks[0].body_lines]

@@ -165,7 +165,8 @@ AtomicCoordinatesFormat Ang
 %endblock AtomicCoordinatesAndAtomicSpecies
 NetCharge 0
 Spin non-polarized
-MD.TypeOfRun SinglePoint
+MD.TypeOfRun CG
+MD.NumCGSteps 0
 %block ProjectedDensityOfStates
   EF -10.0 10.0 0.20 301 eV
 %endblock ProjectedDensityOfStates
@@ -480,7 +481,8 @@ def test_dos_pdos_recipe_builds_a_canonical_siesta_task_and_package(tmp_path: Pa
 @pytest.mark.parametrize(
     ("replacement", "message"),
     [
-        ("MD.TypeOfRun CG", "MD.TypeOfRun SinglePoint"),
+        ("MD.TypeOfRun MD", "MD.TypeOfRun CG"),
+        ("MD.NumCGSteps 1", "MD.NumCGSteps 0"),
         ("EF 10.0 -10.0 0.20 301 eV", "EF -10.0 10.0 0.20 301 eV"),
         ("EF -10.0 10.0 0.00 301 eV", "EF -10.0 10.0 0.20 301 eV"),
         ("EF -10.0 10.0 0.20 1 eV", "EF -10.0 10.0 0.20 301 eV"),
