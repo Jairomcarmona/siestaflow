@@ -78,6 +78,28 @@ def test_same_real_artifacts_produce_strict_kgrid_observation(tmp_path: Path) ->
     assert parsed.used_grid == parsed.requested_grid
 
 
+def test_displaced_eggbox_observation_preserves_atom_identity_not_structure(tmp_path: Path) -> None:
+    paths = _artifacts(tmp_path)
+    primary = produce_observation(
+        axis="mesh", observation_id="primary-300", fdf=paths["h2o.fdf"],
+        stdout=paths["stdout.txt"], force_stress=paths["FORCE_STRESS"],
+        pseudopotential_manifest=paths["pseudo.json"],
+    )
+    paths["h2o.fdf"].write_text(
+        FDF.replace("0.757 0.586 0.000 2", "0.807 0.586 0.000 2"),
+        encoding="utf-8",
+    )
+    eggbox = produce_observation(
+        axis="mesh", observation_id="eggbox-300", fdf=paths["h2o.fdf"],
+        stdout=paths["stdout.txt"], force_stress=paths["FORCE_STRESS"],
+        pseudopotential_manifest=paths["pseudo.json"], kind="EGGBOX",
+        baseline_observation_id="primary-300",
+    )
+    assert primary["atom_identity_sha256"] == eggbox["atom_identity_sha256"]
+    assert primary["structure_sha256"] != eggbox["structure_sha256"]
+    assert MeshObservation.from_mapping(eggbox).baseline_observation_id == "primary-300"
+
+
 def test_incomplete_real_output_is_rejected(tmp_path: Path) -> None:
     paths = _artifacts(tmp_path)
     paths["stdout.txt"].write_text("siesta: E_KS(eV) = -1\nJob completed\n", encoding="utf-8")

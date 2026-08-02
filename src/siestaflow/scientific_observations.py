@@ -23,10 +23,13 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _canonical_fdf(text: str, *, omit_mesh: bool, omit_kgrid: bool) -> str:
-    """Normalize the scientific identity while excluding the swept axis only."""
+def _canonical_fdf(
+    text: str, *, omit_mesh: bool, omit_kgrid: bool, omit_coordinates: bool = False,
+) -> str:
+    """Normalize identity, optionally excluding the swept axis or displacement."""
     output: list[str] = []
     in_kgrid = False
+    in_coordinates = False
     for raw in text.splitlines():
         line = raw.split("#", 1)[0].strip()
         lowered = line.casefold()
@@ -36,6 +39,13 @@ def _canonical_fdf(text: str, *, omit_mesh: bool, omit_kgrid: bool) -> str:
         if in_kgrid:
             if lowered.startswith("%endblock kgrid.monkhorstpack"):
                 in_kgrid = False
+            continue
+        if omit_coordinates and lowered.startswith("%block atomiccoordinatesandatomicspecies"):
+            in_coordinates = True
+            continue
+        if in_coordinates:
+            if lowered.startswith("%endblock atomiccoordinatesandatomicspecies"):
+                in_coordinates = False
             continue
         if omit_mesh and lowered.startswith("mesh.cutoff"):
             continue
@@ -132,7 +142,9 @@ def produce_observation(
         "observation_id": observation_id,
         "atom_count": atom_count,
         "atom_identity_sha256": hashlib.sha256(
-            _canonical_fdf(fdf_text, omit_mesh=True, omit_kgrid=True).encode("utf-8")
+            _canonical_fdf(
+                fdf_text, omit_mesh=True, omit_kgrid=True, omit_coordinates=True,
+            ).encode("utf-8")
         ).hexdigest(),
         "structure_sha256": hashlib.sha256(
             _canonical_fdf(fdf_text, omit_mesh=True, omit_kgrid=True).encode("utf-8")
