@@ -248,6 +248,33 @@ def test_prepare_builds_hash_bound_package_with_exact_destinations(
     assert plan.submission_performed is False
 
 
+def test_prepare_rejects_allocation_that_cannot_launch_declared_task(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    definition = _sources(source)
+    compilation = WorkflowCompiler().compile(definition)
+    assert compilation.valid
+    lock = tmp_path / "workflow.lock.json"
+    write_workflow_lock(compilation, lock)
+    profile = _profile(tmp_path)
+    payload = json.loads(profile.read_text(encoding="utf-8"))
+    payload["allocation"]["walltime"] = "00:05:00"
+    profile.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="allocation walltime cannot launch"):
+        RunPreparer(REPO).prepare(
+            RunPreparationRequest(
+                workflow_lock=lock,
+                source_root=source,
+                execution_profile=profile,
+                output_root=tmp_path / "output",
+                run_id="insufficient-walltime",
+            )
+        )
+
+
 def test_prepare_dry_run_does_not_create_output(tmp_path: Path) -> None:
     source = tmp_path / "source"
     source.mkdir()

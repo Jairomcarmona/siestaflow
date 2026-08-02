@@ -17,7 +17,7 @@ from .contracts import DecisionStatus, PreparedRun
 from .contracts.workflow import require_local_id
 from .controller_package import ControllerPackageBuilder
 from .engines.siesta.fdf_parser import FDFParser
-from .execution_profile import SlurmExecutionProfile
+from .execution_profile import SlurmExecutionProfile, _walltime_seconds
 from .siesta_validation import SiestaContextualValidator
 from .workflows import load_workflow_lock
 
@@ -206,6 +206,7 @@ class RunPreparer:
             artifacts,
             resolved_sources,
         )
+        self._validate_initial_launch_budget(campaign, profile)
         campaign_bytes = _json_bytes(campaign)
         campaign_sha256 = hashlib.sha256(campaign_bytes).hexdigest()
         prepared = PreparedRun(
@@ -293,6 +294,31 @@ class RunPreparer:
             ),
             validation_review_codes=review_codes,
         )
+
+    @staticmethod
+    def _validate_initial_launch_budget(
+        campaign: Mapping[str, Any],
+        profile: SlurmExecutionProfile,
+    ) -> None:
+        """Reject allocations that cannot launch even one declared task.
+
+        The allocation controller deliberately refuses a task when its declared
+        estimate plus the shutdown margin does not fit in the remaining
+        allocation.  Catch that deterministic condition during preparation,
+        before creating a package that would immediately interrupt remotely.
+        """
+        available = _walltime_seconds(profile.walltime) - profile.shutdown_margin_seconds
+        blocked = [
+            str(task["task_id"])
+            for task in campaign["tasks"]
+            if float(task["estimated_runtime_seconds"]) >= available
+        ]
+        if blocked:
+            raise ValueError(
+                "allocation walltime cannot launch declared task(s) before "
+                "the shutdown margin: "
+                f"available_seconds={available}, tasks={','.join(blocked)}"
+            )
 
     def _source_identity(self) -> dict[str, Any]:
         """Capture repository identity without making Git a runtime dependency."""
