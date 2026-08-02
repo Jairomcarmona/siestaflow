@@ -115,6 +115,46 @@ Las aristas transportan control o artefactos tipados. La expansión dinámica
 debe ser declarada, determinista, acotada y materializada antes de ejecución en
 `workflow.lock.json`.
 
+### 7.1 Orden vinculante para incorporar herramientas científicas y CLI
+
+Una herramienta científica nueva se integra de dentro hacia fuera. La CLI es
+una interfaz sobre contratos canónicos, no una segunda implementación. El orden
+obligatorio es:
+
+1. estabilizar contratos versionados de regla, observación, decisión, estados,
+   unidades y autoridad final;
+2. representar las operaciones y expansiones como nodos y artefactos de
+   `WorkflowDefinition`;
+3. demostrar compilación determinista a `workflow.lock.json` y preparación por
+   la ruta canónica `run prepare` a `run.lock.json` y paquete autocontenido;
+4. exponer una API de aplicación independiente de la CLI para cargar, validar,
+   planificar, evaluar, expandir y registrar decisiones;
+5. persistir regla, hashes, observaciones, procedencia, candidato, expansión y
+   decisión humana de forma verificable;
+6. añadir primero comandos CLI de solo lectura, como `validate`, `show`, `plan`
+   y `evaluate`;
+7. añadir después edición controlada mediante preview y diff, validación previa
+   y confirmación explícita; ninguna edición puede modificar silenciosamente el
+   archivo fuente;
+8. implementar aprobación o rechazo humano vinculados por hash a la regla, la
+   evidencia y el candidato exactos;
+9. verificar localmente el recorrido completo desde Project hasta decisión,
+   incluyendo casos adversariales y reanudación;
+10. preparar y ejecutar una aceptación HPC mínima sólo después de completar los
+    pasos anteriores.
+
+No se construye una CLI completa antes de integrar el contrato con
+`WorkflowDefinition`, el compilador y `run prepare`. Los comandos no pueden
+crear locks, paquetes, estados ni decisiones con semántica diferente de la API
+canónica. Una regla parametrizable puede reutilizar su motor entre proyectos,
+pero sus valores, tolerancias, aplicabilidad y aceptación pertenecen a una
+política de proyecto bajo autoridad humana.
+
+En convergencia adaptativa, un estado como `READY_FOR_HUMAN_REVIEW` es una
+recomendación trazable, nunca una aceptación científica automática. La
+propagación del parámetro a un DAG posterior exige una decisión humana
+persistida y vinculada a los hashes evaluados.
+
 ## 8. Descubrimiento de entornos HPC
 
 El descubrimiento sigue una promoción explícita:
