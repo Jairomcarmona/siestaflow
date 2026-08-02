@@ -109,10 +109,11 @@ FDF y no interpreta picos, gaps ni estados.
 
 La salida canónica contiene dos artefactos requeridos, ligados por hash al
 paquete: `<SystemLabel>.DOS` (`siestaflow.total-density-of-states`) y
-`<SystemLabel>.PDOS` (`siestaflow.projected-density-of-states`). Así se puede
-ejecutar un análisis aislado desde CLI hoy, y un consumidor futuro podrá enlazar
-estos artefactos a un módulo de tabla, gráfica o comparación sin alterar el
-motor ni nombrar un material en el núcleo.
+`<SystemLabel>.PDOS` (`siestaflow.projected-density-of-states`). El consumidor
+de solo lectura `results dos-pdos` puede exportar la tabla DOS y el manifiesto
+de procedencia PDOS desde un paquete completado, sin alterar el motor ni
+nombrar un material en el núcleo. No interpreta picos, gap ni orbitales; una
+gráfica o comparación futura debe consumir el mismo manifiesto hash-bound.
 
 La receta `siestaflow.recipe.siesta.ground-state-to-dos-pdos` añade el ciclo
 encadenado mínimo. Materializa un padre SCF (`CG` con cero pasos) que declara su

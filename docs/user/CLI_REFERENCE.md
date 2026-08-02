@@ -21,6 +21,7 @@ run prepare WORKFLOW_LOCK --source-root PATH --profile EXECUTION_PROFILE --outpu
 run inspect PACKAGE [--json]
 run status PACKAGE [--json]
 run resume PACKAGE [--previous-job-terminal] [--json]
+results dos-pdos PACKAGE --output DIRECTORY [--dry-run] [--json]
 campaign create --project PATH --campaign-id ID [--dry-run] [--json]
 campaign validate CAMPAIGN [--dry-run] [--json]
 campaign simulate CAMPAIGN [--dry-run] [--json]
@@ -98,3 +99,13 @@ mutable progress. `run resume` only prints a fail-closed resubmission plan; it
 never contacts Slurm or invokes `sbatch`. A noninitial resubmission requires
 the researcher to confirm scheduler evidence with `--previous-job-terminal`;
 the flag records that assertion but still performs no submission.
+
+`results dos-pdos` is a read-only consumer for a completed, canonical prepared
+run that declares exactly one DOS/PDOS-producing task. It first applies the
+same immutable package verification as `run inspect`, then requires successful
+termination, SCF convergence, manifest-backed DOS/PDOS hashes, and—when the
+task consumes a density matrix—evidence that SIESTA read that DM. It writes a
+fresh directory containing `total_dos.csv` and `dos_pdos_export.json`. The
+manifest binds the table to the workflow lock, run lock, task attempt, raw DOS,
+raw PDOS, and any restart transfer. It exports numbers only: it never infers a
+gap, peak, orbital assignment, or scientific conclusion.

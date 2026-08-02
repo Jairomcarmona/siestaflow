@@ -34,6 +34,7 @@ from .execution.allocation_controller import AllocationController, ExecutionStat
 from .execution.campaign_progress import read_campaign_progress, render_campaign_progress
 from .m4_remote_package import M4RemoteSmokePackager
 from .controller_package import ControllerPackageBuilder
+from .dos_pdos_results import DOSPDOSResultExporter
 from .run_inspection import RunInspector
 from .run_preparation import RunPreparer, RunPreparationRequest
 from .execution_profile import SlurmExecutionProfile
@@ -340,6 +341,18 @@ def build_parser() -> argparse.ArgumentParser:
             )
         command.add_argument("--json", action="store_true")
 
+    results = sub.add_parser(
+        "results", help="export hash-bound numerical results from completed prepared runs"
+    )
+    results_sub = results.add_subparsers(dest="action", required=True)
+    dos_pdos = results_sub.add_parser(
+        "dos-pdos", help="export total DOS table and PDOS provenance without interpretation"
+    )
+    dos_pdos.add_argument("package", type=Path)
+    dos_pdos.add_argument("--output", type=Path, required=True)
+    dos_pdos.add_argument("--dry-run", action="store_true")
+    dos_pdos.add_argument("--json", action="store_true")
+
     examples = sub.add_parser("examples")
     example_sub = examples.add_subparsers(dest="action", required=True)
     example_sub.add_parser("list").add_argument("--json", action="store_true")
@@ -411,6 +424,9 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _dispatch(args: argparse.Namespace) -> int:
+    if args.domain == "results":
+        _emit(DOSPDOSResultExporter().export(args.package, args.output, dry_run=args.dry_run), args.json)
+        return 0
     if args.domain == "scientific":
         if args.action == "decide":
             _emit(create_decision(
