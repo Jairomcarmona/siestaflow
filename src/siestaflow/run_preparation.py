@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Mapping
 
@@ -33,8 +34,18 @@ _RESOURCE_FIELDS = {
     "walltime_seconds",
 }
 _ADAPTIVE_GATE_SCRIPT = "src/siestaflow/execution/adaptive_gate.py"
-_MESH_EVALUATOR_SCRIPT = "src/siestaflow/scientific_convergence.py"
-_MESH_EVALUATOR_CAPABILITY = "siestaflow.siesta.mesh-evidence-evaluator"
+_EVIDENCE_EVALUATORS = {
+    "siestaflow.siesta.mesh-evidence-evaluator": {
+        "script": "src/siestaflow/scientific_convergence.py",
+        "script_name": "scientific_convergence.py",
+        "artifact_type": "siestaflow.mesh-convergence-report",
+    },
+    "siestaflow.siesta.kgrid-evidence-evaluator": {
+        "script": "src/siestaflow/scientific_kgrid.py",
+        "script_name": "scientific_kgrid.py",
+        "artifact_type": "siestaflow.kgrid-convergence-report",
+    },
+}
 _ADAPTIVE_CAPABILITIES = {
     "sweep": "siestaflow.gate.deterministic-metric",
     "selection_minimum": "siestaflow.gate.minimum-selector",
@@ -126,7 +137,8 @@ class RunPreparer:
         self.repository_root = repository_root.resolve()
         self.validator = validator or SiestaContextualValidator()
         self._task_adapters: dict[str, Callable[..., dict[str, Any]]] = {
-            _MESH_EVALUATOR_CAPABILITY: self._mesh_evaluator_task,
+            capability: partial(self._evidence_evaluator_task, evaluator=evaluator)
+            for capability, evaluator in _EVIDENCE_EVALUATORS.items()
         }
         for capability_id, adapter in (task_adapters or {}).items():
             if capability_id in self._task_adapters:
@@ -501,34 +513,35 @@ class RunPreparer:
             return common
         raise ValueError(f"unsupported adaptive task kind: {task.kind.value}")
 
-    def _mesh_evaluator_task(
+    def _evidence_evaluator_task(
         self,
         task: Any,
         *,
+        evaluator: Mapping[str, str],
         by_task: Mapping[str, Any],
         artifacts: Mapping[str, Any],
         resolved_sources: Mapping[str, Path],
         profile: SlurmExecutionProfile,
         protected: dict[str, Path],
     ) -> dict[str, Any]:
-        if task.kind.value != "validation" or task.capability_id != _MESH_EVALUATOR_CAPABILITY:
+        if task.kind.value != "validation" or task.capability_id not in _EVIDENCE_EVALUATORS:
             raise ValueError(f"unsupported scientific evaluator: {task.task_id}")
         if set(task.settings) != {"rule_id"}:
-            raise ValueError(f"mesh evaluator settings mismatch: {task.task_id}")
+            raise ValueError(f"scientific evaluator settings mismatch: {task.task_id}")
         self._local_setting(task.settings["rule_id"], field="rule_id")
         output = self._gate_output(task, name="report")
         port = next(item for item in task.outputs if item.name == "report")
-        if port.artifact_type != "siestaflow.mesh-convergence-report":
-            raise ValueError(f"mesh evaluator report artifact type mismatch: {task.task_id}")
-        script = self.repository_root / _MESH_EVALUATOR_SCRIPT
+        if port.artifact_type != evaluator["artifact_type"]:
+            raise ValueError(f"scientific evaluator report artifact type mismatch: {task.task_id}")
+        script = self.repository_root / evaluator["script"]
         if not script.is_file():
-            raise ValueError("mesh evaluator runtime script is missing")
+            raise ValueError("scientific evaluator runtime script is missing")
         script_relative = (
-            PurePosixPath("protected") / task.task_id / "scientific_convergence.py"
+            PurePosixPath("protected") / task.task_id / evaluator["script_name"]
         ).as_posix()
         protected[script_relative] = script
         hashes = {script_relative: _sha256(script)}
-        destinations = {script_relative: "scientific_convergence.py"}
+        destinations = {script_relative: evaluator["script_name"]}
         transfers: list[dict[str, str]] = []
         rule_destination: str | None = None
         observation_destinations: list[str] = []
@@ -538,9 +551,9 @@ class RunPreparer:
             elif binding.name.startswith("observation_"):
                 observation_destinations.append(binding.destination)
             else:
-                raise ValueError(f"unexpected mesh evaluator input: {binding.name}")
+                raise ValueError(f"unexpected scientific evaluator input: {binding.name}")
             if binding.media_type != "application/json":
-                raise ValueError(f"mesh evaluator inputs must use application/json: {binding.name}")
+                raise ValueError(f"scientific evaluator inputs must use application/json: {binding.name}")
             if binding.external_artifact_id is not None:
                 artifact = artifacts[binding.external_artifact_id]
                 package_source = (
@@ -559,14 +572,14 @@ class RunPreparer:
                     None,
                 )
                 if parent_output is None or not parent_output.required:
-                    raise ValueError(f"mesh evaluator input is not a required parent output: {binding.name}")
+                    raise ValueError(f"scientific evaluator input is not a required parent output: {binding.name}")
                 transfers.append({
                     "from_task": parent.task_id,
                     "artifact": parent_output.relative_path,
                     "destination": binding.destination,
                 })
         if rule_destination is None or not observation_destinations:
-            raise ValueError("mesh evaluator requires one rule and observation inputs")
+            raise ValueError("scientific evaluator requires one rule and observation inputs")
         arguments: list[str] = []
         for destination in sorted(observation_destinations):
             arguments.extend(("--observation", destination))
@@ -588,7 +601,7 @@ class RunPreparer:
             "max_attempts": profile.max_attempts,
             "require_scf_converged": False,
             "command": [
-                "python3", "scientific_convergence.py", "evaluate",
+                "python3", evaluator["script_name"], "evaluate",
                 "--rule", rule_destination, *arguments, "--output", output,
             ],
         }

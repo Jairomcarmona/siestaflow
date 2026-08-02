@@ -34,7 +34,7 @@ siestaflow run prepare workflow.lock.json ...
 `workflow create` no sobrescribe archivos y exige que intención, definición y
 entradas permanezcan en el mismo árbol autocontenido. `--dry-run` no escribe.
 
-## Intent de evaluación Mesh
+## Intents de evaluación de convergencia
 
 ```json
 {
@@ -60,6 +60,14 @@ entradas permanezcan en el mismo árbol autocontenido. `--dry-run` no escribe.
 La regla y observaciones deben ser JSON porque se copian al runtime mínimo sin
 dependencias opcionales. El compilador añade sus hashes como artefactos externos.
 
+La segunda receta registrada es
+`siestaflow.recipe.siesta.kgrid-evidence-evaluation`. Conserva la misma
+interfaz de intent, recipe, lock y paquete, pero su regla expresa una serie de
+grillas Monkhorst-Pack con desplazamientos invariantes y refinamiento estricto.
+Evalúa energía por átomo, fuerzas, SCF, firma magnética, identidad inmutable y
+la igualdad entre grilla solicitada y usada. No aplica la prueba eggbox, que es
+específica de la malla real espacial.
+
 ## Extensión futura
 
 Una implementación nueva debe aportar descriptores, builder, recipe cuando
@@ -67,7 +75,7 @@ proceda, adaptador de `run prepare` únicamente si introduce un tipo de ejecuci�
 nuevo, y pruebas de contrato. El objetivo es que:
 
 ```text
-k-grid = nuevo builder/política reutilizando ParameterStudy
+k-grid = segundo builder/política validado reutilizando la misma API y runtime
 DOS/PDOS/bandas = capacidades consumidoras de artefactos electrónicos
 fonones/óptica = plugins que declaran sus propios puertos y validadores
 ```

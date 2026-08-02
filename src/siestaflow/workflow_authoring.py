@@ -25,11 +25,14 @@ from .contracts import (
 )
 from .project_packages import load_structured
 from .scientific_convergence import MeshConvergenceRule, MeshObservation
+from .scientific_kgrid import KGridConvergenceRule, KGridObservation
 from .workflows import WorkflowCompiler
 
 
 MESH_EVALUATOR_CAPABILITY = "siestaflow.siesta.mesh-evidence-evaluator"
 MESH_EVALUATION_RECIPE = "siestaflow.recipe.siesta.mesh-evidence-evaluation"
+KGRID_EVALUATOR_CAPABILITY = "siestaflow.siesta.kgrid-evidence-evaluator"
+KGRID_EVALUATION_RECIPE = "siestaflow.recipe.siesta.kgrid-evidence-evaluation"
 
 
 def _relative(raw: object, *, field: str) -> str:
@@ -199,6 +202,86 @@ class MeshEvidenceRecipe:
         }
 
 
+class KGridEvidenceTaskBuilder:
+    """Build the hash-bound k-grid evaluator task; it does not run SIESTA."""
+
+    def build_task(self, intent: ScientificIntent) -> dict[str, Any]:
+        if set(intent.parameters) != {"rule", "observations"}:
+            raise ValueError("k-grid evidence intent requires rule and observations")
+        rule_relative = _relative(intent.parameters["rule"], field="parameters.rule")
+        observations_raw = intent.parameters["observations"]
+        if not isinstance(observations_raw, list) or not observations_raw:
+            raise ValueError("parameters.observations must be a non-empty list")
+        observation_paths = tuple(
+            _relative(item, field="parameters.observations") for item in observations_raw
+        )
+        if len(set(observation_paths)) != len(observation_paths):
+            raise ValueError("observation paths must be unique")
+        root = intent.source.parent
+        rule_data = _json_mapping(
+            root / Path(*PurePosixPath(rule_relative).parts), field="parameters.rule"
+        )
+        rule = KGridConvergenceRule.from_mapping(rule_data)
+        for relative in observation_paths:
+            data = _json_mapping(
+                root / Path(*PurePosixPath(relative).parts), field="parameters.observations"
+            )
+            KGridObservation.from_mapping(data)
+        inputs: list[dict[str, Any]] = [{
+            "name": "rule", "source": rule_relative, "destination": "rule.json",
+            "media_type": "application/json",
+        }]
+        inputs.extend({
+            "name": f"observation_{index:03d}", "source": relative,
+            "destination": f"observations/{index:03d}.json",
+            "media_type": "application/json",
+        } for index, relative in enumerate(observation_paths, 1))
+        return {
+            "task_id": "evaluate_kgrid_evidence",
+            "kind": "validation",
+            "capability": KGRID_EVALUATOR_CAPABILITY,
+            "inputs": inputs,
+            "outputs": [{
+                "name": "report", "path": "kgrid-convergence-report.json",
+                "artifact_type": "siestaflow.kgrid-convergence-report",
+                "media_type": "application/json", "required": True,
+            }],
+            "resources": _resources(intent.resources),
+            "settings": {"rule_id": rule.rule_id},
+        }
+
+
+class KGridEvidenceRecipe:
+    def build_workflow(
+        self, intent: ScientificIntent, registry: CapabilityRegistry
+    ) -> dict[str, Any]:
+        registered = registry.resolve(
+            KGRID_EVALUATOR_CAPABILITY,
+            required_inputs=(SCIENTIFIC_INTENT,),
+            required_outputs=(WORKFLOW_DEFINITION,),
+        )
+        builder = registered.implementation
+        if not callable(getattr(builder, "build_task", None)):
+            raise TypeError("k-grid evaluator capability cannot build tasks")
+        task = builder.build_task(intent)
+        return {
+            "schema_version": "1.0",
+            "workflow_id": intent.intent_id,
+            "project_id": intent.project_id,
+            "description": "Evaluate hash-bound k-grid convergence evidence",
+            "metadata": {
+                **dict(intent.metadata),
+                "intent_sha256": intent.sha256,
+                "recipe_id": KGRID_EVALUATION_RECIPE,
+                "recipe_version": "1.0.0",
+                "scientific_scope": "EVIDENCE_EVALUATION_ONLY",
+                "execution_authorized": False,
+                "final_authority": "HUMAN_REVIEW",
+            },
+            "tasks": [task],
+        }
+
+
 def builtin_authoring_registry() -> CapabilityRegistry:
     evaluator = CapabilityDescriptor(
         capability_id=MESH_EVALUATOR_CAPABILITY,
@@ -218,11 +301,29 @@ def builtin_authoring_registry() -> CapabilityRegistry:
         engine="siesta",
         metadata={"requires": [MESH_EVALUATOR_CAPABILITY], "runs_engine": False},
     )
+    kgrid_evaluator = CapabilityDescriptor(
+        capability_id=KGRID_EVALUATOR_CAPABILITY,
+        kind=CapabilityKind.WORKFLOW_BUILDER,
+        implementation_version="1.0.0",
+        input_contracts=(SCIENTIFIC_INTENT,),
+        output_contracts=(WORKFLOW_DEFINITION,),
+        engine="siesta",
+        metadata={"scope": "k-grid convergence evidence", "runs_engine": False},
+    )
+    kgrid_recipe = CapabilityDescriptor(
+        capability_id=KGRID_EVALUATION_RECIPE,
+        kind=CapabilityKind.RECIPE,
+        implementation_version="1.0.0",
+        input_contracts=(SCIENTIFIC_INTENT,),
+        output_contracts=(WORKFLOW_DEFINITION,),
+        engine="siesta",
+        metadata={"requires": [KGRID_EVALUATOR_CAPABILITY], "runs_engine": False},
+    )
     plugin = PluginDescriptor(
         plugin_id="siestaflow.builtin.scientific-authoring",
         plugin_version="1.0.0",
         core_contract_version=CORE_CONTRACT_VERSION,
-        capabilities=(evaluator, recipe),
+        capabilities=(evaluator, recipe, kgrid_evaluator, kgrid_recipe),
         provider="SIESTAFLOW",
         metadata={"registration": "explicit", "global_import_side_effects": False},
     )
@@ -230,6 +331,8 @@ def builtin_authoring_registry() -> CapabilityRegistry:
     registry.register(plugin, {
         MESH_EVALUATOR_CAPABILITY: MeshEvidenceTaskBuilder(),
         MESH_EVALUATION_RECIPE: MeshEvidenceRecipe(),
+        KGRID_EVALUATOR_CAPABILITY: KGridEvidenceTaskBuilder(),
+        KGRID_EVALUATION_RECIPE: KGridEvidenceRecipe(),
     })
     registry.freeze()
     return registry

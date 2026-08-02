@@ -13,6 +13,8 @@ from siestaflow.contracts import SCIENTIFIC_INTENT, WORKFLOW_DEFINITION, contrac
 from siestaflow.execution.allocation_controller import AllocationController, ExecutionStatus
 from siestaflow.run_preparation import RunPreparationRequest, RunPreparer
 from siestaflow.workflow_authoring import (
+    KGRID_EVALUATION_RECIPE,
+    KGRID_EVALUATOR_CAPABILITY,
     MESH_EVALUATION_RECIPE,
     MESH_EVALUATOR_CAPABILITY,
     WorkflowAuthoringService,
@@ -79,6 +81,46 @@ def authoring_source(root: Path) -> tuple[Path, Path]:
     return intent, root / "workflow.json"
 
 
+def kgrid(dimensions: tuple[int, int, int]) -> dict:
+    return {"dimensions": list(dimensions), "shifts": ["0.0", "0.0", "0.0"]}
+
+
+def kgrid_authoring_source(root: Path) -> tuple[Path, Path]:
+    write_json(root / "rule.json", {
+        "schema_version": "1.0", "rule_id": "TEST_KGRID_V1", "parameter": "kgrid.MonkhorstPack",
+        "initial_values": [kgrid((2, 2, 1)), kgrid((3, 3, 1)), kgrid((4, 4, 1))],
+        "extension_values": [], "energy_tolerance": {"value": "1", "unit": "meV/atom"},
+        "force_tolerance": {"value": "0.01", "unit": "eV/Ang"}, "consecutive_levels": 2,
+        "require_magnetic_stability": True, "selection": "LOWEST_PASSING", "final_authority": "HUMAN_REVIEW",
+    })
+    records = []
+    for dimensions, energy, force in (((2, 2, 1), "-19.990", "0.030"), ((3, 3, 1), "-19.999", "0.005"), ((4, 4, 1), "-20.000", "0.000")):
+        spec = kgrid(dimensions)
+        records.append({
+            "schema_version": "1.0", "observation_id": f"k{'x'.join(map(str, dimensions))}",
+            "requested_grid": spec, "used_grid": spec, "atom_count": 2,
+            "atom_identity_sha256": HASHES["atoms"], "structure_sha256": HASHES["structure"],
+            "pseudopotential_manifest_sha256": HASHES["pseudo"], "invariant_input_sha256": "e" * 64,
+            "energy": {"value": energy, "unit": "eV"},
+            "forces": {"values": [[force, "0", "0"], ["0", force, "0"]], "unit": "eV/Ang"},
+            "scf_converged": True, "magnetic_signature": "FM",
+        })
+    paths = []
+    for index, record in enumerate(records, 1):
+        path = root / "observations" / f"{index:03d}.json"
+        write_json(path, record)
+        paths.append(path.relative_to(root).as_posix())
+    intent = root / "intent.json"
+    write_json(intent, {
+        "schema_version": "1.0", "intent_id": "kgrid-evidence-local", "project_id": "test-project",
+        "recipe": KGRID_EVALUATION_RECIPE,
+        "parameters": {"rule": "rule.json", "observations": paths},
+        "resources": {"nodes": 1, "mpi_processes": 1, "processes_per_node": 1, "cpus_per_process": 1, "walltime_seconds": 30},
+        "metadata": {"classification": "SYNTHETIC_STRUCTURED_EVIDENCE"},
+    })
+    return intent, root / "workflow.json"
+
+
 def profile(root: Path) -> Path:
     path = root / "profile.json"
     write_json(path, {
@@ -97,12 +139,16 @@ def test_registry_exposes_recipe_and_builder_without_global_discovery() -> None:
     assert SCIENTIFIC_INTENT in contract_catalog()
     assert WORKFLOW_DEFINITION in contract_catalog()
     service = WorkflowAuthoringService()
-    assert [item["recipe_id"] for item in service.recipes()] == [MESH_EVALUATION_RECIPE]
+    assert [item["recipe_id"] for item in service.recipes()] == [
+        KGRID_EVALUATION_RECIPE, MESH_EVALUATION_RECIPE,
+    ]
     detail = service.recipe(MESH_EVALUATION_RECIPE)
     assert detail["metadata"]["requires"] == [MESH_EVALUATOR_CAPABILITY]
     assert detail["metadata"]["runs_engine"] is False
     preparer = RunPreparer(REPO)
-    assert preparer.task_adapter_ids == (MESH_EVALUATOR_CAPABILITY,)
+    assert preparer.task_adapter_ids == (
+        KGRID_EVALUATOR_CAPABILITY, MESH_EVALUATOR_CAPABILITY,
+    )
     with pytest.raises(ValueError, match="already registered"):
         RunPreparer(REPO, task_adapters={MESH_EVALUATOR_CAPABILITY: lambda *args, **kwargs: {}})
 
@@ -127,7 +173,9 @@ def test_application_builds_a_canonical_deterministic_workflow(tmp_path: Path) -
 def test_cli_lists_describes_and_creates_recipe_workflow(tmp_path: Path, capsys) -> None:
     intent, output = authoring_source(tmp_path)
     assert main(["workflow", "recipes", "--json"]) == 0
-    assert json.loads(capsys.readouterr().out)["recipes"][0]["recipe_id"] == MESH_EVALUATION_RECIPE
+    assert [item["recipe_id"] for item in json.loads(capsys.readouterr().out)["recipes"]] == [
+        KGRID_EVALUATION_RECIPE, MESH_EVALUATION_RECIPE,
+    ]
     assert main(["workflow", "recipe", MESH_EVALUATION_RECIPE, "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["metadata"]["runs_engine"] is False
     assert main(["workflow", "create", str(intent), "--output", str(output), "--json"]) == 0
@@ -168,6 +216,35 @@ def test_mesh_recipe_compiles_prepares_and_executes_through_canonical_gate(tmp_p
     assert [item["observation_id"] for item in payload["observations"]] == [
         "primary-100", "primary-200", "primary-300", "eggbox-200",
     ]
+
+
+def test_kgrid_recipe_reuses_cli_compiler_and_runtime_extension_seam(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    intent, definition = kgrid_authoring_source(source)
+    WorkflowAuthoringService().create_definition(intent, definition)
+    compilation = WorkflowCompiler().compile(definition)
+    assert compilation.valid
+    assert compilation.compiled.tasks[0].capability_id == KGRID_EVALUATOR_CAPABILITY  # type: ignore[union-attr]
+    lock = source / "workflow.lock.json"
+    write_workflow_lock(compilation, lock)
+    prepared = RunPreparer(REPO).prepare(RunPreparationRequest(
+        workflow_lock=lock, source_root=source, execution_profile=profile(tmp_path),
+        output_root=tmp_path / "packages", run_id="kgrid-evidence-canonical-local",
+    ))
+    package = Path(prepared.package_path)
+    environment = {
+        "SLURM_JOB_ID": "kgrid-local-job", "SLURM_SUBMIT_DIR": str(package),
+        "SLURM_JOB_END_TIME": str(time.time() + 300), "SLURM_NNODES": "1",
+        "SLURM_NTASKS": "1", "SLURM_CPUS_PER_TASK": "1",
+    }
+    controller = AllocationController.from_file(
+        package / "campaign.yaml", environment=environment, poll_interval_seconds=0.01,
+    )
+    assert controller.run(install_signal_handlers=False) is ExecutionStatus.COMPLETED
+    report = json.loads((package / "work/evaluate_kgrid_evidence/attempt-0001/kgrid-convergence-report.json").read_text(encoding="utf-8"))
+    assert report["status"] == "READY_FOR_HUMAN_REVIEW"
+    assert report["selected_grid"]["dimensions"] == [3, 3, 1]
 
 
 def test_authoring_rejects_unknown_recipe_unsafe_paths_and_overwrite(tmp_path: Path) -> None:
