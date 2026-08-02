@@ -96,6 +96,23 @@ La capacidad no declara convergencia numérica, no selecciona parámetros y no
 aprueba la estructura. Conserva `execution_authorized: false`; su cálculo sólo
 puede llegar a SIESTA tras compilar y usar `run prepare` con un perfil explícito.
 
+## DOS y PDOS iniciales
+
+`siestaflow.recipe.siesta.dos-pdos` materializa una tarea SIESTA de análisis
+aislada, con un FDF y pseudopotenciales PSML declarados por el investigador. El
+FDF debe declarar explícitamente `MD.TypeOfRun SinglePoint` y un único bloque
+cerrado `ProjectedDensityOfStates`; sus energías ordenadas, anchura positiva,
+número de puntos mayor que uno y unidad `eV` se validan como contrato de
+ejecución. La receta no elige esos valores, no crea una k-grid, no reescribe el
+FDF y no interpreta picos, gaps ni estados.
+
+La salida canónica contiene dos artefactos requeridos, ligados por hash al
+paquete: `<SystemLabel>.DOS` (`siestaflow.total-density-of-states`) y
+`<SystemLabel>.PDOS` (`siestaflow.projected-density-of-states`). Así se puede
+ejecutar un análisis aislado desde CLI hoy, y un consumidor futuro podrá enlazar
+estos artefactos a un módulo de tabla, gráfica o comparación sin alterar el
+motor ni nombrar un material en el núcleo.
+
 ## Aprobación y propagación de convergencia
 
 Una recomendación `READY_FOR_HUMAN_REVIEW` no altera el lock que produjo la

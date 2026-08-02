@@ -15,6 +15,8 @@ from siestaflow.run_preparation import RunPreparationRequest, RunPreparer
 from siestaflow.workflow_authoring import (
     CONVERGE_THEN_RELAX_CAPABILITY,
     CONVERGE_THEN_RELAX_RECIPE,
+    DOS_PDOS_CAPABILITY,
+    DOS_PDOS_RECIPE,
     KGRID_EVALUATION_RECIPE,
     KGRID_EVALUATOR_CAPABILITY,
     MESH_EVALUATION_RECIPE,
@@ -142,6 +144,44 @@ MD.NumCGSteps 2
     return intent, root / "relaxation-workflow.json"
 
 
+def dos_pdos_source(root: Path) -> tuple[Path, Path]:
+    fdf = root / "dos-pdos.fdf"
+    fdf.write_text("""SystemName Local technical DOS/PDOS fixture
+SystemLabel dos_local
+NumberOfAtoms 1
+NumberOfSpecies 1
+%block ChemicalSpeciesLabel
+  1 6 C
+%endblock ChemicalSpeciesLabel
+LatticeConstant 1.0 Ang
+%block LatticeVectors
+  8.0 0.0 0.0
+  0.0 8.0 0.0
+  0.0 0.0 8.0
+%endblock LatticeVectors
+AtomicCoordinatesFormat Ang
+%block AtomicCoordinatesAndAtomicSpecies
+  0.0 0.0 0.0 1
+%endblock AtomicCoordinatesAndAtomicSpecies
+NetCharge 0
+Spin non-polarized
+MD.TypeOfRun SinglePoint
+%block ProjectedDensityOfStates
+  EF -10.0 10.0 0.20 301 eV
+%endblock ProjectedDensityOfStates
+""", encoding="utf-8", newline="\n")
+    (root / "C.psml").write_text("technical fixture only\n", encoding="utf-8")
+    intent = root / "dos-pdos-intent.json"
+    write_json(intent, {
+        "schema_version": "1.0", "intent_id": "dos-pdos-local", "project_id": "test-project",
+        "recipe": DOS_PDOS_RECIPE,
+        "parameters": {"fdf": "dos-pdos.fdf", "pseudopotentials": [{"source": "C.psml", "destination": "C.psml"}]},
+        "resources": {"nodes": 1, "mpi_processes": 1, "processes_per_node": 1, "cpus_per_process": 1, "walltime_seconds": 60},
+        "metadata": {"classification": "TECHNICAL_DOS_PDOS_CONTRACT_TEST"},
+    })
+    return intent, root / "dos-pdos-workflow.json"
+
+
 def approved_mesh_contracts(root: Path) -> tuple[Path, Path, Path]:
     source_intent, _ = authoring_source(root)
     raw = json.loads(source_intent.read_text(encoding="utf-8"))
@@ -262,12 +302,13 @@ def test_registry_exposes_recipe_and_builder_without_global_discovery() -> None:
     assert WORKFLOW_DEFINITION in contract_catalog()
     service = WorkflowAuthoringService()
     assert [item["recipe_id"] for item in service.recipes()] == [
-        SCIENTIFIC_COMPOSITION_RECIPE, CONVERGE_THEN_RELAX_RECIPE, KGRID_EVALUATION_RECIPE,
+        SCIENTIFIC_COMPOSITION_RECIPE, CONVERGE_THEN_RELAX_RECIPE, DOS_PDOS_RECIPE, KGRID_EVALUATION_RECIPE,
         MESH_EVALUATION_RECIPE, OBSERVATION_PRODUCTION_RECIPE, STRUCTURAL_RELAXATION_RECIPE,
     ]
     detail = service.recipe(MESH_EVALUATION_RECIPE)
     assert detail["metadata"]["requires"] == [MESH_EVALUATOR_CAPABILITY]
     assert detail["metadata"]["runs_engine"] is False
+    assert service.recipe(DOS_PDOS_RECIPE)["metadata"]["requires"] == [DOS_PDOS_CAPABILITY]
     preparer = RunPreparer(REPO)
     assert preparer.task_adapter_ids == (
         KGRID_EVALUATOR_CAPABILITY, MESH_EVALUATOR_CAPABILITY, OBSERVATION_PRODUCER_CAPABILITY,
@@ -413,6 +454,46 @@ def test_approved_convergence_profile_creates_a_new_hash_bound_relaxation_stage(
     assert propagation[0]["parameter"] == "Mesh.Cutoff"
 
 
+def test_dos_pdos_recipe_builds_a_canonical_siesta_task_and_package(tmp_path: Path) -> None:
+    intent, definition = dos_pdos_source(tmp_path)
+    result = WorkflowAuthoringService().create_definition(intent, definition)
+    assert result["recipe_id"] == DOS_PDOS_RECIPE
+    compilation = WorkflowCompiler().compile(definition)
+    assert compilation.valid
+    task = compilation.compiled.tasks[0]  # type: ignore[union-attr]
+    assert task.capability_id == "siestaflow.engine.siesta"
+    assert task.kind.value == "calculation"
+    assert [(item.name, item.relative_path, item.required) for item in task.outputs] == [
+        ("projected_dos", "dos_local.PDOS", True),
+        ("total_dos", "dos_local.DOS", True),
+    ]
+    lock = tmp_path / "workflow.lock.json"
+    write_workflow_lock(compilation, lock)
+    prepared = RunPreparer(REPO).prepare(RunPreparationRequest(
+        workflow_lock=lock, source_root=tmp_path, execution_profile=profile(tmp_path),
+        output_root=tmp_path / "packages", run_id="dos-pdos-local",
+    ))
+    campaign = json.loads((Path(prepared.package_path) / "campaign.yaml").read_text(encoding="utf-8"))
+    assert campaign["tasks"][0]["required_artifacts"] == ["dos_local.PDOS", "dos_local.DOS"]
+
+
+@pytest.mark.parametrize(
+    ("replacement", "message"),
+    [
+        ("MD.TypeOfRun CG", "MD.TypeOfRun SinglePoint"),
+        ("EF 10.0 -10.0 0.20 301 eV", "EF -10.0 10.0 0.20 301 eV"),
+        ("EF -10.0 10.0 0.00 301 eV", "EF -10.0 10.0 0.20 301 eV"),
+        ("EF -10.0 10.0 0.20 1 eV", "EF -10.0 10.0 0.20 301 eV"),
+    ],
+)
+def test_dos_pdos_rejects_invalid_analysis_contract(tmp_path: Path, replacement: str, message: str) -> None:
+    intent, definition = dos_pdos_source(tmp_path)
+    fdf = tmp_path / "dos-pdos.fdf"
+    fdf.write_text(fdf.read_text(encoding="utf-8").replace(message, replacement), encoding="utf-8", newline="\n")
+    with pytest.raises(ValueError):
+        WorkflowAuthoringService().create_definition(intent, definition)
+
+
 def test_converge_then_relax_rejects_wrong_fdf_or_unmatched_evidence(tmp_path: Path, capsys) -> None:
     intent, definition = converge_then_relaxation_source(tmp_path)
     capsys.readouterr()
@@ -498,7 +579,7 @@ def test_cli_lists_describes_and_creates_recipe_workflow(tmp_path: Path, capsys)
     intent, output = authoring_source(tmp_path)
     assert main(["workflow", "recipes", "--json"]) == 0
     assert [item["recipe_id"] for item in json.loads(capsys.readouterr().out)["recipes"]] == [
-        SCIENTIFIC_COMPOSITION_RECIPE, CONVERGE_THEN_RELAX_RECIPE, KGRID_EVALUATION_RECIPE,
+        SCIENTIFIC_COMPOSITION_RECIPE, CONVERGE_THEN_RELAX_RECIPE, DOS_PDOS_RECIPE, KGRID_EVALUATION_RECIPE,
         MESH_EVALUATION_RECIPE, OBSERVATION_PRODUCTION_RECIPE, STRUCTURAL_RELAXATION_RECIPE,
     ]
     assert main(["workflow", "recipe", MESH_EVALUATION_RECIPE, "--json"]) == 0

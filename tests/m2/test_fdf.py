@@ -6,6 +6,8 @@ from siestaflow.engines.siesta.fdf_parser import FDFParser
 from siestaflow.engines.siesta.input_validator import SiestaInputValidator
 from siestaflow.engines.siesta.models import FDFInclude, FDFUnknown
 
+from tests.validation_fixture import BASE_FDF
+
 
 def test_round_trip_preserves_comments_blocks_includes_unknown_and_windows_eol():
     source = "# c\r\n\r\nSystemLabel Test ! inline\r\n%include other.fdf\r\n%block Demo\r\n  1 2 3\r\n%endblock Demo\r\n@unknown raw\r\n"
@@ -90,5 +92,19 @@ def test_cg_steps_are_recognized_as_the_explicit_relaxation_step_limit(sanity_fd
     )
     assert not any(
         item.code == "UNDECLARED_GOVERNED_VALUE" and "MD.Steps" in item.message
+        for item in result.findings
+    )
+
+
+def test_single_point_does_not_require_an_md_step_limit_and_recognizes_pdos():
+    source = BASE_FDF.replace("MD.TypeOfRun CG\nMD.Steps 0", """MD.TypeOfRun SinglePoint
+%block ProjectedDensityOfStates
+  EF -10.0 10.0 0.20 301 eV
+%endblock ProjectedDensityOfStates""")
+    result = SiestaInputValidator().validate(FDFParser().parse(source))
+
+    assert result.status.value == "PASS"
+    assert not any(
+        item.code == "UNKNOWN_LABEL" and "ProjectedDensityOfStates" in item.message
         for item in result.findings
     )
