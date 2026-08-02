@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import shutil
 import subprocess
 import tempfile
@@ -12,6 +13,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Mapping
 
 from .contracts import DecisionStatus, PreparedRun
+from .contracts.workflow import require_local_id
 from .controller_package import ControllerPackageBuilder
 from .engines.siesta.fdf_parser import FDFParser
 from .execution_profile import SlurmExecutionProfile
@@ -29,6 +31,13 @@ _RESOURCE_FIELDS = {
     "processes_per_node",
     "cpus_per_process",
     "walltime_seconds",
+}
+_ADAPTIVE_GATE_SCRIPT = "src/siestaflow/execution/adaptive_gate.py"
+_ADAPTIVE_CAPABILITIES = {
+    "sweep": "siestaflow.gate.deterministic-metric",
+    "selection_minimum": "siestaflow.gate.minimum-selector",
+    "selection_maximum": "siestaflow.gate.maximum-selector",
+    "consumer": "siestaflow.gate.selection-consumer",
 }
 
 
@@ -303,6 +312,179 @@ class RunPreparer:
             )
         return tuple(sorted(review))
 
+    @staticmethod
+    def _gate_resources(task: Any, profile: SlurmExecutionProfile) -> tuple[int, int]:
+        """Validate the declared small-gate footprint before local execution."""
+        resources = dict(task.resources)
+        if set(resources) != _RESOURCE_FIELDS:
+            difference = sorted(set(resources) ^ _RESOURCE_FIELDS)
+            raise ValueError(
+                f"task resource fields mismatch for {task.task_id}: {difference}"
+            )
+        nodes = _integer(resources["nodes"], field=f"{task.task_id}.nodes")
+        ranks = _integer(
+            resources["mpi_processes"], field=f"{task.task_id}.mpi_processes"
+        )
+        ppn = _integer(
+            resources["processes_per_node"], field=f"{task.task_id}.processes_per_node")
+        cpus = _integer(
+            resources["cpus_per_process"], field=f"{task.task_id}.cpus_per_process")
+        walltime = _integer(
+            resources["walltime_seconds"], field=f"{task.task_id}.walltime_seconds")
+        if (nodes, ranks, ppn, cpus) != (1, 1, 1, 1):
+            raise ValueError(
+                "adaptive gate tasks require nodes=1, mpi_processes=1, "
+                f"processes_per_node=1, cpus_per_process=1: {task.task_id}"
+            )
+        if ranks > profile.total_cpus:
+            raise ValueError(f"task exceeds execution allocation: {task.task_id}")
+        return walltime, cpus
+
+    @staticmethod
+    def _gate_output(task: Any, *, name: str) -> str:
+        outputs = [item for item in task.outputs if item.required]
+        if len(outputs) != 1 or outputs[0].name != name:
+            raise ValueError(
+                f"adaptive {task.kind.value} task requires one required {name!r} output: "
+                f"{task.task_id}"
+            )
+        if outputs[0].media_type != "application/json":
+            raise ValueError(
+                f"adaptive {task.kind.value} output must use application/json: "
+                f"{task.task_id}"
+            )
+        return outputs[0].relative_path
+
+    @staticmethod
+    def _local_setting(value: Any, *, field: str) -> str:
+        try:
+            return require_local_id(str(value), field_name=field)
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
+
+    def _adaptive_gate_task(
+        self,
+        task: Any,
+        *,
+        by_task: Mapping[str, Any],
+        profile: SlurmExecutionProfile,
+        protected: dict[str, Path],
+    ) -> dict[str, Any]:
+        """Translate the deliberately narrow Phase 4.1 contract to a gate."""
+        if any(item.external_artifact_id is not None for item in task.inputs):
+            raise ValueError(
+                f"adaptive gate tasks cannot consume external scientific inputs: {task.task_id}"
+            )
+        script = self.repository_root / _ADAPTIVE_GATE_SCRIPT
+        if not script.is_file():
+            raise ValueError("adaptive gate runtime script is missing")
+        script_relative = (
+            PurePosixPath("protected") / task.task_id / "adaptive_gate.py"
+        ).as_posix()
+        protected[script_relative] = script
+        hashes = {script_relative: _sha256(script)}
+        destinations = {script_relative: "adaptive_gate.py"}
+        walltime, cpus = self._gate_resources(task, profile)
+        common: dict[str, Any] = {
+            "task_id": task.task_id,
+            "kind": "gate",
+            "input": script_relative,
+            "input_hashes": hashes,
+            "input_destinations": destinations,
+            "mpi_processes": 1,
+            "cpus_per_process": cpus,
+            "nodes": 0,
+            "estimated_runtime_seconds": walltime,
+            "max_attempts": profile.max_attempts,
+            "require_scf_converged": False,
+            "depends_on": list(task.dependencies),
+            "optional_artifacts": [],
+        }
+        settings = dict(task.settings)
+        if task.kind.value == "sweep":
+            if task.capability_id != _ADAPTIVE_CAPABILITIES["sweep"]:
+                raise ValueError(f"unsupported sweep capability: {task.capability_id}")
+            if set(settings) != {"variant_id", "metric_name", "metric_value"}:
+                raise ValueError(f"invalid deterministic sweep settings: {task.task_id}")
+            variant_id = self._local_setting(settings["variant_id"], field="variant_id")
+            metric_name = self._local_setting(settings["metric_name"], field="metric_name")
+            value = settings["metric_value"]
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(float(value)):
+                raise ValueError(f"metric_value must be finite numeric: {task.task_id}")
+            common.update({
+                "required_artifacts": [self._gate_output(task, name="metric")],
+                "transfers": [],
+                "command": [
+                    "python3", "adaptive_gate.py", "metric", "--output",
+                    self._gate_output(task, name="metric"), "--variant-id", variant_id,
+                    "--metric-name", metric_name, "--metric-value", str(value),
+                ],
+            })
+            return common
+        if task.kind.value == "selection":
+            goal = (
+                "minimum"
+                if task.capability_id == _ADAPTIVE_CAPABILITIES["selection_minimum"]
+                else "maximum"
+                if task.capability_id == _ADAPTIVE_CAPABILITIES["selection_maximum"]
+                else None
+            )
+            if goal is None:
+                raise ValueError(f"unsupported selection capability: {task.capability_id}")
+            if set(settings) != {"metric_name"}:
+                raise ValueError(f"invalid selector settings: {task.task_id}")
+            metric_name = self._local_setting(settings["metric_name"], field="metric_name")
+            if not 2 <= len(task.inputs) <= 3:
+                raise ValueError(f"selector requires two or three sweep inputs: {task.task_id}")
+            transfers: list[dict[str, str]] = []
+            arguments: list[str] = []
+            for binding in sorted(task.inputs, key=lambda item: item.name):
+                parent = by_task[str(binding.source_task_id)]
+                if (
+                    parent.kind.value != "sweep"
+                    or binding.source_output_name != "metric"
+                ):
+                    raise ValueError(f"selector input is not a sweep metric: {task.task_id}.{binding.name}")
+                transfers.append({
+                    "from_task": parent.task_id,
+                    "artifact": self._gate_output(parent, name="metric"),
+                    "destination": binding.destination,
+                })
+                arguments.extend(("--input", binding.destination))
+            common.update({
+                "required_artifacts": [self._gate_output(task, name="decision")],
+                "transfers": transfers,
+                "command": [
+                    "python3", "adaptive_gate.py", "select", "--output",
+                    self._gate_output(task, name="decision"), *arguments,
+                    "--metric-name", metric_name, "--goal", goal,
+                ],
+            })
+            return common
+        if task.kind.value == "transformation":
+            if task.capability_id != _ADAPTIVE_CAPABILITIES["consumer"]:
+                raise ValueError(f"unsupported transformation capability: {task.capability_id}")
+            if settings or len(task.inputs) != 1:
+                raise ValueError(f"invalid selection consumer settings: {task.task_id}")
+            binding = task.inputs[0]
+            parent = by_task[str(binding.source_task_id)]
+            if parent.kind.value != "selection" or binding.source_output_name != "decision":
+                raise ValueError(f"consumer input is not a selector decision: {task.task_id}")
+            common.update({
+                "required_artifacts": [self._gate_output(task, name="result")],
+                "transfers": [{
+                    "from_task": parent.task_id,
+                    "artifact": self._gate_output(parent, name="decision"),
+                    "destination": binding.destination,
+                }],
+                "command": [
+                    "python3", "adaptive_gate.py", "consume", "--output",
+                    self._gate_output(task, name="result"), "--selection", binding.destination,
+                ],
+            })
+            return common
+        raise ValueError(f"unsupported adaptive task kind: {task.kind.value}")
+
     def _campaign(
         self,
         run_id: str,
@@ -315,6 +497,16 @@ class RunPreparer:
         protected: dict[str, Path] = {}
         by_task = {task.task_id: task for task in workflow.tasks}
         for task in workflow.tasks:
+            if task.kind.value in {"sweep", "selection", "transformation"}:
+                tasks.append(
+                    self._adaptive_gate_task(
+                        task,
+                        by_task=by_task,
+                        profile=profile,
+                        protected=protected,
+                    )
+                )
+                continue
             if task.kind.value != "calculation":
                 raise ValueError(
                     f"run adapter does not yet execute task kind {task.kind.value}: "

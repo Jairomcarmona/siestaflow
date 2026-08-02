@@ -2,6 +2,10 @@
 
 ## Unreleased — governance and roadmap
 
+- Added the Phase 4.1 canonical local adaptive-DAG slice: bounded materialized
+  sweep gates, deterministic min/max selection with provenance and fan-in to a
+  consumer task, all prepared through `run prepare` as hash-bound controller
+  gates. This is not a scientific or remote Phase 4 acceptance.
 - Closed Phase 3 as a technical engineering acceptance after Jairo Carmona's
   declared human transition acceptance. The dedicated record links the
   canonical positive run, adversarial evidence, real Slurm signal/recovery and
