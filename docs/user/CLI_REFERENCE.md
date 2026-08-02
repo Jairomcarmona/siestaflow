@@ -23,6 +23,7 @@ run status PACKAGE [--json]
 run resume PACKAGE [--previous-job-terminal] [--json]
 results dos-pdos PACKAGE --output DIRECTORY [--dry-run] [--json]
 results bands PACKAGE --output DIRECTORY [--dry-run] [--json]
+results optics PACKAGE --output DIRECTORY [--dry-run] [--json]
 campaign create --project PATH --campaign-id ID [--dry-run] [--json]
 campaign validate CAMPAIGN [--dry-run] [--json]
 campaign simulate CAMPAIGN [--dry-run] [--json]
@@ -117,3 +118,9 @@ successful SCF completion, and the artifact hash, then writes `bands.csv` in
 long form plus `bands_export.json`. The latter records the Fermi energy and the
 declared k/energy ranges exactly as written by SIESTA. It does not shift bands,
 identify a gap, generate a k-path, or assign physical meaning to the result.
+
+`results optics` verifies one completed `EPSIMG` artifact and exports
+`epsimg.csv` plus `optical_export.json`. It preserves energy and epsilon-2
+values exactly as written by SIESTA and binds them to the package locks and
+artifact hash. It does not infer absorption edges, peaks, dielectric constants,
+or any optical property.
