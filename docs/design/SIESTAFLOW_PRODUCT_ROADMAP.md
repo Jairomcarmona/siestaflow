@@ -1,6 +1,6 @@
 # Roadmap de producto de SIESTAFLOW
 
-Estado del roadmap: 2026-08-01
+Estado del roadmap: 2026-08-02
 Estado del software: SIESTAFLOW 0.2 alpha
 Estado vinculante: `PHASE3_TECHNICAL_ACCEPTED / SCIENTIFIC_VALIDATION_OUT_OF_SCOPE`
 
@@ -36,6 +36,13 @@ La prioridad pasa a la integración canónica de Fase 4, sin ampliar el alcance
 científico de la aceptación técnica de Fase 3.
 
 ## Estado por fase
+
+Actualizacion 2026-08-02: la receta CLI de analisis electronico de Fase 4 fue
+aceptada tecnicamente en Yoltla por el job `781132` (4/4 tareas, transferencia
+DM hash-bound y lectura de DM confirmada en bandas, DOS/PDOS y optica). Esta
+actualizacion no cierra Fase 4 ni constituye una validacion cientifica; el
+estado detallado esta en
+[`PHASE4_YOLTLA_REMOTE_CLI_ELECTRONIC_ANALYSIS_781132.md`](../validation/PHASE4_YOLTLA_REMOTE_CLI_ELECTRONIC_ANALYSIS_781132.md).
 
 | Fase | Estado comprobado | Implementado o parcial | Cierre pendiente |
 |---|---|---|---|
