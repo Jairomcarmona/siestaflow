@@ -68,6 +68,16 @@ Evalúa energía por átomo, fuerzas, SCF, firma magnética, identidad inmutable
 la igualdad entre grilla solicitada y usada. No aplica la prueba eggbox, que es
 específica de la malla real espacial.
 
+## Productor de observaciones reales
+
+`siestaflow.recipe.siesta.observation-production` registra el paso previo a
+ambos evaluadores. Su capacidad no ejecuta SIESTA: procesa `FDF`, `stdout`,
+`FORCE_STRESS` y el manifiesto de pseudopotenciales ya producidos. Exige
+evidencia de energía final, malla efectiva, SCF convergido, terminación normal
+y fuerzas por átomo; cualquier ausencia bloquea la observación. Su salida es un
+artefacto `siestaflow.mesh-observation` o `siestaflow.kgrid-observation`,
+enlazado por hashes al input invariante.
+
 ## Extensión futura
 
 Una implementación nueva debe aportar descriptores, builder, recipe cuando

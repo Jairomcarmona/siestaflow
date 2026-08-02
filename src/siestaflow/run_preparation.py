@@ -46,6 +46,7 @@ _EVIDENCE_EVALUATORS = {
         "artifact_type": "siestaflow.kgrid-convergence-report",
     },
 }
+_OBSERVATION_PRODUCER = "siestaflow.siesta.observation-producer"
 _ADAPTIVE_CAPABILITIES = {
     "sweep": "siestaflow.gate.deterministic-metric",
     "selection_minimum": "siestaflow.gate.minimum-selector",
@@ -140,6 +141,7 @@ class RunPreparer:
             capability: partial(self._evidence_evaluator_task, evaluator=evaluator)
             for capability, evaluator in _EVIDENCE_EVALUATORS.items()
         }
+        self._task_adapters[_OBSERVATION_PRODUCER] = self._observation_producer_task
         for capability_id, adapter in (task_adapters or {}).items():
             if capability_id in self._task_adapters:
                 raise ValueError(f"run task adapter already registered: {capability_id}")
@@ -604,6 +606,59 @@ class RunPreparer:
                 "python3", evaluator["script_name"], "evaluate",
                 "--rule", rule_destination, *arguments, "--output", output,
             ],
+        }
+
+    def _observation_producer_task(
+        self,
+        task: Any,
+        *,
+        by_task: Mapping[str, Any],
+        artifacts: Mapping[str, Any],
+        resolved_sources: Mapping[str, Path],
+        profile: SlurmExecutionProfile,
+        protected: dict[str, Path],
+    ) -> dict[str, Any]:
+        """Package the pure parser as a small postprocessing gate."""
+        if task.kind.value != "postprocess" or task.capability_id != _OBSERVATION_PRODUCER:
+            raise ValueError(f"unsupported observation producer: {task.task_id}")
+        if set(task.settings) != {"axis", "observation_id"} or task.settings["axis"] not in {"mesh", "kgrid"}:
+            raise ValueError(f"observation producer settings mismatch: {task.task_id}")
+        axis = str(task.settings["axis"])
+        observation_id = self._local_setting(task.settings["observation_id"], field="observation_id")
+        output = self._gate_output(task, name="observation")
+        port = next(item for item in task.outputs if item.name == "observation")
+        if port.artifact_type != f"siestaflow.{axis}-observation":
+            raise ValueError(f"observation producer output artifact type mismatch: {task.task_id}")
+        required = {"fdf", "stdout", "force_stress", "pseudopotential_manifest"}
+        if {item.name for item in task.inputs} != required or any(item.external_artifact_id is None for item in task.inputs):
+            raise ValueError("observation producer currently consumes four external immutable artifacts")
+        script = self.repository_root / "src/siestaflow/scientific_observations.py"
+        if not script.is_file():
+            raise ValueError("scientific observation runtime script is missing")
+        script_relative = (PurePosixPath("protected") / task.task_id / "scientific_observations.py").as_posix()
+        protected[script_relative] = script
+        hashes = {script_relative: _sha256(script)}
+        destinations = {script_relative: "scientific_observations.py"}
+        for binding in task.inputs:
+            artifact = artifacts[binding.external_artifact_id]
+            package_source = (PurePosixPath("protected") / task.task_id / binding.name / PurePosixPath(artifact.relative_path).name).as_posix()
+            protected[package_source] = resolved_sources[artifact.artifact_id]
+            hashes[package_source] = artifact.sha256
+            destinations[package_source] = binding.destination
+        walltime, cpus = self._gate_resources(task, profile)
+        return {
+            "task_id": task.task_id, "kind": "gate", "input": script_relative,
+            "input_hashes": hashes, "input_destinations": destinations,
+            "required_artifacts": [output], "optional_artifacts": [],
+            "depends_on": list(task.dependencies), "transfers": [], "nodes": 0,
+            "mpi_processes": 1, "cpus_per_process": cpus,
+            "estimated_runtime_seconds": walltime, "max_attempts": profile.max_attempts,
+            "require_scf_converged": False,
+            "command": ["python3", "scientific_observations.py", "--axis", axis,
+                        "--observation-id", observation_id, "--fdf", "input/fdf",
+                        "--stdout", "input/stdout", "--force-stress", "input/force_stress",
+                        "--pseudopotential-manifest", "input/pseudopotential_manifest",
+                        "--output", output],
         }
 
     def _campaign(

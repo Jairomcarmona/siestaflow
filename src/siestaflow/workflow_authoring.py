@@ -33,6 +33,8 @@ MESH_EVALUATOR_CAPABILITY = "siestaflow.siesta.mesh-evidence-evaluator"
 MESH_EVALUATION_RECIPE = "siestaflow.recipe.siesta.mesh-evidence-evaluation"
 KGRID_EVALUATOR_CAPABILITY = "siestaflow.siesta.kgrid-evidence-evaluator"
 KGRID_EVALUATION_RECIPE = "siestaflow.recipe.siesta.kgrid-evidence-evaluation"
+OBSERVATION_PRODUCER_CAPABILITY = "siestaflow.siesta.observation-producer"
+OBSERVATION_PRODUCTION_RECIPE = "siestaflow.recipe.siesta.observation-production"
 
 
 def _relative(raw: object, *, field: str) -> str:
@@ -282,6 +284,57 @@ class KGridEvidenceRecipe:
         }
 
 
+class ObservationProducerTaskBuilder:
+    """Build a postprocessor task from completed immutable SIESTA artifacts."""
+
+    def build_task(self, intent: ScientificIntent) -> dict[str, Any]:
+        expected = {"axis", "observation_id", "fdf", "stdout", "force_stress", "pseudopotential_manifest"}
+        if set(intent.parameters) != expected:
+            raise ValueError("observation production intent fields mismatch")
+        axis = str(intent.parameters["axis"])
+        if axis not in {"mesh", "kgrid"}:
+            raise ValueError("observation production axis must be mesh or kgrid")
+        observation_id = self._id(intent.parameters["observation_id"], field="observation_id")
+        inputs = []
+        for name, media_type in (
+            ("fdf", "application/x-siesta-fdf"), ("stdout", "text/plain"),
+            ("force_stress", "text/plain"), ("pseudopotential_manifest", "application/json"),
+        ):
+            source = _relative(intent.parameters[name], field=f"parameters.{name}")
+            if not (intent.source.parent / Path(*PurePosixPath(source).parts)).is_file():
+                raise ValueError(f"observation source is missing: {source}")
+            inputs.append({"name": name, "source": source, "destination": f"input/{name}", "media_type": media_type})
+        return {
+            "task_id": "produce_observation", "kind": "postprocess",
+            "capability": OBSERVATION_PRODUCER_CAPABILITY, "inputs": inputs,
+            "outputs": [{"name": "observation", "path": "observation.json",
+                         "artifact_type": f"siestaflow.{axis}-observation",
+                         "media_type": "application/json", "required": True}],
+            "resources": _resources(intent.resources),
+            "settings": {"axis": axis, "observation_id": observation_id},
+        }
+
+    @staticmethod
+    def _id(value: object, *, field: str) -> str:
+        return _relative(value, field=field).replace("/", "-")
+
+
+class ObservationProductionRecipe:
+    def build_workflow(self, intent: ScientificIntent, registry: CapabilityRegistry) -> dict[str, Any]:
+        registered = registry.resolve(OBSERVATION_PRODUCER_CAPABILITY, required_inputs=(SCIENTIFIC_INTENT,), required_outputs=(WORKFLOW_DEFINITION,))
+        task = registered.implementation.build_task(intent)
+        return {
+            "schema_version": "1.0", "workflow_id": intent.intent_id,
+            "project_id": intent.project_id,
+            "description": "Produce a hash-bound observation from completed SIESTA artifacts",
+            "metadata": {**dict(intent.metadata), "intent_sha256": intent.sha256,
+                         "recipe_id": OBSERVATION_PRODUCTION_RECIPE, "recipe_version": "1.0.0",
+                         "scientific_scope": "POSTPROCESSING_ONLY", "execution_authorized": False,
+                         "final_authority": "HUMAN_REVIEW"},
+            "tasks": [task],
+        }
+
+
 def builtin_authoring_registry() -> CapabilityRegistry:
     evaluator = CapabilityDescriptor(
         capability_id=MESH_EVALUATOR_CAPABILITY,
@@ -319,11 +372,23 @@ def builtin_authoring_registry() -> CapabilityRegistry:
         engine="siesta",
         metadata={"requires": [KGRID_EVALUATOR_CAPABILITY], "runs_engine": False},
     )
+    producer = CapabilityDescriptor(
+        capability_id=OBSERVATION_PRODUCER_CAPABILITY, kind=CapabilityKind.WORKFLOW_BUILDER,
+        implementation_version="1.0.0", input_contracts=(SCIENTIFIC_INTENT,),
+        output_contracts=(WORKFLOW_DEFINITION,), engine="siesta",
+        metadata={"scope": "real SIESTA artifact observation production", "runs_engine": False},
+    )
+    producer_recipe = CapabilityDescriptor(
+        capability_id=OBSERVATION_PRODUCTION_RECIPE, kind=CapabilityKind.RECIPE,
+        implementation_version="1.0.0", input_contracts=(SCIENTIFIC_INTENT,),
+        output_contracts=(WORKFLOW_DEFINITION,), engine="siesta",
+        metadata={"requires": [OBSERVATION_PRODUCER_CAPABILITY], "runs_engine": False},
+    )
     plugin = PluginDescriptor(
         plugin_id="siestaflow.builtin.scientific-authoring",
         plugin_version="1.0.0",
         core_contract_version=CORE_CONTRACT_VERSION,
-        capabilities=(evaluator, recipe, kgrid_evaluator, kgrid_recipe),
+        capabilities=(evaluator, recipe, kgrid_evaluator, kgrid_recipe, producer, producer_recipe),
         provider="SIESTAFLOW",
         metadata={"registration": "explicit", "global_import_side_effects": False},
     )
@@ -333,6 +398,8 @@ def builtin_authoring_registry() -> CapabilityRegistry:
         MESH_EVALUATION_RECIPE: MeshEvidenceRecipe(),
         KGRID_EVALUATOR_CAPABILITY: KGridEvidenceTaskBuilder(),
         KGRID_EVALUATION_RECIPE: KGridEvidenceRecipe(),
+        OBSERVATION_PRODUCER_CAPABILITY: ObservationProducerTaskBuilder(),
+        OBSERVATION_PRODUCTION_RECIPE: ObservationProductionRecipe(),
     })
     registry.freeze()
     return registry

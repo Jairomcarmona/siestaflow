@@ -17,6 +17,8 @@ from siestaflow.workflow_authoring import (
     KGRID_EVALUATOR_CAPABILITY,
     MESH_EVALUATION_RECIPE,
     MESH_EVALUATOR_CAPABILITY,
+    OBSERVATION_PRODUCTION_RECIPE,
+    OBSERVATION_PRODUCER_CAPABILITY,
     WorkflowAuthoringService,
 )
 from siestaflow.workflows import WorkflowCompiler, write_workflow_lock
@@ -140,14 +142,14 @@ def test_registry_exposes_recipe_and_builder_without_global_discovery() -> None:
     assert WORKFLOW_DEFINITION in contract_catalog()
     service = WorkflowAuthoringService()
     assert [item["recipe_id"] for item in service.recipes()] == [
-        KGRID_EVALUATION_RECIPE, MESH_EVALUATION_RECIPE,
+        KGRID_EVALUATION_RECIPE, MESH_EVALUATION_RECIPE, OBSERVATION_PRODUCTION_RECIPE,
     ]
     detail = service.recipe(MESH_EVALUATION_RECIPE)
     assert detail["metadata"]["requires"] == [MESH_EVALUATOR_CAPABILITY]
     assert detail["metadata"]["runs_engine"] is False
     preparer = RunPreparer(REPO)
     assert preparer.task_adapter_ids == (
-        KGRID_EVALUATOR_CAPABILITY, MESH_EVALUATOR_CAPABILITY,
+        KGRID_EVALUATOR_CAPABILITY, MESH_EVALUATOR_CAPABILITY, OBSERVATION_PRODUCER_CAPABILITY,
     )
     with pytest.raises(ValueError, match="already registered"):
         RunPreparer(REPO, task_adapters={MESH_EVALUATOR_CAPABILITY: lambda *args, **kwargs: {}})
@@ -170,11 +172,33 @@ def test_application_builds_a_canonical_deterministic_workflow(tmp_path: Path) -
     assert first.compiled.metadata["final_authority"] == "HUMAN_REVIEW"  # type: ignore[union-attr]
 
 
+def test_observation_producer_recipe_builds_a_canonical_postprocess_node(tmp_path: Path) -> None:
+    for name in ("input.fdf", "stdout.txt", "FORCE_STRESS", "pseudo.json"):
+        (tmp_path / name).write_text("placeholder\n", encoding="utf-8")
+    intent = tmp_path / "observation-intent.json"
+    output = tmp_path / "observation-workflow.json"
+    write_json(intent, {
+        "schema_version": "1.0", "intent_id": "observation-local", "project_id": "test-project",
+        "recipe": OBSERVATION_PRODUCTION_RECIPE,
+        "parameters": {"axis": "mesh", "observation_id": "mesh-300", "fdf": "input.fdf",
+                       "stdout": "stdout.txt", "force_stress": "FORCE_STRESS", "pseudopotential_manifest": "pseudo.json"},
+        "resources": {"nodes": 1, "mpi_processes": 1, "processes_per_node": 1, "cpus_per_process": 1, "walltime_seconds": 30},
+        "metadata": {"classification": "LOCAL_REAL_ARTIFACT_POSTPROCESSING"},
+    })
+    WorkflowAuthoringService().create_definition(intent, output)
+    compilation = WorkflowCompiler().compile(output)
+    assert compilation.valid
+    task = compilation.compiled.tasks[0]  # type: ignore[union-attr]
+    assert task.kind.value == "postprocess"
+    assert task.capability_id == OBSERVATION_PRODUCER_CAPABILITY
+    assert task.outputs[0].artifact_type == "siestaflow.mesh-observation"
+
+
 def test_cli_lists_describes_and_creates_recipe_workflow(tmp_path: Path, capsys) -> None:
     intent, output = authoring_source(tmp_path)
     assert main(["workflow", "recipes", "--json"]) == 0
     assert [item["recipe_id"] for item in json.loads(capsys.readouterr().out)["recipes"]] == [
-        KGRID_EVALUATION_RECIPE, MESH_EVALUATION_RECIPE,
+        KGRID_EVALUATION_RECIPE, MESH_EVALUATION_RECIPE, OBSERVATION_PRODUCTION_RECIPE,
     ]
     assert main(["workflow", "recipe", MESH_EVALUATION_RECIPE, "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["metadata"]["runs_engine"] is False
