@@ -100,6 +100,25 @@ def test_displaced_eggbox_observation_preserves_atom_identity_not_structure(tmp_
     assert MeshObservation.from_mapping(eggbox).baseline_observation_id == "primary-300"
 
 
+def test_distinct_technical_system_labels_preserve_scientific_identity(tmp_path: Path) -> None:
+    paths = _artifacts(tmp_path)
+    first = produce_observation(
+        axis="mesh", observation_id="first", fdf=paths["h2o.fdf"],
+        stdout=paths["stdout.txt"], force_stress=paths["FORCE_STRESS"],
+        pseudopotential_manifest=paths["pseudo.json"],
+    )
+    paths["h2o.fdf"].write_text(
+        FDF.replace("SystemLabel h2o", "SystemLabel h2o_mesh_300"), encoding="utf-8",
+    )
+    second = produce_observation(
+        axis="mesh", observation_id="second", fdf=paths["h2o.fdf"],
+        stdout=paths["stdout.txt"], force_stress=paths["FORCE_STRESS"],
+        pseudopotential_manifest=paths["pseudo.json"],
+    )
+    assert first["atom_identity_sha256"] == second["atom_identity_sha256"]
+    assert first["structure_sha256"] == second["structure_sha256"]
+
+
 def test_incomplete_real_output_is_rejected(tmp_path: Path) -> None:
     paths = _artifacts(tmp_path)
     paths["stdout.txt"].write_text("siesta: E_KS(eV) = -1\nJob completed\n", encoding="utf-8")

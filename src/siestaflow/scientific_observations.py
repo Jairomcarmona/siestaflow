@@ -33,6 +33,10 @@ def _canonical_fdf(
     for raw in text.splitlines():
         line = raw.split("#", 1)[0].strip()
         lowered = line.casefold()
+        # Labels identify files and runs, not the physical system.  A sweep
+        # must be free to use distinct labels in isolated working directories.
+        if lowered.startswith(("systemname ", "systemlabel ")):
+            continue
         if omit_kgrid and lowered.startswith("%block kgrid.monkhorstpack"):
             in_kgrid = True
             continue
