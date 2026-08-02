@@ -82,6 +82,20 @@ hash determinista por módulo y exige que cada fragmento declare contratos de
 puerto. La composición conserva `execution_authorized: false`; después se usa
 la secuencia ordinaria `workflow compile` y `run prepare`.
 
+## Relajación estructural inicial
+
+`siestaflow.recipe.siesta.structural-relaxation` es la primera capacidad que
+crea una tarea de cálculo SIESTA real. No modifica ni sintetiza FDF: recibe un
+FDF científico ya declarado, una lista explícita de pseudopotenciales PSML y
+recursos. Verifica antes de crear el workflow que el FDF declara
+`MD.TypeOfRun CG`, `MD.NumCGSteps` positivo y un `SystemLabel` seguro. La salida
+requerida queda fijada a `<SystemLabel>.XV` como
+`siestaflow.relaxed-structure`.
+
+La capacidad no declara convergencia numérica, no selecciona parámetros y no
+aprueba la estructura. Conserva `execution_authorized: false`; su cálculo sólo
+puede llegar a SIESTA tras compilar y usar `run prepare` con un perfil explícito.
+
 ## Intents de evaluación de convergencia
 
 ```json

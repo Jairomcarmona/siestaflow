@@ -20,6 +20,8 @@ from siestaflow.workflow_authoring import (
     OBSERVATION_PRODUCTION_RECIPE,
     OBSERVATION_PRODUCER_CAPABILITY,
     SCIENTIFIC_COMPOSITION_RECIPE,
+    STRUCTURAL_RELAXATION_CAPABILITY,
+    STRUCTURAL_RELAXATION_RECIPE,
     WorkflowAuthoringService,
 )
 from siestaflow.workflows import WorkflowCompiler, write_workflow_lock
@@ -100,6 +102,42 @@ def manual_composition_source(root: Path) -> tuple[Path, Path]:
     return intent, output
 
 
+def structural_relaxation_source(root: Path) -> tuple[Path, Path]:
+    fdf = root / "relax.fdf"
+    fdf.write_text("""SystemName Local technical relaxation fixture
+SystemLabel relax_local
+NumberOfAtoms 1
+NumberOfSpecies 1
+%block ChemicalSpeciesLabel
+  1 6 C
+%endblock ChemicalSpeciesLabel
+LatticeConstant 1.0 Ang
+%block LatticeVectors
+  8.0 0.0 0.0
+  0.0 8.0 0.0
+  0.0 0.0 8.0
+%endblock LatticeVectors
+AtomicCoordinatesFormat Ang
+%block AtomicCoordinatesAndAtomicSpecies
+  0.0 0.0 0.0 1
+%endblock AtomicCoordinatesAndAtomicSpecies
+NetCharge 0
+Spin non-polarized
+MD.TypeOfRun CG
+MD.NumCGSteps 2
+""", encoding="utf-8", newline="\n")
+    (root / "C.psml").write_text("technical fixture only\n", encoding="utf-8")
+    intent = root / "relaxation-intent.json"
+    write_json(intent, {
+        "schema_version": "1.0", "intent_id": "relaxation-local", "project_id": "test-project",
+        "recipe": STRUCTURAL_RELAXATION_RECIPE,
+        "parameters": {"fdf": "relax.fdf", "pseudopotentials": [{"source": "C.psml", "destination": "C.psml"}]},
+        "resources": {"nodes": 1, "mpi_processes": 1, "processes_per_node": 1, "cpus_per_process": 1, "walltime_seconds": 60},
+        "metadata": {"classification": "TECHNICAL_RELAXATION_CONTRACT_TEST"},
+    })
+    return intent, root / "relaxation-workflow.json"
+
+
 def kgrid(dimensions: tuple[int, int, int]) -> dict:
     return {"dimensions": list(dimensions), "shifts": ["0.0", "0.0", "0.0"]}
 
@@ -160,7 +198,7 @@ def test_registry_exposes_recipe_and_builder_without_global_discovery() -> None:
     service = WorkflowAuthoringService()
     assert [item["recipe_id"] for item in service.recipes()] == [
         SCIENTIFIC_COMPOSITION_RECIPE, KGRID_EVALUATION_RECIPE,
-        MESH_EVALUATION_RECIPE, OBSERVATION_PRODUCTION_RECIPE,
+        MESH_EVALUATION_RECIPE, OBSERVATION_PRODUCTION_RECIPE, STRUCTURAL_RELAXATION_RECIPE,
     ]
     detail = service.recipe(MESH_EVALUATION_RECIPE)
     assert detail["metadata"]["requires"] == [MESH_EVALUATOR_CAPABILITY]
@@ -224,6 +262,60 @@ def test_manual_composition_rejects_duplicate_modules_and_non_builder_capabiliti
         WorkflowAuthoringService().compose_definition(intent, output)
 
 
+def test_structural_relaxation_compiles_and_prepares_through_the_canonical_route(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    intent, definition = structural_relaxation_source(source)
+    service = WorkflowAuthoringService()
+    service.create_definition(intent, definition)
+    compilation = WorkflowCompiler().compile(definition)
+    assert compilation.valid
+    task = compilation.compiled.tasks[0]  # type: ignore[union-attr]
+    assert task.kind.value == "calculation"
+    assert task.capability_id == "siestaflow.engine.siesta"
+    assert task.outputs[0].relative_path == "relax_local.XV"
+    assert task.outputs[0].artifact_type == "siestaflow.relaxed-structure"
+    lock = source / "workflow.lock.json"
+    write_workflow_lock(compilation, lock)
+    prepared = RunPreparer(REPO).prepare(RunPreparationRequest(
+        workflow_lock=lock, source_root=source, execution_profile=profile(tmp_path),
+        output_root=tmp_path / "packages", run_id="structural-relaxation-local",
+    ))
+    package = Path(prepared.package_path)
+    campaign = json.loads((package / "campaign.yaml").read_text(encoding="utf-8"))
+    prepared_task = campaign["tasks"][0]
+    assert prepared_task["kind"] == "siesta"
+    assert prepared_task["required_artifacts"] == ["relax_local.XV"]
+    assert set(prepared_task["input_destinations"].values()) >= {"relax.fdf", "C.psml"}
+    assert "runtime/siestaflow/execution/allocation_controller.py" in (package / "checksums.sha256").read_text(encoding="utf-8")
+
+
+def test_structural_relaxation_requires_explicit_cg_and_number_of_steps(tmp_path: Path) -> None:
+    intent, output = structural_relaxation_source(tmp_path)
+    fdf = tmp_path / "relax.fdf"
+    fdf.write_text(fdf.read_text(encoding="utf-8").replace("MD.NumCGSteps 2\n", ""), encoding="utf-8", newline="\n")
+    with pytest.raises(ValueError, match="MD.NumCGSteps"):
+        WorkflowAuthoringService().create_definition(intent, output)
+    fdf.write_text(fdf.read_text(encoding="utf-8").replace("MD.TypeOfRun CG", "MD.TypeOfRun MD") + "MD.NumCGSteps 2\n", encoding="utf-8", newline="\n")
+    with pytest.raises(ValueError, match="MD.TypeOfRun CG"):
+        WorkflowAuthoringService().create_definition(intent, output)
+
+
+def test_structural_relaxation_rejects_non_psml_or_misnamed_pseudopotentials(tmp_path: Path) -> None:
+    intent, output = structural_relaxation_source(tmp_path)
+    raw = json.loads(intent.read_text(encoding="utf-8"))
+    raw["parameters"]["pseudopotentials"][0]["source"] = "C.psf"
+    (tmp_path / "C.psf").write_text("technical fixture only\n", encoding="utf-8")
+    write_json(intent, raw)
+    with pytest.raises(ValueError, match="PSML"):
+        WorkflowAuthoringService().create_definition(intent, output)
+    raw["parameters"]["pseudopotentials"][0]["source"] = "C.psml"
+    raw["parameters"]["pseudopotentials"][0]["destination"] = "wrong.psml"
+    write_json(intent, raw)
+    with pytest.raises(ValueError, match="ChemicalSpeciesLabel"):
+        WorkflowAuthoringService().create_definition(intent, output)
+
+
 def test_observation_producer_recipe_builds_a_canonical_postprocess_node(tmp_path: Path) -> None:
     for name in ("input.fdf", "stdout.txt", "FORCE_STRESS", "pseudo.json"):
         (tmp_path / name).write_text("placeholder\n", encoding="utf-8")
@@ -252,7 +344,7 @@ def test_cli_lists_describes_and_creates_recipe_workflow(tmp_path: Path, capsys)
     assert main(["workflow", "recipes", "--json"]) == 0
     assert [item["recipe_id"] for item in json.loads(capsys.readouterr().out)["recipes"]] == [
         SCIENTIFIC_COMPOSITION_RECIPE, KGRID_EVALUATION_RECIPE,
-        MESH_EVALUATION_RECIPE, OBSERVATION_PRODUCTION_RECIPE,
+        MESH_EVALUATION_RECIPE, OBSERVATION_PRODUCTION_RECIPE, STRUCTURAL_RELAXATION_RECIPE,
     ]
     assert main(["workflow", "recipe", MESH_EVALUATION_RECIPE, "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["metadata"]["runs_engine"] is False

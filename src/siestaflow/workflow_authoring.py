@@ -33,6 +33,7 @@ from .workflow_composition import (
     WorkflowFragment,
 )
 from .contracts.workflow import require_local_id
+from .engines.siesta.fdf_parser import FDFParser
 from .workflows import WorkflowCompiler
 
 
@@ -43,6 +44,8 @@ KGRID_EVALUATION_RECIPE = "siestaflow.recipe.siesta.kgrid-evidence-evaluation"
 OBSERVATION_PRODUCER_CAPABILITY = "siestaflow.siesta.observation-producer"
 OBSERVATION_PRODUCTION_RECIPE = "siestaflow.recipe.siesta.observation-production"
 SCIENTIFIC_COMPOSITION_RECIPE = "siestaflow.recipe.scientific.manual-composition"
+STRUCTURAL_RELAXATION_CAPABILITY = "siestaflow.siesta.structural-relaxation"
+STRUCTURAL_RELAXATION_RECIPE = "siestaflow.recipe.siesta.structural-relaxation"
 
 
 def _relative(raw: object, *, field: str) -> str:
@@ -454,6 +457,121 @@ class ManualCompositionRecipe:
         )
 
 
+class StructuralRelaxationTaskBuilder:
+    """Build a SIESTA CG relaxation from an already declared scientific FDF."""
+
+    _PARAMETERS = {"fdf", "pseudopotentials"}
+
+    def build_task(self, intent: ScientificIntent) -> dict[str, Any]:
+        if set(intent.parameters) != self._PARAMETERS:
+            raise ValueError("structural relaxation intent requires fdf and pseudopotentials")
+        fdf = _relative(intent.parameters["fdf"], field="parameters.fdf")
+        root = intent.source.parent
+        fdf_path = root / Path(*PurePosixPath(fdf).parts)
+        if not fdf_path.is_file():
+            raise ValueError(f"structural relaxation FDF is missing: {fdf}")
+        label, expected_pseudos = self._relaxation_spec(fdf_path)
+        pseudos = intent.parameters["pseudopotentials"]
+        if not isinstance(pseudos, list) or not pseudos:
+            raise ValueError("structural relaxation pseudopotentials must be a non-empty list")
+        inputs: list[dict[str, Any]] = [{
+            "name": "fdf", "source": fdf, "destination": "relax.fdf",
+            "media_type": "application/x-siesta-fdf",
+        }]
+        destinations: set[str] = {"relax.fdf"}
+        for index, item in enumerate(pseudos, 1):
+            if not isinstance(item, Mapping) or set(item) != {"source", "destination"}:
+                raise ValueError("each structural relaxation pseudopotential requires source and destination")
+            source = _relative(item["source"], field="parameters.pseudopotentials.source")
+            destination = _relative(item["destination"], field="parameters.pseudopotentials.destination")
+            if not source.casefold().endswith(".psml"):
+                raise ValueError("structural relaxation pseudopotentials must be PSML files")
+            if not (root / Path(*PurePosixPath(source).parts)).is_file():
+                raise ValueError(f"structural relaxation pseudopotential is missing: {source}")
+            if destination in destinations:
+                raise ValueError(f"structural relaxation input destination is duplicated: {destination}")
+            destinations.add(destination)
+            inputs.append({
+                "name": f"pseudo_{index:03d}", "source": source,
+                "destination": destination, "media_type": "application/x-psml",
+            })
+        if destinations - {"relax.fdf"} != set(expected_pseudos):
+            raise ValueError(
+                "structural relaxation pseudopotential destinations must match ChemicalSpeciesLabel"
+            )
+        return {
+            "task_id": "relax_structure", "kind": "calculation",
+            "capability": "siestaflow.engine.siesta", "inputs": inputs,
+            "outputs": [{
+                "name": "relaxed_structure", "path": f"{label}.XV",
+                "artifact_type": "siestaflow.relaxed-structure",
+                "media_type": "text/x-siesta-xv", "required": True,
+            }],
+            "resources": _resources(intent.resources), "settings": {},
+        }
+
+    def build_fragment(self, intent: ScientificIntent) -> WorkflowFragment:
+        task = self.build_task(intent)
+        return WorkflowFragment.single(
+            "structural-relaxation", task,
+            input_contracts={
+                "fdf": ArtifactPortContract("siestaflow.siesta-relaxation-fdf", "application/x-siesta-fdf"),
+                **{
+                    f"pseudo_{index:03d}": ArtifactPortContract("siestaflow.pseudopotential", "application/x-psml")
+                    for index, _ in enumerate(intent.parameters["pseudopotentials"], 1)
+                },
+            },
+        )
+
+    @staticmethod
+    def _relaxation_spec(path: Path) -> tuple[str, tuple[str, ...]]:
+        document = FDFParser().parse_path(path)
+        run_type = document.scalars("MD.TypeOfRun")
+        steps = document.scalars("MD.NumCGSteps")
+        labels = document.scalars("SystemLabel")
+        if len(run_type) != 1 or run_type[0].value.casefold() != "cg":
+            raise ValueError("structural relaxation requires explicit MD.TypeOfRun CG")
+        if len(steps) != 1:
+            raise ValueError("structural relaxation requires explicit positive MD.NumCGSteps")
+        try:
+            if int(steps[0].value) <= 0:
+                raise ValueError
+        except ValueError as exc:
+            raise ValueError("structural relaxation requires explicit positive MD.NumCGSteps") from exc
+        if len(labels) != 1:
+            raise ValueError("structural relaxation requires exactly one SystemLabel")
+        species_blocks = document.blocks("ChemicalSpeciesLabel")
+        if len(species_blocks) != 1:
+            raise ValueError("structural relaxation requires exactly one ChemicalSpeciesLabel block")
+        species_labels: set[str] = set()
+        for raw in species_blocks[0].body_lines:
+            row = raw.split("#", 1)[0].strip()
+            if not row or row.startswith(("!", ";")):
+                continue
+            fields = row.split()
+            if len(fields) < 3:
+                raise ValueError("structural relaxation has an invalid ChemicalSpeciesLabel row")
+            species_labels.add(require_local_id(fields[2], field_name="SIESTA species label"))
+        if not species_labels:
+            raise ValueError("structural relaxation requires ChemicalSpeciesLabel rows")
+        return (
+            require_local_id(labels[0].value, field_name="SIESTA SystemLabel"),
+            tuple(f"{item}.psml" for item in sorted(species_labels)),
+        )
+
+
+class StructuralRelaxationRecipe:
+    def build_workflow(self, intent: ScientificIntent, registry: CapabilityRegistry) -> dict[str, Any]:
+        return _compose_single(
+            intent, registry, capability_id=STRUCTURAL_RELAXATION_CAPABILITY,
+            policy=RecipePolicy(
+                STRUCTURAL_RELAXATION_RECIPE, "1.0.0",
+                "Run a user-declared SIESTA structural relaxation",
+                "STRUCTURAL_RELAXATION",
+            ),
+        )
+
+
 def builtin_authoring_registry() -> CapabilityRegistry:
     evaluator = CapabilityDescriptor(
         capability_id=MESH_EVALUATOR_CAPABILITY,
@@ -510,11 +628,25 @@ def builtin_authoring_registry() -> CapabilityRegistry:
         metadata={"requires": "user-selected registered WORKFLOW_BUILDER capabilities", "runs_engine": False,
                   "execution_authorized": False},
     )
+    relaxation = CapabilityDescriptor(
+        capability_id=STRUCTURAL_RELAXATION_CAPABILITY, kind=CapabilityKind.WORKFLOW_BUILDER,
+        implementation_version="1.0.0", input_contracts=(SCIENTIFIC_INTENT,),
+        output_contracts=(WORKFLOW_DEFINITION,), engine="siesta",
+        metadata={"scope": "structural relaxation from explicit FDF", "runs_engine": True},
+    )
+    relaxation_recipe = CapabilityDescriptor(
+        capability_id=STRUCTURAL_RELAXATION_RECIPE, kind=CapabilityKind.RECIPE,
+        implementation_version="1.0.0", input_contracts=(SCIENTIFIC_INTENT,),
+        output_contracts=(WORKFLOW_DEFINITION,), engine="siesta",
+        metadata={"requires": [STRUCTURAL_RELAXATION_CAPABILITY], "runs_engine": True,
+                  "execution_authorized": False},
+    )
     plugin = PluginDescriptor(
         plugin_id="siestaflow.builtin.scientific-authoring",
         plugin_version="1.0.0",
         core_contract_version=CORE_CONTRACT_VERSION,
-        capabilities=(evaluator, recipe, kgrid_evaluator, kgrid_recipe, producer, producer_recipe, composition_recipe),
+        capabilities=(evaluator, recipe, kgrid_evaluator, kgrid_recipe, producer, producer_recipe,
+                      composition_recipe, relaxation, relaxation_recipe),
         provider="SIESTAFLOW",
         metadata={"registration": "explicit", "global_import_side_effects": False},
     )
@@ -527,6 +659,8 @@ def builtin_authoring_registry() -> CapabilityRegistry:
         OBSERVATION_PRODUCER_CAPABILITY: ObservationProducerTaskBuilder(),
         OBSERVATION_PRODUCTION_RECIPE: ObservationProductionRecipe(),
         SCIENTIFIC_COMPOSITION_RECIPE: ManualCompositionRecipe(),
+        STRUCTURAL_RELAXATION_CAPABILITY: StructuralRelaxationTaskBuilder(),
+        STRUCTURAL_RELAXATION_RECIPE: StructuralRelaxationRecipe(),
     })
     registry.freeze()
     return registry
