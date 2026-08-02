@@ -1,0 +1,44 @@
+Scheduling pool data:
+-------------------------------------------------------------
+Pool        Memory  Cpus  Total Usable   Free  Other Traits
+-------------------------------------------------------------
+q1h-20p*    64152Mb    20    120     64      0  nc,mem64
+q1d-20p     64152Mb    20    120     64      0  nc,mem64
+q4d-20p     64152Mb    20    120     64      0  nc,mem64
+q7d-20p     64152Mb    20    120     64      0  nc,mem64
+q1h-40p     64152Mb    20    120     64      0  nc,mem64
+q1d-40p     64152Mb    20    120     64      0  nc,mem64
+q4d-40p     64152Mb    20    120     64      0  nc,mem64
+q1h-80p     64152Mb    20    120     64      0  nc,mem64
+q12h-80p    64152Mb    20    120     64      0  nc,mem64
+q1d-80p     64152Mb    20    120     64      0  nc,mem64
+q4d-80p    64152Mb    20    120     64      0  nc,mem64
+q1h-160p    64152Mb    20    120     64      0  nc,mem64
+q12h-160p   64152Mb    20    120     64      0  nc,mem64
+q1d-160p    64152Mb    20    120     64      0  nc,mem64
+q1h-320p    64152Mb    20    120     64      0  nc,mem64
+q12h-320p   64152Mb    20    120     64      0  nc,mem64
+q1d-320p    64152Mb    20    120     64      0  nc,mem64
+gpus        64152Mb    20      4      0      0  gpu8
+gpus        64152Mb    20     19      7      0  gpu2
+gpus        64152Mb    20      1      1      1  gpu1
+vgpus       95506Mb    36      1      0      0  gpu2,mem94
+vgpus      257599Mb    36      1      1      0  gpu4,mem256
+vgpus      128575Mb    36      1      1      0  gpu2,mem128
+tt2d-80p   128000Mb    20     52     35     11  ttv3,mem128
+tt2d-80p   256000Mb    20      6      3      3  ttv3,mem256
+tt2d-100p  128000Mb    20     52     35     11  ttv3,mem128
+tt2d-100p  256000Mb    20      6      3      3  ttv3,mem256
+tt1d-160p  128000Mb    20     52     35     11  ttv3,mem128
+tt1d-160p  256000Mb    20      6      3      3  ttv3,mem256
+tt12h-320  128000Mb    20     52     35     11  ttv3,mem128
+tt12h-320  256000Mb    20      6      3      3  ttv3,mem256
+tt2d-64p   256000Mb    32     38     28      0  ttv4,mem256
+tt1d-128p  256000Mb    32     38     28      0  ttv4,mem256
+tt1d-256p  256000Mb    32     38     28      0  ttv4,mem256
+tt1d-512p  256000Mb    32     38     28      0  ttv4,mem256
+qz2d-64p   512000Mb    64     27     22     14  zen3,mem512
+qz2d-128p  512000Mb    64     27     22     14  zen3,mem512
+qz1d-256p  512000Mb    64     27     22     14  zen3,mem512
+qz1d-512p  512000Mb    64     27     22     14  zen3,mem512
+qz12h-768  512000Mb    64     27     22     14  zen3,mem512

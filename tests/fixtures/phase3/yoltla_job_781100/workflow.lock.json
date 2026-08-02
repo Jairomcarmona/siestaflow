@@ -1,0 +1,162 @@
+{
+  "content_sha256": "bdd26b75f5a719069232499b2172fe3d1ff592a54df71d0234144a88e0e63f70",
+  "contract": {
+    "name": "siestaflow.workflow-lock",
+    "version": "1.0"
+  },
+  "extensions": {},
+  "payload": {
+    "definition_sha256": "f2709264f722e9f048a756b800ea8dbf2e3c50d05e617c3c1d90af760f3e34d6",
+    "edges": [
+      {
+        "kind": "artifact",
+        "source_output_name": "density_matrix",
+        "source_task_id": "01_parent",
+        "target_input_name": "parent_dm",
+        "target_task_id": "02_restart_from_parent_dm"
+      }
+    ],
+    "external_artifacts": [
+      {
+        "artifact_id": "input-0c21b93e81b8c968",
+        "media_type": "text/x-siesta-fdf",
+        "metadata": {},
+        "producer_attempt_id": null,
+        "producer_task_id": null,
+        "relative_path": "input/02_restart_from_parent_dm.fdf",
+        "role": "INPUT",
+        "sha256": "e3a7a9b7750629f17cc0335c1fa98cd425a6b63066341aef2323b68f4f91c88e",
+        "size_bytes": 594
+      },
+      {
+        "artifact_id": "input-616bf3abe8327257",
+        "media_type": "application/xml",
+        "metadata": {},
+        "producer_attempt_id": null,
+        "producer_task_id": null,
+        "relative_path": "pseudopotentials/C.psml",
+        "role": "INPUT",
+        "sha256": "ce0f6a7fd43e70d44018e94286d934e9caadc005e95da87500d85fbe501d4c41",
+        "size_bytes": 68659
+      },
+      {
+        "artifact_id": "input-8762a6ade19cee26",
+        "media_type": "text/x-siesta-fdf",
+        "metadata": {},
+        "producer_attempt_id": null,
+        "producer_task_id": null,
+        "relative_path": "input/01_parent.fdf",
+        "role": "INPUT",
+        "sha256": "c21253783f48e6511c6a4fe772406bc3a85fd320181bf6386947329693afdad6",
+        "size_bytes": 593
+      }
+    ],
+    "metadata": {
+      "acceptance_scope": "NON_SCIENTIFIC_TECHNICAL_ACCEPTANCE",
+      "description": "Non-scientific technical parent-to-DM-restart acceptance workflow with four-node minimal MPI placement",
+      "execution_contract_revision_evidence": "Yoltla job 781094: SIESTA rejected 64 ranks as too many processors for the system size",
+      "execution_source_commit": "0a51e51e74decfba6de11a740c47c5770f45770a",
+      "scientific_interpretation_allowed": false,
+      "scientific_source_commit": "af64ac1b0d97c7ed8ff97a4aa606f2b51775ae1a",
+      "source_tree_dirty": false
+    },
+    "project_id": "siestaflow-phase3-acceptance",
+    "schema_version": "1.0",
+    "tasks": [
+      {
+        "capability_id": "siestaflow.engine.siesta",
+        "dependencies": [],
+        "inputs": [
+          {
+            "destination": "input/01_parent.fdf",
+            "external_artifact_id": "input-8762a6ade19cee26",
+            "media_type": "text/x-siesta-fdf",
+            "name": "fdf",
+            "source_output_name": null,
+            "source_task_id": null
+          },
+          {
+            "destination": "C.psml",
+            "external_artifact_id": "input-616bf3abe8327257",
+            "media_type": "application/xml",
+            "name": "pseudo",
+            "source_output_name": null,
+            "source_task_id": null
+          }
+        ],
+        "kind": "calculation",
+        "outputs": [
+          {
+            "artifact_type": "siesta.density-matrix",
+            "media_type": "application/x-siesta-dm",
+            "name": "density_matrix",
+            "relative_path": "phase3_acceptance.DM",
+            "required": true
+          }
+        ],
+        "resources": {
+          "cpus_per_process": 1,
+          "mpi_processes": 4,
+          "nodes": 4,
+          "processes_per_node": 1,
+          "walltime_seconds": 1200
+        },
+        "settings": {},
+        "task_id": "01_parent"
+      },
+      {
+        "capability_id": "siestaflow.engine.siesta",
+        "dependencies": [
+          "01_parent"
+        ],
+        "inputs": [
+          {
+            "destination": "input/02_restart_from_parent_dm.fdf",
+            "external_artifact_id": "input-0c21b93e81b8c968",
+            "media_type": "text/x-siesta-fdf",
+            "name": "fdf",
+            "source_output_name": null,
+            "source_task_id": null
+          },
+          {
+            "destination": "phase3_acceptance.DM",
+            "external_artifact_id": null,
+            "media_type": "application/x-siesta-dm",
+            "name": "parent_dm",
+            "source_output_name": "density_matrix",
+            "source_task_id": "01_parent"
+          },
+          {
+            "destination": "C.psml",
+            "external_artifact_id": "input-616bf3abe8327257",
+            "media_type": "application/xml",
+            "name": "pseudo",
+            "source_output_name": null,
+            "source_task_id": null
+          }
+        ],
+        "kind": "calculation",
+        "outputs": [
+          {
+            "artifact_type": "siesta.density-matrix",
+            "media_type": "application/x-siesta-dm",
+            "name": "restart_density_matrix",
+            "relative_path": "phase3_acceptance.DM",
+            "required": true
+          }
+        ],
+        "resources": {
+          "cpus_per_process": 1,
+          "mpi_processes": 4,
+          "nodes": 4,
+          "processes_per_node": 1,
+          "walltime_seconds": 1200
+        },
+        "settings": {},
+        "task_id": "02_restart_from_parent_dm"
+      }
+    ],
+    "workflow_id": "phase3-yoltla-two-stage-acceptance-r4"
+  },
+  "producer": "siestaflow.workflow-compiler"
+}

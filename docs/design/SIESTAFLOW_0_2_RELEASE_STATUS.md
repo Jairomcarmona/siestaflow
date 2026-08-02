@@ -1,55 +1,104 @@
-# SIESTAFLOW 0.2 — Estado de consolidación
+# SIESTAFLOW 0.2 — estado de consolidación
 
-Fecha de corte: 2026-07-29
+Fecha de corte documental: 2026-08-01
 
-Estado: `LOCAL_ACCEPTANCE_PASS / REMOTE_TWO_STAGE_ACCEPTANCE_PENDING`
+Estado: `PHASE3_TECHNICAL_ACCEPTED / SCIENTIFIC_VALIDATION_OUT_OF_SCOPE`
+
+Este estado es vinculante hasta que exista un expediente remoto canónico. La
+arquitectura estable está en
+[`SIESTAFLOW_BACKBONE.md`](SIESTAFLOW_BACKBONE.md), las dependencias en
+[`SIESTAFLOW_PRODUCT_ROADMAP.md`](SIESTAFLOW_PRODUCT_ROADMAP.md) y los gates en
+[`DEVELOPMENT_GOVERNANCE.md`](../developer/DEVELOPMENT_GOVERNANCE.md).
 
 ## Alcance consolidado
 
-- Ejecución MPI mediante `mpiexec.hydra -bootstrap ssh` con lista explícita de
-  nodos y procesos por nodo.
-- Compatibilidad conservada con `srun`.
-- Campañas descritas como DAG con dependencias explícitas.
-- Transferencia de artefactos padre-hijo con verificación SHA-256.
-- Tareas de decisión (`gate`) acotadas y ejecutadas dentro de la asignación
-  Slurm.
-- Estados `READY`, `RUNNING`, `COMPLETED`, `FAILED` y `BLOCKED`, con cierre
-  seguro ante fallos.
-- CLI de progreso y observación sin modificar la campaña.
-- Empaquetado autocontenido para Yoltla, incluyendo `progress.sh`.
-- Perfil de ejecución de Yoltla y mapa de migración de la campaña de
-  birnessita.
+- Core Contracts 1.0 y adaptadores de compatibilidad.
+- Compilador de DAG tipado y `workflow.lock.json` determinista.
+- `run prepare` como puente local hacia `run.lock.json` y un paquete Slurm
+  autocontenido.
+- AllocationController dentro de la asignación, sin daemon en login.
+- Launchers Hydra y `srun`, colocación explícita y tareas gate acotadas.
+- Transferencia padre-hijo con procedencia y SHA-256.
+- Persistencia, recuperación, shutdown controlado y observación de sólo lectura.
+- Base local de validación SIESTA 5.4.2 y preflight del workflow.
 
-## Validación local
+## Validación local vigente
 
-- Suite completa: `273 passed`.
-- Compilación de módulos Python: aprobada.
-- Versión CLI: `siestaflow 0.2.0`.
-- Paquete técnico de aceptación: verificado.
-- Sintaxis Bash de `submit.slurm` y `progress.sh`: aprobada.
+- Suite autocontenida del repositorio: `355 passed` el 2026-08-01 tras
+  incorporar las evidencias remotas de remediación.
+- La aceptación WSL/Slurm registrada es integración local realista y permanece
+  separada de Yoltla.
+- `pyproject.toml` declara setuptools, Python >= 3.11, la CLI y package data.
+- La versión permanece `0.2.0`; no se promueve por esta formalización.
 
-## Aceptación remota pendiente
+Los conteos de pruebas en expedientes históricos describen su propio corte y no
+son el estado vigente. Una nueva modificación debe volver a ejecutar los gates
+en lugar de reutilizar este conteo.
 
-El paquete `SIESTAFLOW_V02_YOLTLA_TWO_STAGE_ACCEPTANCE.zip` valida en Yoltla,
-sin interpretación científica:
+## Aceptación remota positiva comprobada
 
-1. ejecución SIESTA padre mediante Hydra;
-2. producción de un artefacto `DM`;
-3. verificación de manifiesto y SHA-256;
-4. transferencia del `DM` al cálculo hijo;
-5. ejecución del hijo solamente si el padre terminó correctamente.
+La Fase 3 sólo puede cerrarse con una ejecución limpia generada directamente
+por la ruta canónica:
 
-SHA-256 del ZIP:
+```text
+workflow.lock.json
+→ run prepare
+→ paquete autocontenido
+→ sbatch manual en Yoltla
+→ 01_parent
+→ DM producida y verificada
+→ transferencia padre-hijo
+→ evidencia de lectura de DM por SIESTA
+→ 02_restart_from_parent_dm
+→ reconciliación final e importación de evidencia
+```
 
-`568C31600FB7D7009B537E5F41967DB2536F5312D33B84A66E041F71AFACBFDA`
+El job Yoltla `781100` completó esta trayectoria con estado `COMPLETED`, exit
+`0:0`, cuatro nodos `tt[30-33]`, launcher Hydra y dos tareas completadas en su
+primer intento. El padre produjo la DM, el controlador verificó y conservó su
+transferencia por SHA-256 y el hijo registró lectura satisfactoria de la DM.
+El expediente y el subconjunto sanitizado están en
+[`PHASE3_YOLTLA_REMOTE_ACCEPTANCE_781100.md`](../validation/PHASE3_YOLTLA_REMOTE_ACCEPTANCE_781100.md).
 
-La ejecución remota no se realizó durante esta consolidación y no se modificó
-ningún trabajo científico activo o pendiente en Yoltla.
+El job Yoltla `781102` completó la matriz adversarial técnica con estado
+`COMPLETED`, exit `0:0`, en `tt[30-33]`. Demostró bloqueo del hijo ante padre
+fallido, ausencia de DM y hash alterado; recuperación lógica del controlador
+tras una interrupción inyectada; y asignación lógica de conjuntos de hosts
+disjuntos para tareas independientes. El expediente está en
+[`PHASE3_YOLTLA_ADVERSARIAL_MATRIX_781102.md`](../validation/PHASE3_YOLTLA_ADVERSARIAL_MATRIX_781102.md).
+
+La auditoría independiente del commit `cf62127` emitió
+`CONDITIONALLY_APPROVED`. Sus límites de runtime se remediaron con evidencia
+bruta de la matriz `781106`, señal Slurm real y nueva asignación `781111` /
+`781113`, y colocación física `srun` `781115`. Jairo Carmona declaró la
+aceptación humana de transición el 2026-08-01; por ello la Fase 3 queda cerrada
+como aceptación técnica. El expediente vinculante es
+[`PHASE3_TRANSITION_ACCEPTANCE_2026-08-01.md`](../validation/PHASE3_TRANSITION_ACCEPTANCE_2026-08-01.md).
+
+## Empaquetado y trazabilidad
+
+La configuración actual permite derivar una distribución Python y paquetes HPC
+de la misma base de código. La publicación para usuarios externos sigue siendo
+trabajo de Fase 8: faltan CI versionada, licencia, metadata completa y
+declaración formal de dependencias opcionales.
+
+`run.lock.json` registra los hashes del workflow lock, perfil y campaña del
+controlador. La preparación calcula además hashes del envelope de run y del ZIP.
+Todavía faltan campos persistidos y uniformes para commit fuente, árbol sucio,
+timestamp y hash final de paquete. Por política, un paquete formal debe provenir
+de un árbol limpio; hasta implementar esos campos necesita un registro de build
+externo verificable.
 
 ## Control de versiones
 
-El directorio ya contiene `.git`, pero no existe todavía un commit inicial y
-no hay identidad Git configurada. El baseline no fue firmado con una identidad
-inventada. Se debe configurar `user.name` y `user.email` antes de crear el
-primer commit.
+El repositorio sí tiene historial, identidad Git configurada y el tag
+`v0.2.0`. El corte etiquetado corresponde al baseline de consolidación; los
+commits posteriores no cambian por sí mismos la versión. No se crea tag ni se
+hace push como parte de esta auditoría documental.
 
+## Próximo gate
+
+```text
+Fase 3 cerrada técnicamente
+→ Fase 4: DAG adaptativo canónico
+```

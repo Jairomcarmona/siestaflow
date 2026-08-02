@@ -141,6 +141,10 @@ class M4RemoteSmokePackager:
             "runtime/siestaflow/engines/siesta/models.py": base / "src/siestaflow/engines/siesta/models.py",
             "runtime/siestaflow/engines/siesta/output_parser.py": base / "src/siestaflow/engines/siesta/output_parser.py",
         }
+        for source in sorted((base / "src/siestaflow/contracts").glob("*.py")):
+            source_files[
+                f"runtime/siestaflow/contracts/{source.name}"
+            ] = source
         files = {name: path.read_bytes() for name, path in source_files.items()}
         files.update({
             "runtime/siestaflow/__init__.py": b'"""Vendored SIESTAFLOW M4 runtime."""\n',

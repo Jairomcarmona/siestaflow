@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "evidence_id": "yoltla-siesta-compatibility-781058",
+  "observed_at": null,
+  "module": "siesta/5.4.2",
+  "build_target": "linux-ivybridge",
+  "compiler": "Intel 2021.7",
+  "compiler_flags": ["-O2", "-xHost"],
+  "cpu": "Intel Xeon E5-2660 v3",
+  "compatible_features": ["ttv3"],
+  "incompatible_features": ["zen3"],
+  "probe": {
+    "job_id": "781058",
+    "state": "COMPLETED",
+    "exit_code": "0:0",
+    "nodes": "tt[30-33]",
+    "siesta_version_status": "PASS",
+    "result": "PASS"
+  },
+  "warning": {
+    "code": "MODULE_DEPENDENCY_MODULEFILE_NOT_FOUND",
+    "message": "Unable to locate a modulefile for siesta/5.4.2-intel-oneapi-compilers-classic-...",
+    "blocking": false
+  }
+}

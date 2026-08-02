@@ -1,0 +1,49 @@
+{
+  "allocation": {
+    "max_parallel_steps": 1,
+    "memory": "128000M",
+    "nodes": 4,
+    "shutdown_margin_seconds": 300,
+    "termination_grace_seconds": 30,
+    "total_cpus": 4,
+    "walltime": "2-00:00:00"
+  },
+  "profile_id": "yoltla-ttv3-mem128-r4-resolved",
+  "runtime": {
+    "environment": {
+      "I_MPI_PIN": "1",
+      "I_MPI_PIN_DOMAIN": "core",
+      "MKL_NUM_THREADS": "1",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1"
+    },
+    "exclusive": true,
+    "executable_arguments": [],
+    "launcher": {
+      "arguments": [],
+      "bootstrap": "ssh",
+      "command": [
+        "mpiexec.hydra"
+      ],
+      "kind": "hydra",
+      "processes_per_node": 1
+    },
+    "module_commands": [
+      "module purge",
+      "module load siesta/5.4.2",
+      "module load python/3.12"
+    ],
+    "siesta_executable": "siesta"
+  },
+  "schema_version": "1.0",
+  "slurm": {
+    "account": "vini",
+    "partition": "tt2d-80p",
+    "qos": "normal"
+  },
+  "target": "slurm",
+  "task_policy": {
+    "max_attempts": 2,
+    "require_scf_converged": true
+  }
+}

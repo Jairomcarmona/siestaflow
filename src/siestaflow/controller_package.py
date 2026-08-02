@@ -8,7 +8,7 @@ import re
 import shlex
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import Any, Mapping
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 from .execution.allocation_controller import load_controller_config
@@ -68,12 +68,24 @@ class ControllerPackageBuilder:
     def __init__(self, repository_root: Path) -> None:
         self.repository_root = repository_root.resolve()
 
+    def _runtime_files(self) -> tuple[str, ...]:
+        contracts = tuple(
+            path.relative_to(self.repository_root).as_posix()
+            for path in sorted(
+                (self.repository_root / "src/siestaflow/contracts").glob("*.py")
+            )
+        )
+        if not contracts:
+            raise ValueError("core contract runtime sources are missing")
+        return (*self.RUNTIME_FILES, *contracts)
+
     def build(
         self,
         campaign_path: Path,
         output_root: Path,
         *,
         dry_run: bool = False,
+        provenance_files: Mapping[str, Path] | None = None,
     ) -> ControllerPackageResult:
         campaign_path = campaign_path.resolve()
         source_root = campaign_path.parent
@@ -96,20 +108,76 @@ class ControllerPackageBuilder:
             )
             if _sha(source.read_bytes()) != expected:
                 raise ValueError(f"protected campaign input hash mismatch: {relative}")
+        provenance: dict[str, bytes] = {}
+        reserved = {
+            "campaign.yaml",
+            "manifest.json",
+            "checksums.sha256",
+            "submit.slurm",
+            "verify_package.py",
+            "progress.sh",
+            "README.md",
+        }
+        for target_name, source_path in sorted(
+            (provenance_files or {}).items()
+        ):
+            target = _safe(target_name).as_posix()
+            source = source_path.expanduser().resolve()
+            if (
+                target in reserved
+                or target.startswith(("runtime/", "scripts/"))
+                or target in protected
+            ):
+                raise ValueError(
+                    f"provenance file collides with package content: {target}"
+                )
+            if not source.is_file():
+                raise ValueError(f"provenance file is missing: {source}")
+            provenance[target] = source.read_bytes()
+        if "run.lock.json" in provenance:
+            self._validate_resolution_coherence(
+                load_structured(campaign_path),
+                json.loads(provenance["run.lock.json"].decode("utf-8")),
+            )
         if destination.exists() or zip_path.exists():
             raise FileExistsError(
                 f"refusing to overwrite controller package: {destination} or {zip_path}"
             )
         if dry_run:
+            generated_targets = (
+                "runtime/siestaflow/__init__.py",
+                "runtime/siestaflow/execution/__init__.py",
+                "runtime/siestaflow/engines/__init__.py",
+                "runtime/siestaflow/engines/siesta/__init__.py",
+                "scripts/run_worker.py",
+                "scripts/progress.py",
+                "submit.slurm",
+                "progress.sh",
+                "verify_package.py",
+                "README.md",
+            )
+            planned_file_count = (
+                1
+                + len(protected)
+                + len(provenance)
+                + len(self._runtime_files())
+                + len(generated_targets)
+                + 2
+            )
             return ControllerPackageResult(
-                package_id, str(destination), str(zip_path), "", len(protected),
+                package_id,
+                str(destination),
+                str(zip_path),
+                "",
+                planned_file_count,
                 "DRY_RUN_NO_SIDE_EFFECTS",
             )
         files: dict[str, bytes] = {}
         files["campaign.yaml"] = campaign_path.read_bytes()
         for relative in protected:
             files[relative] = source_root.joinpath(*_safe(relative).parts).read_bytes()
-        for relative in self.RUNTIME_FILES:
+        files.update(provenance)
+        for relative in self._runtime_files():
             source = self.repository_root / relative
             if not source.is_file():
                 raise ValueError(f"runtime source is missing: {relative}")
@@ -154,6 +222,31 @@ class ControllerPackageBuilder:
             len(files),
         )
 
+    @staticmethod
+    def _validate_resolution_coherence(
+        campaign: Mapping[str, Any], run_lock: Mapping[str, Any],
+    ) -> None:
+        payload = run_lock.get("payload", {})
+        metadata = payload.get("metadata", {}) if isinstance(payload, Mapping) else {}
+        resolution = metadata.get("execution_resolution") if isinstance(metadata, Mapping) else None
+        if not isinstance(resolution, Mapping):
+            return  # compatibility with run locks created before resolution.
+        mode = resolution.get("resolution_mode")
+        if mode == "PROFILE_ALREADY_RESOLVED":
+            return
+        if resolution.get("human_confirmed") is not True:
+            raise ValueError("resolved run package requires explicit human confirmation")
+        expected = {
+            "selected_partition": campaign["slurm"]["partition"],
+            "selected_account": campaign["slurm"]["account"],
+            "selected_qos": campaign["slurm"]["qos"],
+            "selected_nodes": campaign["resources"]["nodes"],
+            "selected_total_ranks": campaign["resources"]["total_cpus"],
+            "selected_walltime": campaign["resources"]["walltime"],
+        }
+        if any(resolution.get(key) != value for key, value in expected.items()):
+            raise ValueError("resolved execution and generated Slurm campaign disagree")
+
     def _slurm(self, campaign: dict[str, Any]) -> str:
         slurm = campaign["slurm"]
         resources = campaign["resources"]
@@ -161,7 +254,18 @@ class ControllerPackageBuilder:
         modules = runtime.get("module_commands", [])
         if not isinstance(modules, list):
             raise ValueError("runtime.module_commands must be a list")
-        module_lines = "\n".join(map(str, modules)) or ": # no modules configured"
+        rendered_modules: list[str] = []
+        for command in map(str, modules):
+            if re.fullmatch(r"\s*module\s+load\s+siesta(?:/[^\s]+)?\s*", command):
+                rendered_modules.append(
+                    f'if ! {command}; then\n'
+                    '  echo "SIESTAFLOW_SIESTA_MODULE_LOAD_WARNING: continuing to executable verification" >&2\n'
+                    'fi'
+                )
+            else:
+                rendered_modules.append(command)
+        module_lines = "\n".join(rendered_modules) or ": # no modules configured"
+        siesta_executable = _directive(runtime["siesta_executable"], "siesta_executable")
         launcher = runtime.get("launcher", {})
         ppn = launcher.get("processes_per_node") if isinstance(launcher, dict) else None
         placement = (
@@ -201,6 +305,10 @@ ROOT="$(cd "${{SLURM_SUBMIT_DIR:?SLURM_SUBMIT_DIR required}}" && pwd -P)"
 cd "$ROOT"
 {module_lines}
 {environment_text}
+if ! command -v {siesta_executable} >/dev/null 2>&1; then
+  echo "SIESTAFLOW_SIESTA_EXECUTABLE_UNAVAILABLE: {siesta_executable}" >&2
+  exit 127
+fi
 export PYTHONPATH="$ROOT/runtime"
 export PYTHONDONTWRITEBYTECODE=1
 python3 verify_package.py
@@ -254,6 +362,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd -P)"
 cd "$ROOT"
 export PYTHONPATH="$ROOT/runtime"
+export PYTHONDONTWRITEBYTECODE=1
 python3 scripts/progress.py
 echo
 echo "=== SLURM DEL USUARIO ==="
@@ -290,6 +399,19 @@ if actual != seen|{{"checksums.sha256"}}: fail("CHECKSUM_COVERAGE_MISMATCH",str(
 sys.path.insert(0,str(root/"runtime"))
 from siestaflow.execution.allocation_controller import load_controller_config
 load_controller_config(root/"campaign.yaml")
+if (root/"run.lock.json").is_file():
+ run=json.loads((root/"run.lock.json").read_text(encoding="utf-8"))
+ resolution=run.get("payload",{{}}).get("metadata",{{}}).get("execution_resolution")
+ if isinstance(resolution,dict) and resolution.get("resolution_mode")!="PROFILE_ALREADY_RESOLVED":
+  if resolution.get("human_confirmed") is not True: fail("HUMAN_CONFIRMATION_REQUIRED")
+  campaign=json.loads((root/"campaign.yaml").read_text(encoding="utf-8"))
+  expected={{"selected_partition":campaign["slurm"]["partition"],"selected_account":campaign["slurm"]["account"],"selected_qos":campaign["slurm"]["qos"],"selected_nodes":campaign["resources"]["nodes"],"selected_total_ranks":campaign["resources"]["total_cpus"],"selected_walltime":campaign["resources"]["walltime"]}}
+  if any(resolution.get(key)!=value for key,value in expected.items()): fail("RUN_LOCK_SUBMIT_COHERENCE_MISMATCH")
+  directives={{}}
+  for line in (root/"submit.slurm").read_text(encoding="utf-8").splitlines():
+   match=re.fullmatch(r"#SBATCH --([^=]+)=(.+)",line)
+   if match: directives[match.group(1)]=match.group(2)
+  if directives.get("partition")!=expected["selected_partition"] or directives.get("account")!=expected["selected_account"] or directives.get("qos")!=expected["selected_qos"] or directives.get("nodes")!=str(expected["selected_nodes"]) or directives.get("ntasks")!=str(expected["selected_total_ranks"]) or directives.get("time")!=expected["selected_walltime"]: fail("RUN_LOCK_SUBMIT_COHERENCE_MISMATCH")
 for path in ("submit.slurm","progress.sh"):
  result=subprocess.run(["bash","-n",path],cwd=root,capture_output=True,text=True)
  if result.returncode: fail("BASH_SYNTAX_FAILURE",result.stderr.strip())

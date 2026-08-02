@@ -40,6 +40,10 @@ def write_runtime(root: Path) -> tuple[Path, Path]:
         " print('SIESTA started'); print('SCF iteration 1'); raise SystemExit(0)\n"
         "print('Version: 5.4.2')\n"
         "print('Reading input FDF')\n"
+        "if 'RESTART_MUTATES' in text:\n"
+        " assert pathlib.Path('required.DM').read_text() == 'dm'\n"
+        " print('Attempting to read DM from file... Succeeded...')\n"
+        " pathlib.Path('required.DM').write_text('updated-dm')\n"
         "print('SCF iteration 1')\n"
         "print('SCF converged')\n"
         "if 'ARTIFACT' in text: pathlib.Path('required.DM').write_text('dm')\n"
@@ -246,6 +250,130 @@ def test_dependency_artifact_is_hash_bound_and_transferred(tmp_path: Path):
     assert transfer["from_task"] == "task-1"
     assert transfer["destination"] == "parent.DM"
     assert state(tmp_path)["tasks"]["task-1"]["status"] == "COMPLETED"
+
+
+def test_protected_inputs_are_staged_at_declared_exact_destinations(
+    tmp_path: Path,
+) -> None:
+    campaign, config = make_package(tmp_path, ["SUCCESS"])
+    config["tasks"][0]["input_destinations"] = {
+        "input/task1.fdf": "nested/input.fdf",
+        "pseudopotentials/C.psml": "species/C.psml",
+    }
+    campaign.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+
+    result = controller(campaign, "exact-destinations").run(
+        install_signal_handlers=False
+    )
+
+    assert result is ExecutionStatus.COMPLETED
+    attempt = tmp_path / "work" / "task-1" / "attempt-0001"
+    assert (attempt / "nested" / "input.fdf").read_text() == "SUCCESS\n"
+    assert (attempt / "species" / "C.psml").read_text() == "pseudo"
+    assert not (attempt / "task1.fdf").exists()
+
+
+def test_mutable_restart_dm_keeps_immutable_input_evidence(tmp_path: Path):
+    campaign, config = make_package(
+        tmp_path,
+        ["ARTIFACT", "RESTART_MUTATES"],
+        max_parallel=1,
+        required_artifact=True,
+    )
+    config["tasks"][1]["depends_on"] = ["task-1"]
+    config["tasks"][1]["transfers"] = [{
+        "from_task": "task-1",
+        "artifact": "required.DM",
+        "destination": "required.DM",
+    }]
+    campaign.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+
+    assert (
+        controller(campaign, "mutable-dm").run(install_signal_handlers=False)
+        is ExecutionStatus.COMPLETED
+    )
+    attempt = tmp_path / "work" / "task-2" / "attempt-0001"
+    manifest = json.loads((attempt / "result_manifest.json").read_text())
+    transfer = manifest["transferred_inputs"][0]
+    evidence = attempt / transfer["evidence_path"]
+
+    assert evidence.read_text() == "dm"
+    assert sha(evidence) == transfer["sha256"]
+    assert (attempt / "required.DM").read_text() == "updated-dm"
+    assert manifest["artifacts"]["required.DM"] == sha(attempt / "required.DM")
+    assert manifest["restart_evidence"]["dm_read_succeeded"] is True
+    assert manifest["parser_classification"] == "COMPLETED"
+
+
+def test_legacy_mutated_dm_attempt_is_recovered_without_recalculation(
+    tmp_path: Path,
+):
+    campaign, config = make_package(
+        tmp_path,
+        ["ARTIFACT", "RESTART_MUTATES"],
+        max_parallel=1,
+        required_artifact=True,
+    )
+    config["tasks"][1]["depends_on"] = ["task-1"]
+    config["tasks"][1]["transfers"] = [{
+        "from_task": "task-1",
+        "artifact": "required.DM",
+        "destination": "required.DM",
+    }]
+    campaign.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    assert (
+        controller(campaign, "legacy-first").run(install_signal_handlers=False)
+        is ExecutionStatus.COMPLETED
+    )
+
+    attempt = tmp_path / "work" / "task-2" / "attempt-0001"
+    manifest_path = attempt / "result_manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    transfer = manifest["transferred_inputs"][0]
+    for field in (
+        "evidence_path",
+        "evidence_sha256",
+        "destination_sha256_before_execution",
+        "destination_mutable_after_launch",
+    ):
+        transfer.pop(field)
+    manifest["parser_classification"] = "UNKNOWN_WARNING"
+    manifest.pop("restart_evidence")
+    manifest.pop("parser_warnings")
+    manifest.pop("parser_benign_warnings")
+    manifest_path.write_text(
+        json.dumps(manifest, sort_keys=True, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    state_path = tmp_path / "state" / "campaign_state.json"
+    wrapper = json.loads(state_path.read_text())
+    payload = wrapper["payload"]
+    payload["status"] = "INCOMPLETE"
+    payload["tasks"]["task-2"].update({
+        "status": "INCOMPLETE",
+        "reason": "transferred input hash mismatch: required.DM",
+        "result_manifest_sha256": sha(manifest_path),
+    })
+    wrapper["sha256"] = hashlib.sha256(
+        json.dumps(
+            payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        ).encode("utf-8")
+    ).hexdigest()
+    state_path.write_text(
+        json.dumps(wrapper, sort_keys=True, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    assert (
+        controller(campaign, "legacy-recovery").run(
+            install_signal_handlers=False
+        )
+        is ExecutionStatus.COMPLETED
+    )
+    recovered = state(tmp_path)["tasks"]["task-2"]
+    assert recovered["attempts"] == 1
+    assert recovered["status"] == "COMPLETED"
 
 
 def test_failed_dependency_blocks_child_without_launch(tmp_path: Path):

@@ -1,0 +1,40 @@
+# Managed by the SIESTAFlow local Slurm sandbox.
+# This is a single-node integration profile, not a Yoltla configuration.
+ClusterName=siestaflow-local
+SlurmctldHost=@HOSTNAME@
+
+SlurmUser=slurm
+SlurmdUser=root
+AuthType=auth/munge
+StateSaveLocation=/var/lib/slurm/slurmctld
+SlurmdSpoolDir=/var/lib/slurm/slurmd
+SlurmctldPidFile=/run/slurmctld/slurmctld.pid
+SlurmdPidFile=/run/slurm/slurmd.pid
+SlurmctldLogFile=/var/log/slurm/slurmctld.log
+SlurmdLogFile=/var/log/slurm/slurmd.log
+
+SlurmctldPort=6817
+SlurmdPort=6818
+ReturnToService=2
+SchedulerType=sched/backfill
+SelectType=select/cons_tres
+SelectTypeParameters=CR_Core
+SwitchType=switch/none
+MpiDefault=none
+ProctrackType=proctrack/linuxproc
+TaskPlugin=task/affinity
+
+AccountingStorageType=accounting_storage/none
+JobAcctGatherType=jobacct_gather/linux
+JobCompType=jobcomp/filetxt
+JobCompLoc=/var/log/slurm/jobcomp.log
+
+InactiveLimit=0
+KillWait=30
+MinJobAge=300
+SlurmctldTimeout=120
+SlurmdTimeout=300
+Waittime=0
+
+NodeName=@HOSTNAME@ CPUs=@CPUS@ Boards=@BOARDS@ SocketsPerBoard=@SOCKETS_PER_BOARD@ CoresPerSocket=@CORES_PER_SOCKET@ ThreadsPerCore=@THREADS_PER_CORE@ RealMemory=@REAL_MEMORY_MB@ State=UNKNOWN
+PartitionName=local Nodes=@HOSTNAME@ Default=YES MinNodes=1 MaxNodes=1 MaxTime=01:00:00 State=UP

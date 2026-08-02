@@ -6,6 +6,8 @@ import pytest
 from siestaflow.engines.siesta.adapter import SyntheticSiestaLauncher
 from siestaflow.engines.siesta.output_parser import SiestaOutputParser
 from siestaflow.project_packages import ProjectPackageLoader
+from siestaflow.project_packages import load_structured
+from siestaflow.scientific_convergence import MeshConvergenceRule, mesh_adaptive_dag
 from siestaflow.siesta_campaigns import SiestaCampaignFactory, simulate_definition
 
 
@@ -48,24 +50,33 @@ def test_sanity_definition_and_single_task_simulation(reference_package: Path, t
     assert definition.metadata["stop_after_task"] is True
 
 
-def test_mesh_real_gate_and_four_task_one_allocation_resume(reference_package: Path, tmp_path: Path):
+def test_mesh_real_gate_and_five_task_one_allocation_resume(reference_package: Path, tmp_path: Path):
     definition, variants = _definition(reference_package, "m1_mesh_convergence")
     assert definition.metadata["preview"] == "MESH_CAMPAIGN_PREVIEW_ONLY"
     assert len(definition.metadata["missing_dependencies"]) == 3
-    assert len(variants) == 4
+    assert len(variants) == 5
     state, launcher, slurm = simulate_definition(definition, tmp_path)
     assert state.final_decision.value == "PASS"
     assert slurm.submissions == 1
     assert len({allocation for allocation, _, _ in launcher.launches}) == 1
-    assert len(launcher.launches) == 4
+    assert len(launcher.launches) == 5
     attempts = list((tmp_path / "campaigns" / definition.manifest.campaign_id / "tasks").glob("*/attempt_001"))
-    assert len(attempts) == 4
+    assert len(attempts) == 5
     revisions_before = state.revision
     resumed, second_launcher, second_slurm = simulate_definition(definition, tmp_path)
     assert resumed.revision >= revisions_before
     assert second_launcher.launches == []
     assert second_slurm.submissions == 0
     assert not list((tmp_path / "campaigns" / definition.manifest.campaign_id / "tasks").glob("*/attempt_002"))
+
+
+def test_mesh_campaign_references_a_valid_human_review_rule(reference_package: Path):
+    package = ProjectPackageLoader().load(reference_package)
+    campaign = package.campaign("m1_mesh_convergence")
+    rule_path = reference_package / str(campaign.metadata["convergence_rule"])
+    rule = MeshConvergenceRule.from_mapping(load_structured(rule_path))
+    assert tuple(f"{value} Ry" for value in map(str, rule.initial_cutoffs_ry)) == campaign.values
+    assert mesh_adaptive_dag(rule)["execution_authorized"] is False
 
 
 @pytest.mark.parametrize("fixture_name,expected_tasks", [("unknown_warning.out", 1), ("input_error.out", 1), ("truncated_output.out", 1)])

@@ -7,6 +7,7 @@ from siestaflow.engines.siesta.input_validator import SiestaInputValidator
 from siestaflow.engines.siesta.models import FDFInclude, FDFUnknown
 
 
+
 def test_round_trip_preserves_comments_blocks_includes_unknown_and_windows_eol():
     source = "# c\r\n\r\nSystemLabel Test ! inline\r\n%include other.fdf\r\n%block Demo\r\n  1 2 3\r\n%endblock Demo\r\n@unknown raw\r\n"
     document = FDFParser().parse(source)
@@ -14,6 +15,16 @@ def test_round_trip_preserves_comments_blocks_includes_unknown_and_windows_eol()
     assert document.newline_style == "\r\n"
     assert any(isinstance(node, FDFInclude) for node in document.nodes)
     assert any(isinstance(node, FDFUnknown) for node in document.nodes)
+
+
+def test_scalar_parser_preserves_compound_units_and_unqualified_text() -> None:
+    document = FDFParser().parse(
+        "MD.MaxForceTol 0.05 eV/Ang\nSystemName Water molecule\n"
+    )
+    force = document.scalars("MD.MaxForceTol")[0]
+    name = document.scalars("SystemName")[0]
+    assert (force.value, force.unit) == ("0.05", "eV/Ang")
+    assert (name.value, name.unit) == ("Water molecule", None)
 
 
 @pytest.mark.parametrize("source,code", [
@@ -54,3 +65,81 @@ def test_include_is_preserved_but_blocked_without_path_policy():
     result = SiestaInputValidator().validate(FDFParser().parse("%include x.fdf\n"))
     assert result.status.value == "FAIL"  # required blocks are also absent
     assert any(item.code == "UNRESOLVED_INCLUDE" and item.status.value == "BLOCKED" for item in result.findings)
+
+
+def test_documented_density_matrix_restart_keyword_is_recognized(sanity_fdf: Path):
+    source = sanity_fdf.read_text(encoding="utf-8").replace(
+        "MD.Steps 0",
+        "DM.UseSaveDM T\nMD.Steps 0",
+    )
+    result = SiestaInputValidator().validate(FDFParser().parse(source))
+
+    assert not any(
+        item.code == "UNKNOWN_LABEL" and item.label == "DM.UseSaveDM"
+        for item in result.findings
+    )
+
+
+def test_cg_steps_are_recognized_as_the_explicit_relaxation_step_limit(sanity_fdf: Path):
+    source = sanity_fdf.read_text(encoding="utf-8").replace(
+        "MD.Steps 0", "MD.NumCGSteps 1"
+    )
+    result = SiestaInputValidator().validate(FDFParser().parse(source))
+    assert not any(
+        item.code == "UNKNOWN_LABEL" and "MD.NumCGSteps" in item.message
+        for item in result.findings
+    )
+    assert not any(
+        item.code == "UNDECLARED_GOVERNED_VALUE" and "MD.Steps" in item.message
+        for item in result.findings
+    )
+
+
+def test_projected_density_of_states_is_recognized():
+    source = """SystemName DOS fixture
+SystemLabel dos_fixture
+NumberOfAtoms 1
+NumberOfSpecies 1
+%block ChemicalSpeciesLabel
+  1 6 C
+%endblock ChemicalSpeciesLabel
+LatticeConstant 1.0 Ang
+%block LatticeVectors
+  8.0 0.0 0.0
+  0.0 8.0 0.0
+  0.0 0.0 8.0
+%endblock LatticeVectors
+AtomicCoordinatesFormat Ang
+%block AtomicCoordinatesAndAtomicSpecies
+  0.0 0.0 0.0 1
+%endblock AtomicCoordinatesAndAtomicSpecies
+NetCharge 0
+Spin non-polarized
+MD.TypeOfRun CG
+MD.NumCGSteps 0
+%block ProjectedDensityOfStates
+  EF -10.0 10.0 0.20 301 eV
+%endblock ProjectedDensityOfStates"""
+    result = SiestaInputValidator().validate(FDFParser().parse(source))
+
+    assert result.status.value == "PASS"
+    assert not any(
+        item.code == "UNKNOWN_LABEL" and "ProjectedDensityOfStates" in item.message
+        for item in result.findings
+    )
+
+
+def test_band_path_labels_are_recognized_by_the_versioned_registry(sanity_fdf: Path):
+    source = sanity_fdf.read_text(encoding="utf-8") + """
+BandLinesScale ReciprocalLatticeVectors
+%block BandLines
+  1 0.0 0.0 0.0 Gamma
+  4 0.5 0.0 0.0 X
+%endblock BandLines
+"""
+    result = SiestaInputValidator().validate(FDFParser().parse(source))
+
+    assert not any(
+        item.code == "UNKNOWN_LABEL" and any(label in item.message for label in ("BandLinesScale", "BandLines"))
+        for item in result.findings
+    )

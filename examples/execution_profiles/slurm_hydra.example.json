@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "profile_id": "cluster-hydra-example",
+  "target": "slurm",
+  "slurm": {
+    "partition": "partition_name",
+    "account": "account_name",
+    "qos": "normal"
+  },
+  "allocation": {
+    "nodes": 2,
+    "total_cpus": 64,
+    "memory": "500G",
+    "walltime": "2-00:00:00",
+    "max_parallel_steps": 1,
+    "shutdown_margin_seconds": 1800,
+    "termination_grace_seconds": 30
+  },
+  "runtime": {
+    "module_commands": [
+      "module purge",
+      "module load siesta/5.4.2",
+      "module load python/3.12"
+    ],
+    "siesta_executable": "siesta",
+    "executable_arguments": [],
+    "launcher": {
+      "kind": "hydra",
+      "command": [
+        "mpiexec.hydra"
+      ],
+      "arguments": [],
+      "bootstrap": "ssh",
+      "processes_per_node": 32
+    },
+    "exclusive": true,
+    "environment": {
+      "OMP_NUM_THREADS": "1"
+    }
+  },
+  "task_policy": {
+    "max_attempts": 2,
+    "require_scf_converged": true
+  }
+}

@@ -9,7 +9,7 @@ import shutil
 import threading
 import time
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path, PurePosixPath
 from typing import Any, Mapping
@@ -58,6 +58,8 @@ class ControllerTask:
     nodes: int = 0
     task_kind: str = "siesta"
     command: tuple[str, ...] = ()
+    input_destinations: Mapping[str, str] = field(default_factory=dict)
+    optional_artifacts: tuple[str, ...] = ()
 
     @property
     def cpus(self) -> int:
@@ -208,23 +210,60 @@ def load_controller_config(path: Path) -> ControllerConfig:
         if not isinstance(hashes, Mapping) or not hashes:
             raise ValueError(f"input_hashes required for {task_id}")
         normalized_hashes: dict[str, str] = {}
-        basenames: set[str] = set()
         for name, digest in hashes.items():
             relative = _safe_relative(str(name), f"{task_id}.input_hashes").as_posix()
             expected = str(digest).lower()
             if len(expected) != 64 or any(char not in "0123456789abcdef" for char in expected):
                 raise ValueError(f"invalid SHA-256 for {relative}")
-            basename = PurePosixPath(relative).name
-            if basename in basenames:
-                raise ValueError(f"staged input basename collision: {basename}")
-            basenames.add(basename)
             normalized_hashes[relative] = expected
         if input_path not in normalized_hashes:
             raise ValueError(f"primary input is not hash-bound: {input_path}")
+        destinations_raw = raw.get("input_destinations")
+        if destinations_raw is None:
+            input_destinations = {
+                relative: PurePosixPath(relative).name
+                for relative in normalized_hashes
+            }
+        else:
+            if not isinstance(destinations_raw, Mapping):
+                raise ValueError(
+                    f"input_destinations must be a mapping for {task_id}"
+                )
+            if set(map(str, destinations_raw)) != set(normalized_hashes):
+                raise ValueError(
+                    f"input_destinations keys must match input_hashes for {task_id}"
+                )
+            input_destinations = {
+                str(relative): _safe_relative(
+                    str(destination),
+                    f"{task_id}.input_destinations",
+                ).as_posix()
+                for relative, destination in destinations_raw.items()
+            }
+        staged_destinations = tuple(input_destinations.values())
+        if len(set(staged_destinations)) != len(staged_destinations):
+            raise ValueError(f"staged input destination collision: {task_id}")
         required_raw = raw.get("required_artifacts", [])
         if not isinstance(required_raw, list):
             raise ValueError(f"required_artifacts must be a list for {task_id}")
         required = tuple(_safe_relative(str(item), f"{task_id}.required_artifacts").as_posix() for item in required_raw)
+        optional_raw = raw.get("optional_artifacts", [])
+        if not isinstance(optional_raw, list):
+            raise ValueError(f"optional_artifacts must be a list for {task_id}")
+        optional = tuple(
+            _safe_relative(
+                str(item), f"{task_id}.optional_artifacts"
+            ).as_posix()
+            for item in optional_raw
+        )
+        if (
+            len(set(required)) != len(required)
+            or len(set(optional)) != len(optional)
+            or set(required) & set(optional)
+        ):
+            raise ValueError(
+                f"required and optional artifacts must be unique for {task_id}"
+            )
         mpi = _positive_int(raw.get("mpi_processes"), f"{task_id}.mpi_processes")
         cpp = _positive_int(raw.get("cpus_per_process", 1), f"{task_id}.cpus_per_process")
         estimate = _nonnegative_float(raw.get("estimated_runtime_seconds"), f"{task_id}.estimated_runtime_seconds")
@@ -256,7 +295,7 @@ def load_controller_config(path: Path) -> ControllerConfig:
                 ),
                 f"{task_id}.transfer.destination",
             ).as_posix()
-            if destination in destinations or PurePosixPath(destination).name in basenames:
+            if destination in destinations or destination in staged_destinations:
                 raise ValueError(f"staged transfer destination collision: {destination}")
             destinations.add(destination)
             transfers.append(ArtifactTransfer(source_task, artifact, destination))
@@ -290,6 +329,7 @@ def load_controller_config(path: Path) -> ControllerConfig:
             task_id, input_path, normalized_hashes, required, mpi, cpp, estimate,
             attempts, bool(raw.get("require_scf_converged", True)),
             dependencies, tuple(transfers), task_nodes, task_kind, task_command,
+            input_destinations, optional,
         ))
     if max_parallel > len(tasks):
         max_parallel = len(tasks)
@@ -500,7 +540,7 @@ class AllocationController:
 
     def _transfer_inputs(self, task: ControllerTask, attempt: Path) -> tuple[dict[str, Any], ...]:
         transferred: list[dict[str, Any]] = []
-        for transfer in task.transfers:
+        for index, transfer in enumerate(task.transfers, 1):
             source_state = self._task_state(transfer.from_task)
             source_attempt_id = source_state.get("last_attempt")
             source_manifest_hash = source_state.get("result_manifest_sha256")
@@ -535,7 +575,20 @@ class AllocationController:
                 transfer.destination, f"{task.task_id}.transfer.destination"
             )
             destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source, destination)
+            evidence_relative = (
+                Path(".siestaflow")
+                / "transfer_evidence"
+                / f"{index:04d}"
+                / PurePosixPath(transfer.destination).name
+            )
+            evidence = attempt / evidence_relative
+            evidence.parent.mkdir(parents=True, exist_ok=False)
+            shutil.copy2(source, evidence)
+            shutil.copy2(evidence, destination)
+            if _sha_file(evidence) != actual or _sha_file(destination) != actual:
+                raise ValueError(
+                    f"transferred destination staging mismatch: {transfer.destination}"
+                )
             transferred.append({
                 "from_task": transfer.from_task,
                 "from_attempt": source_attempt_id,
@@ -543,13 +596,51 @@ class AllocationController:
                 "artifact": transfer.artifact,
                 "destination": transfer.destination,
                 "sha256": actual,
+                "evidence_path": evidence_relative.as_posix(),
+                "evidence_sha256": actual,
+                "destination_sha256_before_execution": actual,
+                "destination_mutable_after_launch": True,
             })
         if transferred:
             self._atomic_json(
                 attempt / "transfer_manifest.json",
-                {"schema_version": "1.0", "transfers": transferred},
+                {"schema_version": "2.0", "transfers": transferred},
             )
         return tuple(transferred)
+
+    def _verify_transfers_before_launch(
+        self, task: ControllerTask, attempt: Path
+    ) -> None:
+        """Verify working copies at the last controller boundary before execution."""
+        if not task.transfers:
+            return
+        manifest_path = attempt / "transfer_manifest.json"
+        if not manifest_path.is_file():
+            raise ValueError("transfer manifest missing before launch")
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        records = payload.get("transfers")
+        if not isinstance(records, list) or len(records) != len(task.transfers):
+            raise ValueError("transfer manifest mismatch before launch")
+        for transfer, record in zip(task.transfers, records, strict=True):
+            if not isinstance(record, dict):
+                raise ValueError("invalid transfer record before launch")
+            expected = str(record.get("sha256", ""))
+            destination = attempt / _safe_relative(
+                transfer.destination, f"{task.task_id}.transfer.destination"
+            )
+            evidence = attempt / _safe_relative(
+                str(record.get("evidence_path", "")),
+                f"{task.task_id}.transfer.evidence_path",
+            )
+            if (
+                not destination.is_file()
+                or not evidence.is_file()
+                or _sha_file(destination) != expected
+                or _sha_file(evidence) != expected
+            ):
+                raise ValueError(
+                    f"transferred input changed before launch: {transfer.destination}"
+                )
 
     def _prepare_attempt(self, task: ControllerTask) -> tuple[str, Path, Path]:
         task_state = self._task_state(task.task_id)
@@ -558,11 +649,18 @@ class AllocationController:
         attempt = self._attempt_path(task.task_id, attempt_id)
         self._verify_source_inputs(task)
         attempt.mkdir(parents=True, exist_ok=False)
-        for relative in task.input_hashes:
+        for relative, destination_relative in task.input_destinations.items():
             source = self.root / _safe_relative(relative, "input_hashes")
-            shutil.copy2(source, attempt / source.name)
+            destination = attempt / _safe_relative(
+                destination_relative, "input_destinations"
+            )
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, destination)
         self._transfer_inputs(task, attempt)
-        primary = attempt / PurePosixPath(task.input_path).name
+        primary = attempt / _safe_relative(
+            task.input_destinations[task.input_path],
+            "primary input destination",
+        )
         task_state.update({"attempts": number, "last_attempt": attempt_id})
         return attempt_id, attempt, primary
 
@@ -586,6 +684,7 @@ class AllocationController:
             hosts, self.config.processes_per_node,
         )
         try:
+            self._verify_transfers_before_launch(task, attempt)
             selected_launcher = (
                 self._direct_launcher if task.task_kind == "gate" else self.launcher
             )
@@ -604,13 +703,27 @@ class AllocationController:
             if task.task_kind == "siesta" else None
         )
         artifacts: dict[str, str] = {}
-        required = tuple(dict.fromkeys((*self.CORE_ARTIFACTS, *task.required_artifacts)))
-        for relative in required:
+        artifacts_to_record = tuple(
+            dict.fromkeys(
+                (
+                    *self.CORE_ARTIFACTS,
+                    *task.required_artifacts,
+                    *task.optional_artifacts,
+                )
+            )
+        )
+        for relative in artifacts_to_record:
             path = attempt / _safe_relative(relative, "required_artifacts")
             if path.is_file():
                 artifacts[relative] = _sha_file(path)
         staged_inputs = {
-            relative: _sha_file(attempt / PurePosixPath(relative).name)
+            relative: _sha_file(
+                attempt
+                / _safe_relative(
+                    task.input_destinations[relative],
+                    "input_destinations",
+                )
+            )
             for relative in task.input_hashes
         }
         manifest = {
@@ -627,6 +740,18 @@ class AllocationController:
             "parser_classification": (
                 record.classification.value if record is not None else "GATE_EXIT_STATUS"
             ),
+            "parser_warnings": list(record.warnings) if record is not None else [],
+            "parser_benign_warnings": (
+                list(record.benign_warnings) if record is not None else []
+            ),
+            "restart_evidence": {
+                "dm_read_attempted": (
+                    record.dm_restart_attempted if record is not None else False
+                ),
+                "dm_read_succeeded": (
+                    record.dm_restart_succeeded if record is not None else False
+                ),
+            },
             "input_hashes": staged_inputs, "artifacts": artifacts,
             "transferred_inputs": (
                 json.loads((attempt / "transfer_manifest.json").read_text(encoding="utf-8"))[
@@ -669,12 +794,24 @@ class AllocationController:
         if not isinstance(staged, dict) or staged != dict(task.input_hashes):
             return False, "staged input manifest mismatch"
         for relative, expected in task.input_hashes.items():
-            path = attempt / PurePosixPath(relative).name
+            path = attempt / _safe_relative(
+                task.input_destinations[relative],
+                "input_destinations",
+            )
             if not path.is_file() or _sha_file(path) != expected:
                 return False, f"staged input hash mismatch: {relative}"
         transferred = manifest.get("transferred_inputs")
         if not isinstance(transferred, list) or len(transferred) != len(task.transfers):
             return False, "transferred input manifest mismatch"
+        output_record = None
+        output_path = attempt / "stdout.txt"
+        if task.task_kind == "siesta" and output_path.is_file():
+            output_record = SiestaOutputParser().parse(
+                output_path.read_text(
+                    encoding="utf-8", errors="replace"
+                ).splitlines(keepends=True),
+                synthetic=False,
+            )
         declared_transfers = {
             (item.from_task, item.artifact, item.destination) for item in task.transfers
         }
@@ -692,8 +829,30 @@ class AllocationController:
                 identity[2], f"{task.task_id}.transferred_input"
             )
             digest = str(item.get("sha256", ""))
-            if not destination.is_file() or _sha_file(destination) != digest:
-                return False, f"transferred input hash mismatch: {identity[2]}"
+            if not destination.is_file():
+                return False, f"transferred input missing after execution: {identity[2]}"
+            evidence_path = item.get("evidence_path")
+            if evidence_path:
+                evidence = attempt / _safe_relative(
+                    str(evidence_path), f"{task.task_id}.transfer.evidence_path"
+                )
+                if (
+                    not evidence.is_file()
+                    or str(item.get("evidence_sha256", "")) != digest
+                    or _sha_file(evidence) != digest
+                ):
+                    return False, f"transferred input evidence mismatch: {identity[2]}"
+            elif _sha_file(destination) != digest:
+                # Schema 1.0 compared the working copy after SIESTA had
+                # legitimately replaced a restart DM. Preserve compatibility
+                # only when the real output proves that the DM was consumed.
+                if not (
+                    task.task_kind == "siesta"
+                    and identity[2].casefold().endswith(".dm")
+                    and output_record is not None
+                    and output_record.dm_restart_succeeded
+                ):
+                    return False, f"legacy transferred input hash mismatch: {identity[2]}"
             source_attempt = self._attempt_path(
                 identity[0], str(item.get("from_attempt", ""))
             )
@@ -711,6 +870,15 @@ class AllocationController:
                 or _sha_file(source_artifact) != digest
             ):
                 return False, f"transferred source evidence mismatch: {identity[0]}"
+            if (
+                task.task_kind == "siesta"
+                and identity[2].casefold().endswith(".dm")
+                and (
+                    output_record is None
+                    or not output_record.dm_restart_succeeded
+                )
+            ):
+                return False, f"DM restart consumption not confirmed: {identity[2]}"
         if observed_transfers != declared_transfers:
             return False, "transferred input declaration mismatch"
         artifacts = manifest.get("artifacts")
@@ -721,6 +889,10 @@ class AllocationController:
             path = attempt / _safe_relative(relative, "required_artifacts")
             if not path.is_file() or artifacts.get(relative) != _sha_file(path):
                 return False, f"required artifact invalid: {relative}"
+        for relative in task.optional_artifacts:
+            path = attempt / _safe_relative(relative, "optional_artifacts")
+            if path.is_file() and artifacts.get(relative) != _sha_file(path):
+                return False, f"optional artifact invalid: {relative}"
         return True, "exit, termination, manifest, hashes and artifacts verified"
 
     def _recover(self) -> None:
@@ -737,11 +909,29 @@ class AllocationController:
                 valid = bool(last) and self._validate_attempt(task, last, item.get("result_manifest_sha256"))[0]
                 if not valid:
                     self._set_task(task_id, ExecutionStatus.INCOMPLETE, "previous completed evidence no longer validates")
-            elif item["status"] == ExecutionStatus.RUNNING.value:
-                valid, reason = self._validate_attempt(task, last, item.get("result_manifest_sha256")) if last else (False, "attempt missing")
+            elif item["status"] in {
+                ExecutionStatus.RUNNING.value,
+                ExecutionStatus.INCOMPLETE.value,
+                ExecutionStatus.INTERRUPTED.value,
+            }:
+                valid, reason = (
+                    self._validate_attempt(
+                        task, last, item.get("result_manifest_sha256")
+                    )
+                    if last
+                    else (False, "attempt missing")
+                )
                 if valid:
-                    self._set_task(task_id, ExecutionStatus.COMPLETED, reason, result_manifest_sha256=_sha_file(self._attempt_path(task_id, last) / "result_manifest.json"))
-                else:
+                    self._set_task(
+                        task_id,
+                        ExecutionStatus.COMPLETED,
+                        reason,
+                        result_manifest_sha256=_sha_file(
+                            self._attempt_path(task_id, last)
+                            / "result_manifest.json"
+                        ),
+                    )
+                elif item["status"] == ExecutionStatus.RUNNING.value:
                     self._set_task(task_id, ExecutionStatus.INTERRUPTED, f"recovered in new allocation: {reason}")
         self._save_state()
 

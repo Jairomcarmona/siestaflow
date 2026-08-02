@@ -1,5 +1,35 @@
 # Troubleshooting
 
+- `SIESTA_EXECUTABLE_MISSING` or `SIESTA_IDENTITY_UNCONFIRMED`: load the intended SIESTA
+  module or provide `--siesta` with the verified executable; do not substitute
+  another program that merely accepts `--version`.
+- `LAUNCHER_NOT_FOUND`: select a launcher installed for that environment or
+  correct the module setup. `environment check` never installs software.
+- `SLURM_CLIENT_INCOMPLETE`: required client commands are unavailable; this does
+  not by itself prove that a controller is reachable.
+- `refusing to modify existing non-matching project`: the destination contains
+  a different initialization lock. Use another destination or reconcile the
+  source inputs; existing work is not overwritten.
+- `PSEUDOPOTENTIAL_DECLARATION_MISSING`: add the exact FDF species declarations to
+  the external manifest. No pseudopotential is guessed or downloaded.
+- `STRUCTURE_CHEMISTRY_REVIEW_REQUIRED`: expected review finding, not proof of
+  invalid chemistry. Inspect composition, coordinates, units, periodicity and
+  intended connectivity before execution.
+- `KEYWORD_VALUE_INVALID`, `LATTICE_MATRIX_*`, or `KGRID_MATRIX_*`: a
+  deterministic input consistency rule failed. Correct the reported FDF line;
+  do not bypass the finding.
+- `PERIODIC_NET_CHARGE_REVIEW`: the input is not automatically invalid.
+  Document the compensating-background convention, finite-size limitations,
+  and allowed comparisons for the declared periodic model.
+- `D3_PERIODICITY_REVIEW`: declare `DFTD3.Periodic` when the intended periodic
+  axes cannot be safely inferred from a low-dimensional or nonorthogonal cell.
+- `DFTU_LINEAR_RESPONSE_MODE_ACTIVE`: `DFTU.PotentialShift` classifies this as
+  a response calculation; its U entries are perturbations, not a productive
+  Hubbard U.
+- `BADER_OUTPUT_NOT_ENABLED`: the project profile requires Bader data but
+  `SaveBaderCharge` is not true. Enable it only in the authorized output task.
+- `BADER_MESH_CUTOFF_REVIEW`: converge the Bader density grid; the finding is
+  a documented numerical review, not an automatic cutoff selection.
 - Exit `2` with `MISSING_DIRECTORY` or `MISSING_*`: fix the external package path or manifest; no partial package is loaded.
 - `EXAMPLE_BLOCKED_MISSING_PSEUDOS`: provide exactly one matching filename below `--pseudo-root`.
 - `EXAMPLE_BLOCKED_HASH_MISMATCH`: do not replace or download automatically; verify provenance and update only the authorized external manifest.

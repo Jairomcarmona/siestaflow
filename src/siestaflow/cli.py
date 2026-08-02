@@ -14,16 +14,55 @@ from .engines.siesta.fdf_parser import FDFParser
 from .engines.siesta.input_validator import SiestaInputValidator
 from .engines.siesta.models import FDFBlock, FDFInclude, FDFScalar, FDFUnknown
 from .engines.siesta.pseudopotentials import PseudopotentialManifest, PseudopotentialVerifier
+from .engines.siesta.validation_catalog import SiestaValidationCatalog
+from .engines.siesta.validation_profile import SiestaValidationProfile
+from .environment_check import EnvironmentChecker, EnvironmentCheckRequest
+from .errors import SiestaFlowError
 from .examples import ExampleRegistry, ExampleService
 from .models import AuthorizationEnvelope, CampaignManifest, TaskSpec, primitive
 from .project_packages import ProjectPackageLoader, load_structured
+from .project_scaffold import (
+    ProjectInitRequest,
+    ProjectScaffolder,
+    render_project_init,
+)
 from .remote import RemotePackager, RemoteResultImporter
 from .remote_environment import EnvironmentProbePackager, RemoteEnvironmentImporter, RemoteEnvironmentStatus
 from .siesta_campaigns import CampaignDefinition, SiestaCampaignFactory, simulate_definition
+from .siesta_validation import SiestaContextualValidator
 from .execution.allocation_controller import AllocationController, ExecutionStatus
 from .execution.campaign_progress import read_campaign_progress, render_campaign_progress
 from .m4_remote_package import M4RemoteSmokePackager
 from .controller_package import ControllerPackageBuilder
+from .band_results import BandResultExporter
+from .optical_results import OpticalResultExporter
+from .dos_pdos_results import DOSPDOSResultExporter
+from .run_inspection import RunInspector
+from .run_preparation import RunPreparer, RunPreparationRequest
+from .execution_profile import SlurmExecutionProfile
+from .slurm_resources import (
+    build_snapshot,
+    discover_snapshot,
+    load_snapshot,
+    memory_megabytes,
+    resolve_candidates,
+    sha256_file,
+    utc_now,
+    walltime_seconds,
+    write_snapshot,
+)
+from .workflows import (
+    WorkflowCompiler,
+    render_workflow_graph,
+    render_workflow_plan,
+    workflow_graph,
+    workflow_plan,
+    write_workflow_lock,
+)
+from .validation_render import render_validation_report
+from .workflow_preflight import WorkflowPreflightValidator
+from .workflow_authoring import WorkflowAuthoringService
+from .scientific_approvals import create_approved_profile, create_decision
 
 
 def _repo_root() -> Path:
@@ -38,6 +77,23 @@ def build_parser() -> argparse.ArgumentParser:
 
     project = sub.add_parser("project")
     project_sub = project.add_subparsers(dest="action", required=True)
+    project_init = project_sub.add_parser(
+        "init",
+        help="create a preparation-only project from real researcher inputs",
+    )
+    project_init.add_argument("path", type=Path)
+    project_init.add_argument("--project-id", required=True)
+    project_init.add_argument("--title")
+    project_init.add_argument("--system-id", required=True)
+    project_init.add_argument("--fdf", type=Path, required=True)
+    project_init.add_argument("--structure", type=Path, required=True)
+    project_init.add_argument(
+        "--pseudo-manifest",
+        type=Path,
+        required=True,
+    )
+    project_init.add_argument("--dry-run", action="store_true")
+    project_init.add_argument("--json", action="store_true")
     for action in ("inspect", "validate", "load"):
         command = project_sub.add_parser(action)
         command.add_argument("path", type=Path)
@@ -53,7 +109,50 @@ def build_parser() -> argparse.ArgumentParser:
     inp_sub = inp.add_subparsers(dest="action", required=True)
     inp_validate = inp_sub.add_parser("validate")
     inp_validate.add_argument("path", type=Path)
+    inp_validate.add_argument("--pseudo-manifest", type=Path)
+    inp_validate.add_argument("--require-pseudos", action="store_true")
+    inp_validate.add_argument("--profile", type=Path)
+    inp_validate.add_argument(
+        "--engine-version",
+        choices=("5.4.2",),
+        default="5.4.2",
+    )
+    inp_validate.add_argument(
+        "--explain",
+        action="store_true",
+        help="render evidence and remediation for every finding",
+    )
     inp_validate.add_argument("--json", action="store_true")
+    inp_rules = inp_sub.add_parser(
+        "rules",
+        help="list the versioned built-in SIESTA validation rules",
+    )
+    inp_rules.add_argument(
+        "--engine-version",
+        choices=("5.4.2",),
+        default="5.4.2",
+    )
+    inp_rules.add_argument("--json", action="store_true")
+
+    environment = sub.add_parser(
+        "environment",
+        help="inspect local SIESTA, launcher, Slurm and workspace capabilities",
+    )
+    environment_sub = environment.add_subparsers(dest="action", required=True)
+    environment_check = environment_sub.add_parser("check")
+    environment_check.add_argument("--siesta", default="siesta")
+    environment_check.add_argument(
+        "--launcher",
+        choices=("auto", "direct", "srun", "mpiexec", "mpirun"),
+        default="auto",
+    )
+    environment_check.add_argument("--require-slurm", action="store_true")
+    environment_check.add_argument(
+        "--working-directory",
+        type=Path,
+        default=Path("."),
+    )
+    environment_check.add_argument("--json", action="store_true")
 
     pseudo = sub.add_parser("pseudo")
     pseudo_sub = pseudo.add_subparsers(dest="action", required=True)
@@ -89,6 +188,182 @@ def build_parser() -> argparse.ArgumentParser:
         help="0 watches until a terminal state; positive values bound refreshes",
     )
     watch.add_argument("--json", action="store_true")
+
+    workflow = sub.add_parser(
+        "workflow", help="validate and compile scientific workflow DAGs"
+    )
+    workflow_sub = workflow.add_subparsers(dest="action", required=True)
+    workflow_recipes = workflow_sub.add_parser(
+        "recipes", help="list registered workflow recipes"
+    )
+    workflow_recipes.add_argument("--json", action="store_true")
+    workflow_recipe = workflow_sub.add_parser(
+        "recipe", help="show one registered workflow recipe"
+    )
+    workflow_recipe.add_argument("recipe_id")
+    workflow_recipe.add_argument("--json", action="store_true")
+    workflow_create = workflow_sub.add_parser(
+        "create", help="create a canonical WorkflowDefinition from a scientific intent"
+    )
+    workflow_create.add_argument("intent", type=Path)
+    workflow_create.add_argument("--output", type=Path, required=True)
+    workflow_create.add_argument("--dry-run", action="store_true")
+    workflow_create.add_argument("--json", action="store_true")
+    workflow_compose = workflow_sub.add_parser(
+        "compose", help="preview or create a researcher-selected modular workflow"
+    )
+    workflow_compose.add_argument("intent", type=Path)
+    workflow_compose.add_argument("--output", type=Path, required=True)
+    workflow_compose.add_argument("--dry-run", action="store_true")
+    workflow_compose.add_argument("--json", action="store_true")
+    workflow_validate = workflow_sub.add_parser(
+        "validate", help="validate schema, artifacts, and graph consistency"
+    )
+    workflow_validate.add_argument("definition", type=Path)
+    workflow_validate.add_argument("--json", action="store_true")
+    workflow_preflight = workflow_sub.add_parser(
+        "preflight",
+        help="validate all external SIESTA FDF inputs in the resolved DAG",
+    )
+    workflow_preflight.add_argument("definition", type=Path)
+    workflow_preflight.add_argument("--profile", type=Path)
+    workflow_preflight.add_argument("--pseudo-manifest", type=Path)
+    workflow_preflight.add_argument(
+        "--require-pseudos",
+        action="store_true",
+    )
+    workflow_preflight.add_argument("--json", action="store_true")
+    workflow_plan_parser = workflow_sub.add_parser(
+        "plan", help="show the resolved topological execution plan"
+    )
+    workflow_plan_parser.add_argument("definition", type=Path)
+    workflow_plan_parser.add_argument("--json", action="store_true")
+    workflow_graph_parser = workflow_sub.add_parser(
+        "graph", help="render dependencies as text, Mermaid, or JSON"
+    )
+    workflow_graph_parser.add_argument("definition", type=Path)
+    workflow_graph_parser.add_argument(
+        "--format", choices=("text", "mermaid", "json"), default="text"
+    )
+    workflow_compile = workflow_sub.add_parser(
+        "compile", help="write a deterministic workflow.lock.json"
+    )
+    workflow_compile.add_argument("definition", type=Path)
+    workflow_compile.add_argument("--output", type=Path, required=True)
+    workflow_compile.add_argument("--force", action="store_true")
+    workflow_compile.add_argument("--dry-run", action="store_true")
+    workflow_compile.add_argument("--json", action="store_true")
+
+    scientific = sub.add_parser(
+        "scientific", help="persist explicit human scientific decisions and approved profiles"
+    )
+    scientific_sub = scientific.add_subparsers(dest="action", required=True)
+    scientific_decide = scientific_sub.add_parser(
+        "decide", help="record APPROVE or REJECT for reviewed convergence evidence"
+    )
+    scientific_decide.add_argument("report", type=Path)
+    scientific_decide.add_argument("--approval-id", required=True)
+    scientific_decide.add_argument("--decision", choices=("APPROVE", "REJECT"), required=True)
+    scientific_decide.add_argument("--actor", required=True)
+    scientific_decide.add_argument("--decided-at", required=True)
+    scientific_decide.add_argument("--output", type=Path, required=True)
+    scientific_decide.add_argument("--json", action="store_true")
+    scientific_profile = scientific_sub.add_parser(
+        "profile", help="materialize an approved numerical profile from matching decision and evidence"
+    )
+    scientific_profile.add_argument("report", type=Path)
+    scientific_profile.add_argument("--approval", type=Path, required=True)
+    scientific_profile.add_argument("--profile-id", required=True)
+    scientific_profile.add_argument("--output", type=Path, required=True)
+    scientific_profile.add_argument("--json", action="store_true")
+
+    prepared_run = sub.add_parser(
+        "run",
+        help="prepare and inspect hash-bound, manually submitted run packages",
+    )
+    prepared_run_sub = prepared_run.add_subparsers(
+        dest="action",
+        required=True,
+    )
+    run_prepare = prepared_run_sub.add_parser(
+        "prepare",
+        help="adapt a workflow lock to a self-contained Slurm package",
+    )
+    run_prepare.add_argument("workflow_lock", type=Path)
+    run_prepare.add_argument("--source-root", type=Path, required=True)
+    run_prepare.add_argument("--profile", type=Path, required=True)
+    run_prepare.add_argument("--output", type=Path, required=True)
+    run_prepare.add_argument("--run-id", required=True)
+    run_prepare.add_argument("--snapshot", type=Path)
+    run_prepare.add_argument("--candidate")
+    run_prepare.add_argument("--confirm", action="store_true")
+    run_prepare.add_argument("--partition")
+    run_prepare.add_argument("--nodes", type=int)
+    run_prepare.add_argument("--ranks-per-node", type=int)
+    run_prepare.add_argument("--account")
+    run_prepare.add_argument("--qos")
+    run_prepare.add_argument("--walltime")
+    run_prepare.add_argument("--required-feature", action="append", default=[])
+    run_prepare.add_argument("--compatibility-evidence", type=Path)
+    run_prepare.add_argument("--dry-run", action="store_true")
+    run_prepare.add_argument("--json", action="store_true")
+    run_candidates = prepared_run_sub.add_parser(
+        "candidates", help="rank Slurm snapshot candidates without submission"
+    )
+    run_candidates.add_argument("--workflow", type=Path, required=True)
+    run_candidates.add_argument("--profile", type=Path, required=True)
+    run_candidates.add_argument("--snapshot", type=Path, required=True)
+    run_candidates.add_argument("--json", action="store_true")
+    run_discover = prepared_run_sub.add_parser(
+        "discover", help="capture a read-only Slurm capability snapshot"
+    )
+    run_discover.add_argument("--cluster-id", required=True)
+    run_discover.add_argument("--output", type=Path, required=True)
+    run_discover.add_argument("--json", action="store_true")
+    run_import = prepared_run_sub.add_parser(
+        "snapshot-import", help="import saved read-only scheduler command output"
+    )
+    run_import.add_argument("--cluster-id", required=True)
+    run_import.add_argument("--output", type=Path, required=True)
+    run_import.add_argument("--sinfo", type=Path)
+    run_import.add_argument("--scontrol-partitions", type=Path)
+    run_import.add_argument("--scontrol-nodes", type=Path)
+    run_import.add_argument("--sacctmgr", type=Path)
+    run_import.add_argument("--sjstat", type=Path)
+    run_import.add_argument("--observed-at", default=None)
+    run_import.add_argument("--json", action="store_true")
+    for action in ("inspect", "status", "resume"):
+        command = prepared_run_sub.add_parser(action)
+        command.add_argument("package", type=Path)
+        if action == "resume":
+            command.add_argument(
+                "--previous-job-terminal",
+                action="store_true",
+                help="confirm that scheduler evidence shows the prior job is terminal",
+            )
+        command.add_argument("--json", action="store_true")
+
+    results = sub.add_parser(
+        "results", help="export hash-bound numerical results from completed prepared runs"
+    )
+    results_sub = results.add_subparsers(dest="action", required=True)
+    dos_pdos = results_sub.add_parser(
+        "dos-pdos", help="export total DOS table and PDOS provenance without interpretation"
+    )
+    dos_pdos.add_argument("package", type=Path)
+    dos_pdos.add_argument("--output", type=Path, required=True)
+    dos_pdos.add_argument("--dry-run", action="store_true")
+    dos_pdos.add_argument("--json", action="store_true")
+    bands = results_sub.add_parser(
+        "bands", help="export a SIESTA band table without interpretation"
+    )
+    bands.add_argument("package", type=Path)
+    bands.add_argument("--output", type=Path, required=True)
+    bands.add_argument("--dry-run", action="store_true")
+    bands.add_argument("--json", action="store_true")
+    optics = results_sub.add_parser("optics", help="export EPSIMG without interpretation")
+    optics.add_argument("package", type=Path); optics.add_argument("--output", type=Path, required=True)
+    optics.add_argument("--dry-run", action="store_true"); optics.add_argument("--json", action="store_true")
 
     examples = sub.add_parser("examples")
     example_sub = examples.add_subparsers(dest="action", required=True)
@@ -148,13 +423,322 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         return _dispatch(args)
-    except (OSError, ValueError, PermissionError, RuntimeError, KeyError) as exc:
+    except (
+        OSError,
+        ValueError,
+        PermissionError,
+        RuntimeError,
+        KeyError,
+        SiestaFlowError,
+    ) as exc:
         print(f"SIESTAFLOW_ERROR: {exc}", file=sys.stderr)
         return 2
 
 
 def _dispatch(args: argparse.Namespace) -> int:
+    if args.domain == "results":
+        exporter = {"dos-pdos": DOSPDOSResultExporter, "bands": BandResultExporter, "optics": OpticalResultExporter}[args.action]()
+        _emit(exporter.export(args.package, args.output, dry_run=args.dry_run), args.json)
+        return 0
+    if args.domain == "scientific":
+        if args.action == "decide":
+            _emit(create_decision(
+                args.report, approval_id=args.approval_id, decision=args.decision,
+                actor=args.actor, decided_at=args.decided_at, output=args.output,
+            ), args.json)
+        else:
+            _emit(create_approved_profile(
+                args.report, args.approval, profile_id=args.profile_id, output=args.output,
+            ), args.json)
+        return 0
+    if args.domain == "environment":
+        report = EnvironmentChecker().check(
+            EnvironmentCheckRequest(
+                siesta_executable=args.siesta,
+                launcher=args.launcher,
+                require_slurm=args.require_slurm,
+                working_directory=args.working_directory,
+            )
+        )
+        if args.json:
+            _emit(report, True)
+        else:
+            print(
+                render_validation_report(
+                    report,
+                    title="ENVIRONMENT CHECK",
+                )
+            )
+        return (
+            2
+            if report.status.value in {"FAIL", "BLOCKED"}
+            else 0
+        )
+    if args.domain == "workflow":
+        if args.action in {"recipes", "recipe", "create", "compose"}:
+            service = WorkflowAuthoringService()
+            if args.action == "recipes":
+                _emit({"recipes": service.recipes()}, args.json)
+                return 0
+            if args.action == "recipe":
+                _emit(service.recipe(args.recipe_id), args.json)
+                return 0
+            result = (
+                service.compose_definition(args.intent, args.output, dry_run=args.dry_run)
+                if args.action == "compose"
+                else service.create_definition(args.intent, args.output, dry_run=args.dry_run)
+            )
+            _emit(result, args.json)
+            return 0
+        if args.action == "preflight":
+            profile = (
+                SiestaValidationProfile.load(args.profile)
+                if args.profile
+                else None
+            )
+            manifest = (
+                PseudopotentialManifest.load(args.pseudo_manifest)
+                if args.pseudo_manifest
+                else None
+            )
+            report = WorkflowPreflightValidator().validate(
+                args.definition,
+                profile=profile,
+                pseudopotential_manifest=manifest,
+                require_pseudos=args.require_pseudos,
+            )
+            if args.json:
+                _emit(report, True)
+            else:
+                print(
+                    render_validation_report(
+                        report,
+                        title="WORKFLOW PREFLIGHT",
+                    )
+                )
+            return (
+                2
+                if report.status.value in {"FAIL", "BLOCKED"}
+                else 0
+            )
+        compilation = WorkflowCompiler().compile(args.definition)
+        if not compilation.valid or compilation.compiled is None:
+            _emit_workflow_validation(compilation, args.json)
+            return 2
+        if args.action == "validate":
+            _emit_workflow_validation(compilation, args.json)
+            return 0
+        if args.action == "plan":
+            _emit(
+                workflow_plan(compilation.compiled)
+                if args.json
+                else render_workflow_plan(compilation.compiled),
+                args.json,
+            )
+            return 0
+        if args.action == "graph":
+            if args.format == "json":
+                print(
+                    json.dumps(
+                        workflow_graph(compilation.compiled),
+                        sort_keys=True,
+                        indent=2,
+                        ensure_ascii=False,
+                    )
+                )
+            else:
+                print(
+                    render_workflow_graph(
+                        compilation.compiled, output_format=args.format
+                    )
+                )
+            return 0
+        lock = compilation.lock_dict()
+        if args.dry_run:
+            _emit(
+                {
+                    "status": "DRY_RUN",
+                    "output": str(args.output),
+                    "content_sha256": lock["content_sha256"],
+                    "filesystem_changes": 0,
+                },
+                args.json,
+            )
+            return 0
+        digest = write_workflow_lock(
+            compilation, args.output, overwrite=args.force
+        )
+        _emit(
+            {
+                "status": "WORKFLOW_COMPILED",
+                "output": str(args.output.resolve()),
+                "content_sha256": digest,
+                "task_count": len(compilation.compiled.tasks),
+                "execution_authorized": False,
+            },
+            args.json,
+        )
+        return 0
+    if args.domain == "run":
+        if args.action == "discover":
+            snapshot = discover_snapshot(cluster_id=args.cluster_id)
+            digest = write_snapshot(snapshot, args.output)
+            _emit({"status": "SLURM_SNAPSHOT_CAPTURED", "output": str(args.output.resolve()), "sha256": digest, "snapshot": snapshot}, args.json)
+            return 0
+        if args.action == "snapshot-import":
+            def read(path: Path | None) -> str:
+                return path.read_text(encoding="utf-8") if path else ""
+            snapshot = build_snapshot(
+                cluster_id=args.cluster_id, observed_at=args.observed_at or utc_now(),
+                sinfo=read(args.sinfo), scontrol_partitions=read(args.scontrol_partitions),
+                scontrol_nodes=read(args.scontrol_nodes), sacctmgr=read(args.sacctmgr), sjstat=read(args.sjstat),
+            )
+            digest = write_snapshot(snapshot, args.output)
+            _emit({"status": "SLURM_SNAPSHOT_IMPORTED", "output": str(args.output.resolve()), "sha256": digest, "snapshot": snapshot}, args.json)
+            return 0
+        if args.action == "candidates":
+            # Loading the workflow proves this is attached to a canonical lock;
+            # it does not add execution data to that scientific contract.
+            from .workflows import load_workflow_lock
+            load_workflow_lock(args.workflow)
+            snapshot, _ = load_snapshot(args.snapshot)
+            result = resolve_candidates(profile=SlurmExecutionProfile.load(args.profile), snapshot=snapshot)
+            result["workflow_lock_path"] = str(args.workflow.resolve())
+            result["snapshot_sha256"] = sha256_file(args.snapshot)
+            _emit(result, args.json)
+            return 0
+        if args.action == "prepare":
+            profile = SlurmExecutionProfile.load(args.profile)
+            manual = (args.partition, args.nodes, args.ranks_per_node, args.account, args.qos, args.walltime)
+            if args.candidate and any(item is not None for item in manual):
+                raise ValueError("candidate selection and manual resource overrides are exclusive")
+            if any(item is not None for item in manual) and not all(item is not None for item in manual):
+                raise ValueError("manual selection requires partition, nodes, ranks-per-node, account, qos, and walltime")
+            resolved_profile = None
+            resolution = None
+            if args.candidate:
+                if args.snapshot is None:
+                    raise ValueError("candidate selection requires --snapshot")
+                if not args.confirm:
+                    raise ValueError("candidate selection requires explicit --confirm")
+                snapshot, _ = load_snapshot(args.snapshot)
+                candidates = resolve_candidates(profile=profile, snapshot=snapshot, required_features=tuple(args.required_feature))
+                chosen = next((item for item in candidates["candidates"] if item["candidate_id"] == args.candidate), None)
+                if chosen is None or chosen["state"] == "INCOMPATIBLE":
+                    raise ValueError("selected candidate is not compatible with the snapshot")
+                resources = chosen["resources"]
+                source_variant = chosen["source_variant"]
+                pending_fields = list(chosen["review_codes"])
+                if source_variant.get("accounts") is None:
+                    pending_fields.append("ACCOUNT_AUTHORIZATION_UNKNOWN")
+                if source_variant.get("qos") is None:
+                    pending_fields.append("QOS_AUTHORIZATION_UNKNOWN")
+                resolved_profile = profile.resolved(partition=chosen["partition"], account=profile.account, qos=profile.qos,
+                                                    nodes=resources["nodes"], ranks_per_node=resources["ranks_per_node"], walltime=resources["walltime"])
+                resolution = {"resolution_mode": "SNAPSHOT_CANDIDATE", "snapshot_schema_version": snapshot["schema_version"],
+                              "snapshot_sha256": sha256_file(args.snapshot), "snapshot_observed_at": snapshot["observed_at"],
+                              "candidate_id": chosen["candidate_id"], "selected_partition": chosen["partition"], "selected_account": profile.account,
+                              "selected_qos": profile.qos, "selected_nodes": resources["nodes"], "selected_ranks_per_node": resources["ranks_per_node"],
+                              "selected_total_ranks": resources["total_ranks"], "selected_walltime": resources["walltime"], "selected_features": resources["features"],
+                              "selection_status": chosen["recommendation"], "selection_reason": chosen["ranking_reason"], "human_confirmed": True,
+                              "resolution_timestamp": utc_now(), "pending_fields": sorted(set(pending_fields))}
+            elif all(item is not None for item in manual):
+                if not args.confirm:
+                    raise ValueError("manual resource selection requires explicit --confirm")
+                if args.snapshot is None or args.compatibility_evidence is None:
+                    raise ValueError("manual compatibility selection requires --snapshot and --compatibility-evidence")
+                snapshot, snapshot_sha = load_snapshot(args.snapshot)
+                required_memory = memory_megabytes(profile.memory)
+                required_walltime = walltime_seconds(args.walltime)
+                compatible_variants = [
+                    item for item in snapshot["partitions"]
+                    if item["name"] == args.partition
+                    and (item.get("min_nodes") is None or args.nodes >= int(item["min_nodes"]))
+                    and (item.get("max_nodes") is None or args.nodes <= int(item["max_nodes"]))
+                    and item.get("cpus_per_node") is not None and int(item["cpus_per_node"]) >= args.ranks_per_node
+                    and set(args.required_feature).issubset(set(item.get("features") or ()))
+                    and item.get("idle_nodes") is not None and int(item["idle_nodes"]) > 0
+                    and (required_memory is None or item.get("memory_mb") is None or int(item["memory_mb"]) >= required_memory)
+                    and (required_walltime is None or walltime_seconds(item.get("walltime")) is None or walltime_seconds(item.get("walltime")) >= required_walltime)
+                    and (item.get("accounts") is None or args.account in item["accounts"])
+                    and (item.get("qos") is None or args.qos in item["qos"])
+                ]
+                if not compatible_variants:
+                    raise ValueError("manual selection is not supported by snapshot resource, authorization, or feature evidence")
+                evidence = load_structured(args.compatibility_evidence)
+                if evidence.get("schema_version") != "1.0" or not set(args.required_feature).issubset(set(evidence.get("compatible_features", []))):
+                    raise ValueError("execution compatibility evidence does not support required features")
+                if set(args.required_feature) & set(evidence.get("incompatible_features", [])):
+                    raise ValueError("execution compatibility evidence marks required feature incompatible")
+                resolved_profile = profile.resolved(partition=args.partition, account=args.account, qos=args.qos, nodes=args.nodes,
+                                                    ranks_per_node=args.ranks_per_node, walltime=args.walltime)
+                resolution = {"resolution_mode": "MANUAL_COMPATIBILITY_OVERRIDE", "snapshot_schema_version": snapshot["schema_version"], "snapshot_sha256": snapshot_sha,
+                              "snapshot_observed_at": snapshot["observed_at"], "candidate_id": None, "selected_partition": args.partition, "selected_account": args.account,
+                              "selected_qos": args.qos, "selected_nodes": args.nodes, "selected_ranks_per_node": args.ranks_per_node,
+                              "selected_total_ranks": args.nodes * args.ranks_per_node, "selected_walltime": args.walltime, "selected_features": sorted(set(args.required_feature)),
+                              "selection_status": "MANUAL_COMPATIBILITY_SELECTION_CONFIRMED", "selection_reason": "explicit human selection validated against snapshot and execution compatibility evidence", "human_confirmed": True,
+                              "resolution_timestamp": utc_now(), "compatibility_evidence_sha256": sha256_file(args.compatibility_evidence), "task_placement_policy": "FULL_ALLOCATION_REMAP",
+                              "pending_fields": []}
+            result = RunPreparer(_repo_root()).prepare(
+                RunPreparationRequest(
+                    workflow_lock=args.workflow_lock,
+                    source_root=args.source_root,
+                    execution_profile=args.profile,
+                    output_root=args.output,
+                    run_id=args.run_id,
+                    dry_run=args.dry_run,
+                    resolved_profile=resolved_profile,
+                    execution_resolution=resolution,
+                    cluster_snapshot=args.snapshot,
+                    compatibility_evidence=args.compatibility_evidence,
+                )
+            )
+            _emit(result, args.json)
+            return 0
+        inspector = RunInspector()
+        if args.action == "inspect":
+            _emit(inspector.inspect(args.package), args.json)
+            return 0
+        if args.action == "status":
+            _emit(inspector.status(args.package), args.json)
+            return 0
+        plan = inspector.resume(
+            args.package,
+            previous_job_terminal=args.previous_job_terminal,
+        )
+        _emit(plan, args.json)
+        return (
+            2
+            if plan.status
+            in {
+                "PREVIOUS_JOB_TERMINAL_CONFIRMATION_REQUIRED",
+                "BLOCKED_REVIEW_REQUIRED",
+            }
+            else 0
+        )
     if args.domain == "project":
+        if args.action == "init":
+            result = ProjectScaffolder().initialize(
+                ProjectInitRequest(
+                    root=args.path,
+                    project_id=args.project_id,
+                    title=args.title or args.project_id,
+                    system_id=args.system_id,
+                    fdf=args.fdf,
+                    structure=args.structure,
+                    pseudopotential_manifest=args.pseudo_manifest,
+                    dry_run=args.dry_run,
+                )
+            )
+            if args.json:
+                _emit(result, True)
+            else:
+                print(render_project_init(result))
+            return (
+                2
+                if result.decision.value in {"FAIL", "BLOCKED"}
+                else 0
+            )
         loader = ProjectPackageLoader()
         if args.action == "inspect":
             data = loader.inspect(args.path)
@@ -169,8 +753,61 @@ def _dispatch(args: argparse.Namespace) -> int:
         document = FDFParser().parse_path(args.path); data = _inspect_data(document); _emit(data, args.json)
         return 2 if any(item["severity"] == "ERROR" for item in data["diagnostics"]) else 0
     if args.domain == "input":
-        result = SiestaInputValidator().validate(FDFParser().parse_path(args.path)); _emit(primitive(result), args.json)
-        return 2 if result.status.value in {"FAIL", "BLOCKED"} else 0
+        if args.action == "rules":
+            catalog = SiestaValidationCatalog.load_default()
+            if catalog.engine_version != args.engine_version:
+                raise ValueError(
+                    f"no rules for SIESTA {args.engine_version}"
+                )
+            summary = catalog.public_summary()
+            if args.json:
+                _emit(summary, True)
+            else:
+                print(
+                    f"SIESTA {catalog.engine_version} VALIDATION RULES "
+                    f"({len(catalog.rules)})"
+                )
+                print(f"RULESET: {catalog.sha256}")
+                for item in summary["rules"]:
+                    print(
+                        f"- {item['rule_id']}@{item['version']}: "
+                        f"{item['summary']}"
+                    )
+                    print(f"  Evidence: {item['reference']}")
+            return 0
+        document = FDFParser().parse_path(args.path)
+        initial = SiestaInputValidator().validate(document)
+        pseudo_result = None
+        if args.pseudo_manifest:
+            manifest = PseudopotentialManifest.load(args.pseudo_manifest)
+            pseudo_result = PseudopotentialVerifier().verify(
+                manifest,
+                initial.species,
+            )
+        profile = (
+            SiestaValidationProfile.load(args.profile)
+            if args.profile
+            else None
+        )
+        catalog = SiestaValidationCatalog.load_default()
+        if catalog.engine_version != args.engine_version:
+            raise ValueError(
+                f"no rules for SIESTA {args.engine_version}"
+            )
+        report = SiestaContextualValidator(
+            catalog=catalog,
+        ).validate(
+            document,
+            pseudo_result=pseudo_result,
+            require_pseudos=args.require_pseudos,
+            profile=profile,
+            subject_id=initial.system_id or args.path.stem,
+        )
+        if args.json:
+            _emit(report, True)
+        else:
+            print(render_validation_report(report, title="SIESTA INPUT"))
+        return 2 if report.status.value in {"FAIL", "BLOCKED"} else 0
     if args.domain == "pseudo":
         manifest = PseudopotentialManifest.load(args.manifest)
         result = PseudopotentialVerifier().verify(manifest, tuple(args.species or [entry.species for entry in manifest.entries]))
@@ -336,6 +973,36 @@ def _emit(data: Any, as_json: bool) -> None:
     elif isinstance(payload, dict):
         for key, value in payload.items(): print(f"{key}: {value}")
     else: print(payload)
+
+
+def _emit_workflow_validation(compilation, as_json: bool) -> None:
+    report = primitive(compilation.report)
+    data = {
+        "valid": compilation.valid,
+        "report": report,
+        "workflow_lock_sha256": (
+            compilation.lock_dict()["content_sha256"]
+            if compilation.valid
+            else None
+        ),
+        "execution_authorized": False,
+    }
+    if as_json:
+        print(json.dumps(data, sort_keys=True, indent=2, ensure_ascii=False))
+        return
+    print(
+        f"WORKFLOW VALIDATION: {compilation.report.status.value}  "
+        f"SUBJECT: {compilation.report.subject.subject_id}"
+    )
+    if not compilation.report.findings:
+        print("No structural, graph, resource, or artifact errors detected.")
+    for finding in compilation.report.findings:
+        location = f" ({finding.location})" if finding.location else ""
+        print(f"[{finding.status.value}] {finding.code}{location}")
+        print(f"  {finding.message}")
+        if finding.hint:
+            print(f"  Suggested action: {finding.hint}")
+    print("EXECUTION_AUTHORIZED: NO")
 
 
 if __name__ == "__main__":

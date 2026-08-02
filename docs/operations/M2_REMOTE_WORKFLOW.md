@@ -3,7 +3,7 @@
 Create a campaign definition from any external package, then render an inert remote preview:
 
 ```powershell
-python -m siestaflow.cli --workspace .work campaign create --project C:\projects\package --campaign-id smoke --json
+python -m siestaflow.cli --workspace .work campaign create --project projects/package --campaign-id smoke --json
 python -m siestaflow.cli --workspace .work remote package smoke --output .work\remote --dry-run --json
 ```
 

@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Mapping
 
+from .contracts.status import DecisionStatus, FailureType, TaskState
+
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -23,45 +25,6 @@ def primitive(value: Any) -> Any:
     if isinstance(value, (list, tuple)):
         return [primitive(item) for item in value]
     return value
-
-
-class TaskState(str, Enum):
-    # PENDING is the canonical pre-launch state for the real allocation
-    # controller.  PLANNED remains for the backwards-compatible synthetic M1
-    # state machine.
-    PENDING = "PENDING"
-    PLANNED = "PLANNED"
-    PREPARED = "PREPARED"
-    RUNNING = "RUNNING"
-    COMPLETED = "COMPLETED"
-    REVIEW = "REVIEW"
-    FAILED = "FAILED"
-    BLOCKED = "BLOCKED"
-    INTERRUPTED = "INTERRUPTED"
-    CANCELLED = "CANCELLED"
-    INCOMPLETE = "INCOMPLETE"
-    SKIPPED = "SKIPPED"
-
-
-class DecisionStatus(str, Enum):
-    PASS = "PASS"
-    REVIEW = "REVIEW"
-    FAIL = "FAIL"
-    BLOCKED = "BLOCKED"
-
-
-class FailureType(str, Enum):
-    SUCCESS = "SUCCESS"
-    INPUT_ERROR = "INPUT_ERROR"
-    PROCESS_FAILURE = "PROCESS_FAILURE"
-    TIMEOUT = "TIMEOUT"
-    OUT_OF_MEMORY = "OUT_OF_MEMORY"
-    NODE_FAILURE = "NODE_FAILURE"
-    CANCELLED = "CANCELLED"
-    INTERRUPTED = "INTERRUPTED"
-    TRUNCATED_OUTPUT = "TRUNCATED_OUTPUT"
-    UNKNOWN_WARNING = "UNKNOWN_WARNING"
-    UNKNOWN_FAILURE = "UNKNOWN_FAILURE"
 
 
 @dataclass(frozen=True)

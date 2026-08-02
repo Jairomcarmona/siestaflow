@@ -129,6 +129,10 @@ class RealSiestaSmokePackager:
             "scripts/runtime_parser/siestaflow/engines/siesta/output_parser.py": source_root / "engines/siesta/output_parser.py",
         }.items():
             files[package_path] = source_path.read_bytes()
+        for source_path in sorted((source_root / "contracts").glob("*.py")):
+            files[
+                f"scripts/runtime_parser/siestaflow/contracts/{source_path.name}"
+            ] = source_path.read_bytes()
         for package_path in (
             "scripts/runtime_parser/siestaflow/__init__.py",
             "scripts/runtime_parser/siestaflow/engines/__init__.py",

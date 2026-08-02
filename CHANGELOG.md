@@ -1,5 +1,90 @@
 # Changelog
 
+## Unreleased — governance and roadmap
+
+- Added the Phase 4.1 canonical local adaptive-DAG slice: bounded materialized
+  sweep gates, deterministic min/max selection with provenance and fan-in to a
+  consumer task, all prepared through `run prepare` as hash-bound controller
+  gates. This is not a scientific or remote Phase 4 acceptance.
+- Closed Phase 3 as a technical engineering acceptance after Jairo Carmona's
+  declared human transition acceptance. The dedicated record links the
+  canonical positive run, adversarial evidence, real Slurm signal/recovery and
+  physical placement evidence; it explicitly excludes scientific validation,
+  version promotion, tagging and push.
+- Incorporated raw Yoltla evidence archives for jobs `781106`, `781111`,
+  `781113` and `781115`: full adversarial provenance, real Slurm `SIGUSR1`
+  recovery across allocations, and physical disjoint concurrent `srun`
+  placement. The remaining Phase 3 gate is human transition acceptance.
+- Recorded the independent audit of `cf62127` as `CONDITIONALLY_APPROVED`,
+  narrowed the documented scope of the `781102` interruption and host-set
+  checks, and distinguished retained local package identity from an unavailable
+  remote-upload checksum record.
+- Incorporated sanitized real Yoltla evidence for job `781102`, which completed
+  all five remote adversarial cases with exit `0:0`; remote Phase 3 engineering
+  evidence is complete while formal independent audit and human transition
+  acceptance remain pending.
+- Incorporated sanitized real Yoltla evidence for job `781100`, which completed
+  the canonical four-node parent → SHA-256-bound DM transfer → verified restart
+  child path with exit `0:0`; Phase 3 remains open for its remote adversarial
+  matrix and formal transition audit.
+- Formalized one source tree and the canonical
+  `WorkflowDefinition → workflow.lock.json → run prepare → AllocationController`
+  route while classifying older campaign, preview, smoke and evidence paths.
+- Added proportional Git/review/testing governance, ADR policy, phase acceptance
+  records, traceability requirements and explicit dirty-tree handling.
+- Added the product roadmap and Phase 8 distribution/adoption gate without
+  changing version 0.2.0 or the pending Yoltla Phase 3 status.
+
+## Unreleased — core contracts
+
+- Added engine- and cluster-neutral Core Contracts 1.0 for validation reports,
+  artifact references and transfers, execution requests/evidence, workflow
+  events, and plugin descriptors.
+- Added canonical immutable SHA-256 envelopes, explicit major/minor
+  compatibility, namespaced extensions, strict relative paths, and exact
+  multinode resource invariants.
+- Added an explicit, freezable capability registry for engines, validation
+  rules, launchers, artifact processors, postprocessors, and schedulers.
+- Moved shared task/decision/failure vocabularies into the contract kernel
+  while preserving imports from `siestaflow.models`.
+- Added compatibility adapters for current SIESTA validation/artifact models
+  and allocation-local launcher models.
+- Added the Phase 1 typed workflow DAG contract and deterministic compiler,
+  including fail-closed schema/graph/artifact/resource validation, external
+  input hashes, topological planning, text/Mermaid graphs, and canonical
+  `workflow.lock.json` envelopes.
+- Added the `workflow validate`, `workflow plan`, `workflow graph`, and
+  `workflow compile` CLI commands. Compilation explicitly does not authorize
+  execution.
+- Corrected the Yoltla-observed restart-DM false negative: transferred inputs
+  now have an immutable pre-execution evidence copy, while the working copy may
+  be legitimately replaced by SIESTA and is recorded as a separate output.
+- Added explicit parsing of successful DM restart consumption, allowlisted the
+  SIESTA 5.4.2 `BASIS_ENTHALPY` deprecation warning, and made recovery
+  re-evaluate incomplete historical attempts without repeating valid work.
+- Added the Phase 2 researcher CLI vertical: read-only environment checks,
+  idempotent preparation-only project initialization, and explainable
+  Core-Contract input validation with optional pseudopotential verification.
+- Added a real WSL/Slurm integration sandbox and recorded local acceptance
+  evidence without treating it as Yoltla or scientific validation.
+- Added the initial Phase 6 SIESTA 5.4.2 validation foundation: a versioned,
+  manual-backed rule catalog, strict researcher context profiles, contextual
+  FDF checks, and a Core Contracts rule-provider capability.
+- Added read-only `input rules` and `workflow preflight` commands and extended
+  `input validate` with engine version, context profile, and explainable
+  output controls. Heuristics remain review-only and never authorize runs.
+- Declared the SIESTA JSON registries as wheel package data so installed
+  distributions carry the same keyword and validation catalogs as source
+  checkouts.
+- Added the initial Phase 3 prepared-run adapter and
+  `siestaflow.run-lock@1.0`: workflow locks plus strict external Slurm
+  profiles now produce self-contained controller packages with exact input
+  destinations and hash-bound DAG transfers.
+- Added read-only `run inspect`, `run status`, and `run resume` planning.
+  These commands verify cross-contract identity and never invoke `sbatch`.
+- Added optional output tracking and explicit source-to-destination staging to
+  the allocation controller while retaining schema-1 package compatibility.
+
 ## 0.2.0 consolidation alpha (2026-07-29)
 
 - Added the Yoltla Hydra launcher with explicit hosts, ranks-per-node and a
