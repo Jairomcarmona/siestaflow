@@ -37,6 +37,11 @@ storage implementation.
 | `siestaflow.workflow-lock@1.0` | Resolved, topologically ordered scientific DAG |
 | `siestaflow.run-lock@1.0` | Hash-bound workflow, execution profile, controller campaign, and task identity |
 | `siestaflow.plugin-descriptor@1.0` | Explicit plugin and capability declaration |
+| `siestaflow.scientific-intent@1.0` | User-selected recipe, parameters, resources and metadata |
+| `siestaflow.workflow-definition@1.0` | Canonical pre-lock workflow document |
+| `siestaflow.scientific-artifact@1.0` | Extensible typed scientific artifact with content and provenance hashes |
+| `siestaflow.numerical-profile@1.0` | Numerical settings with provisional or approved authority |
+| `siestaflow.scientific-approval@1.0` | Human decision bound to exact subject and evidence hashes |
 
 `PASS`, `REVIEW`, `BLOCKED`, and `FAIL` are never replaced by booleans.
 
@@ -139,3 +144,6 @@ Every contract change must include:
 6. documentation and changelog entry.
 
 No contract version is raised merely because an implementation changes.
+
+Adding a new contract family to the catalog is additive. It does not reinterpret
+an existing envelope or change the schema of persisted workflow and run locks.

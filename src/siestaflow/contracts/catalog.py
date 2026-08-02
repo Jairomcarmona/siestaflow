@@ -31,6 +31,15 @@ SCIENTIFIC_INTENT = ContractRef(
 WORKFLOW_DEFINITION = ContractRef(
     "siestaflow.workflow-definition", CORE_CONTRACT_VERSION
 )
+SCIENTIFIC_ARTIFACT = ContractRef(
+    "siestaflow.scientific-artifact", CORE_CONTRACT_VERSION
+)
+NUMERICAL_PROFILE = ContractRef(
+    "siestaflow.numerical-profile", CORE_CONTRACT_VERSION
+)
+SCIENTIFIC_APPROVAL = ContractRef(
+    "siestaflow.scientific-approval", CORE_CONTRACT_VERSION
+)
 
 CORE_CONTRACTS = (
     VALIDATION_REPORT,
@@ -43,6 +52,9 @@ CORE_CONTRACTS = (
     PLUGIN_DESCRIPTOR,
     SCIENTIFIC_INTENT,
     WORKFLOW_DEFINITION,
+    SCIENTIFIC_ARTIFACT,
+    NUMERICAL_PROFILE,
+    SCIENTIFIC_APPROVAL,
 )
 
 

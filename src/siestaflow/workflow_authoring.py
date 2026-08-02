@@ -26,6 +26,12 @@ from .contracts import (
 from .project_packages import load_structured
 from .scientific_convergence import MeshConvergenceRule, MeshObservation
 from .scientific_kgrid import KGridConvergenceRule, KGridObservation
+from .workflow_composition import (
+    ArtifactPortContract,
+    RecipePolicy,
+    WorkflowComposer,
+    WorkflowFragment,
+)
 from .workflows import WorkflowCompiler
 
 
@@ -105,6 +111,28 @@ class WorkflowRecipe(Protocol):
     ) -> dict[str, Any]: ...
 
 
+def _compose_single(
+    intent: ScientificIntent,
+    registry: CapabilityRegistry,
+    *,
+    capability_id: str,
+    policy: RecipePolicy,
+) -> dict[str, Any]:
+    registered = registry.resolve(
+        capability_id,
+        required_inputs=(SCIENTIFIC_INTENT,),
+        required_outputs=(WORKFLOW_DEFINITION,),
+    )
+    builder = registered.implementation
+    build_fragment = getattr(builder, "build_fragment", None)
+    if not callable(build_fragment):
+        raise TypeError(f"composable workflow capability cannot build a fragment: {capability_id}")
+    fragment = build_fragment(intent)
+    if not isinstance(fragment, WorkflowFragment):
+        raise TypeError(f"workflow capability returned an invalid fragment: {capability_id}")
+    return WorkflowComposer().compose(intent, policy, (fragment,))
+
+
 def _resources(value: Mapping[str, Any]) -> dict[str, int]:
     expected = {
         "nodes", "mpi_processes", "processes_per_node",
@@ -172,36 +200,33 @@ class MeshEvidenceTaskBuilder:
             "settings": {"rule_id": rule.rule_id},
         }
 
+    def build_fragment(self, intent: ScientificIntent) -> WorkflowFragment:
+        task = self.build_task(intent)
+        observations = intent.parameters["observations"]
+        return WorkflowFragment.single(
+            "mesh-evidence-evaluation", task,
+            input_contracts={
+                "rule": ArtifactPortContract("siestaflow.mesh-convergence-rule", "application/json"),
+                **{
+                    f"observation_{index:03d}": ArtifactPortContract("siestaflow.mesh-observation", "application/json")
+                    for index, _ in enumerate(observations, 1)
+                },
+            },
+        )
+
 
 class MeshEvidenceRecipe:
     def build_workflow(
         self, intent: ScientificIntent, registry: CapabilityRegistry
     ) -> dict[str, Any]:
-        registered = registry.resolve(
-            MESH_EVALUATOR_CAPABILITY,
-            required_inputs=(SCIENTIFIC_INTENT,),
-            required_outputs=(WORKFLOW_DEFINITION,),
+        return _compose_single(
+            intent, registry, capability_id=MESH_EVALUATOR_CAPABILITY,
+            policy=RecipePolicy(
+                MESH_EVALUATION_RECIPE, "1.0.0",
+                "Evaluate hash-bound Mesh.Cutoff convergence evidence",
+                "EVIDENCE_EVALUATION_ONLY",
+            ),
         )
-        builder = registered.implementation
-        if not callable(getattr(builder, "build_task", None)):
-            raise TypeError("mesh evaluator capability cannot build tasks")
-        task = builder.build_task(intent)
-        return {
-            "schema_version": "1.0",
-            "workflow_id": intent.intent_id,
-            "project_id": intent.project_id,
-            "description": "Evaluate hash-bound Mesh.Cutoff convergence evidence",
-            "metadata": {
-                **dict(intent.metadata),
-                "intent_sha256": intent.sha256,
-                "recipe_id": MESH_EVALUATION_RECIPE,
-                "recipe_version": "1.0.0",
-                "scientific_scope": "EVIDENCE_EVALUATION_ONLY",
-                "execution_authorized": False,
-                "final_authority": "HUMAN_REVIEW",
-            },
-            "tasks": [task],
-        }
 
 
 class KGridEvidenceTaskBuilder:
@@ -252,36 +277,33 @@ class KGridEvidenceTaskBuilder:
             "settings": {"rule_id": rule.rule_id},
         }
 
+    def build_fragment(self, intent: ScientificIntent) -> WorkflowFragment:
+        task = self.build_task(intent)
+        observations = intent.parameters["observations"]
+        return WorkflowFragment.single(
+            "kgrid-evidence-evaluation", task,
+            input_contracts={
+                "rule": ArtifactPortContract("siestaflow.kgrid-convergence-rule", "application/json"),
+                **{
+                    f"observation_{index:03d}": ArtifactPortContract("siestaflow.kgrid-observation", "application/json")
+                    for index, _ in enumerate(observations, 1)
+                },
+            },
+        )
+
 
 class KGridEvidenceRecipe:
     def build_workflow(
         self, intent: ScientificIntent, registry: CapabilityRegistry
     ) -> dict[str, Any]:
-        registered = registry.resolve(
-            KGRID_EVALUATOR_CAPABILITY,
-            required_inputs=(SCIENTIFIC_INTENT,),
-            required_outputs=(WORKFLOW_DEFINITION,),
+        return _compose_single(
+            intent, registry, capability_id=KGRID_EVALUATOR_CAPABILITY,
+            policy=RecipePolicy(
+                KGRID_EVALUATION_RECIPE, "1.0.0",
+                "Evaluate hash-bound k-grid convergence evidence",
+                "EVIDENCE_EVALUATION_ONLY",
+            ),
         )
-        builder = registered.implementation
-        if not callable(getattr(builder, "build_task", None)):
-            raise TypeError("k-grid evaluator capability cannot build tasks")
-        task = builder.build_task(intent)
-        return {
-            "schema_version": "1.0",
-            "workflow_id": intent.intent_id,
-            "project_id": intent.project_id,
-            "description": "Evaluate hash-bound k-grid convergence evidence",
-            "metadata": {
-                **dict(intent.metadata),
-                "intent_sha256": intent.sha256,
-                "recipe_id": KGRID_EVALUATION_RECIPE,
-                "recipe_version": "1.0.0",
-                "scientific_scope": "EVIDENCE_EVALUATION_ONLY",
-                "execution_authorized": False,
-                "final_authority": "HUMAN_REVIEW",
-            },
-            "tasks": [task],
-        }
 
 
 class ObservationProducerTaskBuilder:
@@ -314,6 +336,18 @@ class ObservationProducerTaskBuilder:
             "settings": {"axis": axis, "observation_id": observation_id},
         }
 
+    def build_fragment(self, intent: ScientificIntent) -> WorkflowFragment:
+        task = self.build_task(intent)
+        return WorkflowFragment.single(
+            "observation-production", task,
+            input_contracts={
+                "fdf": ArtifactPortContract("siestaflow.siesta-fdf", "application/x-siesta-fdf"),
+                "stdout": ArtifactPortContract("siestaflow.siesta-stdout", "text/plain"),
+                "force_stress": ArtifactPortContract("siestaflow.siesta-force-stress", "text/plain"),
+                "pseudopotential_manifest": ArtifactPortContract("siestaflow.pseudopotential-manifest", "application/json"),
+            },
+        )
+
     @staticmethod
     def _id(value: object, *, field: str) -> str:
         return _relative(value, field=field).replace("/", "-")
@@ -321,18 +355,14 @@ class ObservationProducerTaskBuilder:
 
 class ObservationProductionRecipe:
     def build_workflow(self, intent: ScientificIntent, registry: CapabilityRegistry) -> dict[str, Any]:
-        registered = registry.resolve(OBSERVATION_PRODUCER_CAPABILITY, required_inputs=(SCIENTIFIC_INTENT,), required_outputs=(WORKFLOW_DEFINITION,))
-        task = registered.implementation.build_task(intent)
-        return {
-            "schema_version": "1.0", "workflow_id": intent.intent_id,
-            "project_id": intent.project_id,
-            "description": "Produce a hash-bound observation from completed SIESTA artifacts",
-            "metadata": {**dict(intent.metadata), "intent_sha256": intent.sha256,
-                         "recipe_id": OBSERVATION_PRODUCTION_RECIPE, "recipe_version": "1.0.0",
-                         "scientific_scope": "POSTPROCESSING_ONLY", "execution_authorized": False,
-                         "final_authority": "HUMAN_REVIEW"},
-            "tasks": [task],
-        }
+        return _compose_single(
+            intent, registry, capability_id=OBSERVATION_PRODUCER_CAPABILITY,
+            policy=RecipePolicy(
+                OBSERVATION_PRODUCTION_RECIPE, "1.0.0",
+                "Produce a hash-bound observation from completed SIESTA artifacts",
+                "POSTPROCESSING_ONLY",
+            ),
+        )
 
 
 def builtin_authoring_registry() -> CapabilityRegistry:

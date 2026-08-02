@@ -155,6 +155,32 @@ recomendación trazable, nunca una aceptación científica automática. La
 propagación del parámetro a un DAG posterior exige una decisión humana
 persistida y vinculada a los hashes evaluados.
 
+### 7.2 Composición manual y ciclos científicos
+
+La unidad de extensión científica es un fragmento de workflow con puertos de
+artefacto tipados. La selección del usuario compone cero rutas implícitas: sólo
+los fragmentos solicitados aparecen en el `WorkflowDefinition`. Deben poder
+representarse, como mínimo, una operación aislada, una selección parcial y un
+ciclo encadenado con fan-out posterior.
+
+El compositor es agnóstico al material, al motor y a la lista futura de
+análisis. No contiene nombres de proyectos, especies, pseudopotenciales,
+cutoffs, grillas ni módulos científicos cerrados. Las capacidades declaran sus
+entradas y salidas mediante identificadores namespaced; una conexión con tipos
+incompatibles se rechaza antes de compilar.
+
+Una relajación no exige haber ejecutado convergencia dentro del mismo ciclo.
+Sí exige un perfil numérico declarado y hash-bound, cuya autoridad sea
+`PROVISIONAL` o `APPROVED`. La primera opción conserva la libertad exploratoria
+del investigador sin afirmar convergencia; la segunda requiere una aprobación
+humana enlazada a sujeto y evidencia.
+
+Los ciclos que atraviesan una decisión humana se materializan en locks por
+etapas. Ninguna recomendación modifica un lock activo ni autoriza por sí misma
+la siguiente etapa. La interfaz puede presentar el recorrido como un solo ciclo
+de usuario, pero cada ejecución deriva de un lock inmutable por la ruta
+canónica.
+
 ## 8. Descubrimiento de entornos HPC
 
 El descubrimiento sigue una promoción explícita:

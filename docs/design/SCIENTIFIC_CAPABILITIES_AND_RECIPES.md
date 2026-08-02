@@ -19,6 +19,17 @@ módulos que necesiten un runtime nuevo se conectan allí sin añadir condicione
 al recorrido central; las capacidades que reutilicen el adaptador SIESTA o un
 gate existente no necesitan uno nuevo.
 
+`WorkflowComposer` combina fragmentos seleccionados por el usuario y conserva
+en metadata los contratos de cada puerto y conexión. Puede materializar una
+operación aislada, una selección parcial o un ciclo con fan-out sin cambiar el
+compilador. Los tipos de artefacto son identificadores namespaced abiertos; no
+existe una enumeración cerrada de materiales o análisis.
+
+Un fragmento consumidor sólo puede conectarse si su contrato coincide con el
+artefacto producido. Por ejemplo, un consumidor de `siestaflow.ground-state`
+no acepta silenciosamente `siestaflow.relaxed-structure`. Esta validación ocurre
+antes de generar el lock y se repite mediante las reglas ordinarias del DAG.
+
 ## CLI inicial
 
 ```text

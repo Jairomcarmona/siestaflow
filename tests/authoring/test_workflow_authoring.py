@@ -170,6 +170,9 @@ def test_application_builds_a_canonical_deterministic_workflow(tmp_path: Path) -
     assert task.kind.value == "validation"
     assert len(task.inputs) == 5
     assert first.compiled.metadata["final_authority"] == "HUMAN_REVIEW"  # type: ignore[union-attr]
+    composition = first.compiled.metadata["composition"]  # type: ignore[union-attr]
+    assert composition["fragments"] == ["mesh-evidence-evaluation"]
+    assert all(item["artifact_type"].startswith("siestaflow.") for item in composition["ports"])
 
 
 def test_observation_producer_recipe_builds_a_canonical_postprocess_node(tmp_path: Path) -> None:
@@ -192,6 +195,7 @@ def test_observation_producer_recipe_builds_a_canonical_postprocess_node(tmp_pat
     assert task.kind.value == "postprocess"
     assert task.capability_id == OBSERVATION_PRODUCER_CAPABILITY
     assert task.outputs[0].artifact_type == "siestaflow.mesh-observation"
+    assert compilation.compiled.metadata["composition"]["fragments"] == ["observation-production"]  # type: ignore[union-attr]
 
 
 def test_cli_lists_describes_and_creates_recipe_workflow(tmp_path: Path, capsys) -> None:
