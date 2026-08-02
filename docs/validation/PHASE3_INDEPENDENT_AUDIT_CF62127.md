@@ -1,6 +1,6 @@
 # Independent Phase 3 audit — commit cf62127
 
-Status: `CONDITIONALLY_APPROVED`.
+Status: `CONDITIONALLY_APPROVED / REMEDIATIONS_EVIDENCED`.
 
 An independent ChatGPT session audited the archive built from commit
 `cf621278d994d0896b9882033b3aea8a0307078c`, the complete post-execution
@@ -32,14 +32,17 @@ contracts, version or tags in `cf62127`.
 
 | Finding | Disposition |
 | --- | --- |
-| No raw immutable post-execution ZIP for `781102` | Explicitly recorded as a provenance limitation; it cannot be reconstructed. |
-| Interruption was injected and resumed inside one allocation | Documentation narrowed; no Slurm-signal or cross-allocation claim remains. |
-| Disjoint hosts used ScriptedLauncher | Documentation narrowed; no physical MPI-placement claim remains. |
+| No raw immutable post-execution ZIP for `781102` | Superseded for acceptance coverage by raw matrix archive `781106`, with `OUT`, `ERROR`, state, case evidence, accounting and hash manifest. |
+| Interruption was injected and resumed inside one allocation | Supplemented by real `SIGUSR1` job `781111` and resume in distinct allocation `781113`. |
+| Disjoint hosts used ScriptedLauncher | Supplemented by concurrent physical `srun` steps in job `781115`. |
 | Original `781100` prepared ZIP was absent from the first audit archive | Retained local prepared ZIP located and hash recalculated; absent remote-upload checksum remains explicit. |
 | `781102` stderr-empty assertion lacked a fixture | Assertion removed. |
 
 The full audit recommends an identified human decision only after these limits
 are read and accepted. It does not establish scientific validity.
+
+The remediation evidence is recorded in
+[`PHASE3_YOLTLA_AUDIT_REMEDIATIONS_781106_781115.md`](PHASE3_YOLTLA_AUDIT_REMEDIATIONS_781106_781115.md).
 
 ## Remaining gate
 

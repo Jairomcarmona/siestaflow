@@ -2,6 +2,10 @@
 
 ## Unreleased — governance and roadmap
 
+- Incorporated raw Yoltla evidence archives for jobs `781106`, `781111`,
+  `781113` and `781115`: full adversarial provenance, real Slurm `SIGUSR1`
+  recovery across allocations, and physical disjoint concurrent `srun`
+  placement. The remaining Phase 3 gate is human transition acceptance.
 - Recorded the independent audit of `cf62127` as `CONDITIONALLY_APPROVED`,
   narrowed the documented scope of the `781102` interruption and host-set
   checks, and distinguished retained local package identity from an unavailable

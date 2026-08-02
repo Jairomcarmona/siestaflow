@@ -2,7 +2,7 @@
 
 Fecha de corte documental: 2026-08-01
 
-Estado: `REMOTE_EVIDENCE_CONDITIONALLY_APPROVED / HUMAN_DECISION_PENDING`
+Estado: `REMOTE_RUNTIME_DEBT_REMEDIATED / HUMAN_DECISION_PENDING`
 
 Este estado es vinculante hasta que exista un expediente remoto canónico. La
 arquitectura estable está en
@@ -68,11 +68,11 @@ disjuntos para tareas independientes. El expediente está en
 [`PHASE3_YOLTLA_ADVERSARIAL_MATRIX_781102.md`](../validation/PHASE3_YOLTLA_ADVERSARIAL_MATRIX_781102.md).
 
 La auditoría independiente del commit `cf62127` emitió
-`CONDITIONALLY_APPROVED`. La evidencia remota de ingeniería requerida está
-completa entre los jobs `781100` y `781102`, con límites explícitos de
-procedencia para `781102` y de alcance para recuperación/colocación. La Fase 3
-todavía no se declara cerrada: queda la decisión humana identificada de la
-transición. El dictamen está en
+`CONDITIONALLY_APPROVED`. Sus límites de runtime se remediaron con evidencia
+bruta de la matriz `781106`, señal Slurm real y nueva asignación `781111` /
+`781113`, y colocación física `srun` `781115`. La Fase 3 todavía no se declara
+cerrada: queda la decisión humana identificada de la transición. El dictamen
+está en
 [`PHASE3_INDEPENDENT_AUDIT_CF62127.md`](../validation/PHASE3_INDEPENDENT_AUDIT_CF62127.md).
 
 ## Empaquetado y trazabilidad

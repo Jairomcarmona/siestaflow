@@ -63,6 +63,9 @@ structured matrix result under
 [`tests/fixtures/phase3/yoltla_job_781102/`](../../tests/fixtures/phase3/yoltla_job_781102/).
 The original post-execution remote directory, including raw `OUT`, `ERROR`,
 case-state and event files, was not retained as an immutable evidence ZIP.
+Job `781106` subsequently repeated the matrix with a complete raw immutable
+post-job archive; see
+[`PHASE3_YOLTLA_AUDIT_REMEDIATIONS_781106_781115.md`](PHASE3_YOLTLA_AUDIT_REMEDIATIONS_781106_781115.md).
 
 Together, jobs `781100` and `781102` provide the positive and adversarial
 remote engineering evidence, conditionally approved by the independent audit

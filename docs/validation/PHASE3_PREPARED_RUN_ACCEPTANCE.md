@@ -1,6 +1,6 @@
 # Phase 3 prepared-run vertical acceptance
 
-Status: `REMOTE_EVIDENCE_CONDITIONALLY_APPROVED_HUMAN_DECISION_PENDING`.
+Status: `REMOTE_RUNTIME_DEBT_REMEDIATED_HUMAN_DECISION_PENDING`.
 
 The implemented slice connects the deterministic workflow DAG to the existing
 persistent-allocation controller without granting execution authority.
@@ -53,11 +53,13 @@ The adversarial record is
 [`PHASE3_YOLTLA_ADVERSARIAL_MATRIX_781102.md`](PHASE3_YOLTLA_ADVERSARIAL_MATRIX_781102.md).
 Its independent audit is
 [`PHASE3_INDEPENDENT_AUDIT_CF62127.md`](PHASE3_INDEPENDENT_AUDIT_CF62127.md).
+The remediation record is
+[`PHASE3_YOLTLA_AUDIT_REMEDIATIONS_781106_781115.md`](PHASE3_YOLTLA_AUDIT_REMEDIATIONS_781106_781115.md).
 
 Not yet accepted:
 
 - formal Phase 3 transition pending identified human acceptance of the
-  conditionally approved evidence;
+  remediated technical evidence;
 - execution adapters for non-SIESTA task capabilities;
 - automatic scheduler submission or queue selection;
 - automatic scientific parameter selection;
@@ -82,5 +84,6 @@ Neither mode executes `sbatch`; unknown authorization stays visible for remote
 `sbatch --test-only` review.
 
 The feature remains within version `0.2.0`. Positive and adversarial remote
-engineering evidence are conditionally approved; the complete phase remains
-open until human phase-transition acceptance is recorded.
+engineering evidence have remediated their identified runtime debt; the
+complete phase remains open until human phase-transition acceptance is
+recorded.

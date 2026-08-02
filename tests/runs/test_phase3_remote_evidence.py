@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from pathlib import Path
+import zipfile
 
 
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "phase3"
@@ -74,3 +76,47 @@ def test_yoltla_job_781102_proves_remote_adversarial_matrix() -> None:
     assert set(independent["left"]).isdisjoint(independent["right"])
     assert "PHASE3_ADVERSARIAL_MATRIX_PACKAGE_VERIFIED" in stdout
     assert "NO_SCIENTIFIC_CALCULATION_CONFIGURED" in stdout
+
+
+def test_yoltla_audit_remediation_archives_are_hash_bound_and_complete() -> None:
+    evidence = FIXTURES / "yoltla_audit_remediations"
+    expected = {
+        "phase3-adversarial-evidence-781106.zip": "e5cadf9d20efd8df31807a1ad194e5fda3a8d8daba00975edf627f89c9f9055e",
+        "phase3-signal-resume-781111-781113-evidence.zip": "a094c30505783763969e4bc6f148a9a35ccb456cfc5495716687ed857556bc8e",
+        "phase3-physical-placement-781115.zip": "cea352bd517b3d0e3b890f7574c265b5760dcb8023933d3ceec68778c73aa1f0",
+    }
+    for name, digest in expected.items():
+        assert hashlib.sha256((evidence / name).read_bytes()).hexdigest() == digest
+
+    with zipfile.ZipFile(evidence / "phase3-adversarial-evidence-781106.zip") as archive:
+        manifest = json.loads(archive.read("evidence/manifest-781106.json"))["files"]
+        assert all(hashlib.sha256(archive.read(name)).hexdigest() == digest for name, digest in manifest.items())
+        report = json.loads(archive.read("results/phase3_adversarial_matrix.json"))
+        assert report["job_id"] == "781106" and report["status"] == "PASS"
+        assert all(case["status"] == "PASS" for case in report["cases"].values())
+
+    with zipfile.ZipFile(evidence / "phase3-signal-resume-781111-781113-evidence.zip") as archive:
+        manifest = archive.read("evidence/manifest-781111-781113.sha256").decode().splitlines()
+        for line in manifest:
+            expected_hash, name = line.split("  ", 1)
+            assert hashlib.sha256(archive.read(name)).hexdigest() == expected_hash
+        first = json.loads(archive.read("results/signal_resume_interrupt.json"))
+        resumed = json.loads(archive.read("results/signal_resume_resume.json"))
+        summary = json.loads(archive.read("results/campaign_summary.json"))
+        accounting = archive.read("evidence/slurm-sacct-781111-781113.txt").decode()
+        assert first["status"] == "INTERRUPTED" and resumed["status"] == "COMPLETED"
+        assert summary["tasks"]["signal_target"]["attempts"] == 2
+        assert '"event":"SHUTDOWN_SIGNAL"' in archive.read("evidence/events.jsonl").decode()
+        assert "781111        COMPLETED      0:0" in accounting
+        assert "781113        COMPLETED      0:0" in accounting
+
+    with zipfile.ZipFile(evidence / "phase3-physical-placement-781115.zip") as archive:
+        manifest = archive.read("evidence/manifest-781115.sha256").decode().splitlines()
+        for line in manifest:
+            expected_hash, name = line.split("  ", 1)
+            assert hashlib.sha256(archive.read(name)).hexdigest() == expected_hash
+        placement = archive.read("results/physical_placement.txt").decode()
+        accounting = archive.read("evidence/slurm-sacct-781115.txt").decode()
+        assert "left_observed=tt30,tt31" in placement and "right_observed=tt32,tt33" in placement
+        assert "781115.0      COMPLETED      0:0" in accounting
+        assert "781115.1      COMPLETED      0:0" in accounting
