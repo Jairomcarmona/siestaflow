@@ -21,6 +21,8 @@ from siestaflow.workflow_authoring import (
     DOS_PDOS_RECIPE,
     GROUND_STATE_TO_DOS_PDOS_CAPABILITY,
     GROUND_STATE_TO_DOS_PDOS_RECIPE,
+    GROUND_STATE_TO_ELECTRONIC_ANALYSIS_CAPABILITY,
+    GROUND_STATE_TO_ELECTRONIC_ANALYSIS_RECIPE,
     KGRID_EVALUATION_RECIPE,
     KGRID_EVALUATOR_CAPABILITY,
     MESH_EVALUATION_RECIPE,
@@ -257,6 +259,43 @@ def ground_state_to_dos_pdos_source(root: Path) -> tuple[Path, Path]:
     return intent, root / "ground-state-dos-pdos-workflow.json"
 
 
+def ground_state_to_electronic_analysis_source(root: Path) -> tuple[Path, Path]:
+    _, _ = ground_state_to_dos_pdos_source(root)
+    dos = root / "dos-pdos.fdf"
+    base = dos.read_text(encoding="utf-8")
+    analysis_block = "%block ProjectedDensityOfStates\n  EF -10.0 10.0 0.20 301 eV\n%endblock ProjectedDensityOfStates\n"
+    common = base.replace(analysis_block, "").replace("DM.UseSaveDM T\n", "")
+    (root / "bands.fdf").write_text(
+        common.replace("SystemLabel dos_local", "SystemLabel bands_local")
+        + "BandLinesScale ReciprocalLatticeVectors\n"
+        + "%block BandLines\n  1 0.0 0.0 0.0 Gamma\n  4 0.5 0.0 0.0 X\n%endblock BandLines\n"
+        + "DM.UseSaveDM T\n",
+        encoding="utf-8", newline="\n",
+    )
+    (root / "optics.fdf").write_text(
+        common.replace("SystemLabel dos_local", "SystemLabel optics_local")
+        + "OpticalCalculation T\nOptical.Energy.Minimum 0.0 eV\n"
+        + "Optical.Energy.Maximum 5.0 eV\nOptical.Broaden 0.2 eV\n"
+        + "Optical.NumberOfBands 4\nOptical.PolarizationType polycrystal\n"
+        + "%block Optical.Mesh\n  1 1 1\n%endblock Optical.Mesh\nDM.UseSaveDM T\n",
+        encoding="utf-8", newline="\n",
+    )
+    intent = root / "electronic-analysis-intent.json"
+    write_json(intent, {
+        "schema_version": "1.0", "intent_id": "electronic-analysis-local",
+        "project_id": "test-project", "recipe": GROUND_STATE_TO_ELECTRONIC_ANALYSIS_RECIPE,
+        "parameters": {
+            "ground_state_fdf": "ground-state.fdf", "dos_pdos_fdf": "dos-pdos.fdf",
+            "bands_fdf": "bands.fdf", "optics_fdf": "optics.fdf",
+            "pseudopotentials": [{"source": "C.psml", "destination": "C.psml"}],
+        },
+        "resources": {"nodes": 1, "mpi_processes": 1, "processes_per_node": 1,
+                      "cpus_per_process": 1, "walltime_seconds": 60},
+        "metadata": {"classification": "TECHNICAL_CLI_INTEGRATION_ACCEPTANCE"},
+    })
+    return intent, root / "electronic-analysis-workflow.json"
+
+
 def approved_mesh_contracts(root: Path) -> tuple[Path, Path, Path]:
     source_intent, _ = authoring_source(root)
     raw = json.loads(source_intent.read_text(encoding="utf-8"))
@@ -378,7 +417,8 @@ def test_registry_exposes_recipe_and_builder_without_global_discovery() -> None:
     service = WorkflowAuthoringService()
     assert [item["recipe_id"] for item in service.recipes()] == [
         SCIENTIFIC_COMPOSITION_RECIPE, BAND_STRUCTURE_RECIPE, CONVERGE_THEN_RELAX_RECIPE, DOS_PDOS_RECIPE,
-        GROUND_STATE_TO_DOS_PDOS_RECIPE, KGRID_EVALUATION_RECIPE,
+        GROUND_STATE_TO_DOS_PDOS_RECIPE, GROUND_STATE_TO_ELECTRONIC_ANALYSIS_RECIPE,
+        KGRID_EVALUATION_RECIPE,
         MESH_EVALUATION_RECIPE, OBSERVATION_PRODUCTION_RECIPE, OPTICAL_SPECTRUM_RECIPE, STRUCTURAL_RELAXATION_RECIPE,
     ]
     detail = service.recipe(MESH_EVALUATION_RECIPE)
@@ -386,6 +426,7 @@ def test_registry_exposes_recipe_and_builder_without_global_discovery() -> None:
     assert detail["metadata"]["runs_engine"] is False
     assert service.recipe(DOS_PDOS_RECIPE)["metadata"]["requires"] == [DOS_PDOS_CAPABILITY]
     assert service.recipe(GROUND_STATE_TO_DOS_PDOS_RECIPE)["metadata"]["requires"] == [GROUND_STATE_TO_DOS_PDOS_CAPABILITY]
+    assert service.recipe(GROUND_STATE_TO_ELECTRONIC_ANALYSIS_RECIPE)["metadata"]["requires"] == [GROUND_STATE_TO_ELECTRONIC_ANALYSIS_CAPABILITY]
     preparer = RunPreparer(REPO)
     assert preparer.task_adapter_ids == (
         KGRID_EVALUATOR_CAPABILITY, MESH_EVALUATOR_CAPABILITY, OBSERVATION_PRODUCER_CAPABILITY,
@@ -614,6 +655,44 @@ def test_ground_state_to_dos_pdos_transfers_only_hash_bound_dm(tmp_path: Path) -
     }]
 
 
+def test_electronic_analysis_recipe_fans_one_dm_into_three_cli_modules(tmp_path: Path) -> None:
+    intent, definition = ground_state_to_electronic_analysis_source(tmp_path)
+    result = WorkflowAuthoringService().create_definition(intent, definition)
+    assert result["recipe_id"] == GROUND_STATE_TO_ELECTRONIC_ANALYSIS_RECIPE
+    compilation = WorkflowCompiler().compile(definition)
+    assert compilation.valid
+    tasks = {task.task_id: task for task in compilation.compiled.tasks}  # type: ignore[union-attr]
+    assert tuple(tasks) == ("ground_state", "bands", "dos_pdos", "optics")
+    for task_id, label in (("dos_pdos", "dos_local"), ("bands", "bands_local"), ("optics", "optics_local")):
+        assert tasks[task_id].dependencies == ("ground_state",)
+        binding = next(item for item in tasks[task_id].inputs if item.name == "ground_state_dm")
+        assert (binding.source_task_id, binding.source_output_name, binding.destination) == (
+            "ground_state", "density_matrix", f"{label}.DM",
+        )
+    lock = tmp_path / "workflow.lock.json"
+    write_workflow_lock(compilation, lock)
+    prepared = RunPreparer(REPO).prepare(RunPreparationRequest(
+        workflow_lock=lock, source_root=tmp_path, execution_profile=profile(tmp_path),
+        output_root=tmp_path / "packages", run_id="electronic-analysis-local",
+    ))
+    campaign = json.loads((Path(prepared.package_path) / "campaign.yaml").read_text(encoding="utf-8"))
+    for task in campaign["tasks"][1:]:
+        assert task["transfers"][0]["from_task"] == "ground_state"
+        assert task["transfers"][0]["artifact"] == "ground_local.DM"
+
+
+def test_electronic_analysis_rejects_missing_dm_restart_or_changed_identity(tmp_path: Path) -> None:
+    intent, definition = ground_state_to_electronic_analysis_source(tmp_path)
+    optics = tmp_path / "optics.fdf"
+    optics.write_text(optics.read_text(encoding="utf-8").replace("DM.UseSaveDM T\n", ""), encoding="utf-8", newline="\n")
+    with pytest.raises(ValueError, match="DM.UseSaveDM"):
+        WorkflowAuthoringService().create_definition(intent, definition)
+    optics.write_text(optics.read_text(encoding="utf-8") + "DM.UseSaveDM T\n", encoding="utf-8", newline="\n")
+    optics.write_text(optics.read_text(encoding="utf-8").replace("NetCharge 0", "NetCharge 1"), encoding="utf-8", newline="\n")
+    with pytest.raises(ValueError, match="restart-compatible"):
+        WorkflowAuthoringService().create_definition(intent, definition)
+
+
 def test_ground_state_to_dos_pdos_rejects_missing_restart_or_changed_scientific_input(tmp_path: Path) -> None:
     intent, definition = ground_state_to_dos_pdos_source(tmp_path)
     child = tmp_path / "dos-pdos.fdf"
@@ -730,7 +809,8 @@ def test_cli_lists_describes_and_creates_recipe_workflow(tmp_path: Path, capsys)
     assert main(["workflow", "recipes", "--json"]) == 0
     assert [item["recipe_id"] for item in json.loads(capsys.readouterr().out)["recipes"]] == [
         SCIENTIFIC_COMPOSITION_RECIPE, BAND_STRUCTURE_RECIPE, CONVERGE_THEN_RELAX_RECIPE, DOS_PDOS_RECIPE,
-        GROUND_STATE_TO_DOS_PDOS_RECIPE, KGRID_EVALUATION_RECIPE,
+        GROUND_STATE_TO_DOS_PDOS_RECIPE, GROUND_STATE_TO_ELECTRONIC_ANALYSIS_RECIPE,
+        KGRID_EVALUATION_RECIPE,
         MESH_EVALUATION_RECIPE, OBSERVATION_PRODUCTION_RECIPE, OPTICAL_SPECTRUM_RECIPE, STRUCTURAL_RELAXATION_RECIPE,
     ]
     assert main(["workflow", "recipe", MESH_EVALUATION_RECIPE, "--json"]) == 0

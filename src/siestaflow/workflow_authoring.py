@@ -58,6 +58,8 @@ BAND_STRUCTURE_CAPABILITY = "siestaflow.siesta.band-structure"
 BAND_STRUCTURE_RECIPE = "siestaflow.recipe.siesta.band-structure"
 OPTICAL_SPECTRUM_CAPABILITY = "siestaflow.siesta.optical-spectrum"
 OPTICAL_SPECTRUM_RECIPE = "siestaflow.recipe.siesta.optical-spectrum"
+GROUND_STATE_TO_ELECTRONIC_ANALYSIS_CAPABILITY = "siestaflow.siesta.ground-state-to-electronic-analysis"
+GROUND_STATE_TO_ELECTRONIC_ANALYSIS_RECIPE = "siestaflow.recipe.siesta.ground-state-to-electronic-analysis"
 
 
 def _relative(raw: object, *, field: str) -> str:
@@ -960,11 +962,11 @@ def _restart_identity(path: Path) -> str:
     other normalized FDF line remains bound, so a geometry, pseudo label, XC,
     basis, mesh or SCF change is rejected before a package is written.
     """
-    excluded_scalars = {"systemname", "systemlabel", "dm.usesavedm"}
-    excluded_prefixes = ("md.",)
+    excluded_scalars = {"systemname", "systemlabel", "dm.usesavedm", "bandlinesscale", "opticalcalculation"}
+    excluded_prefixes = ("md.", "optical.")
     excluded_blocks = {
         "projecteddensityofstates", "pdos.kgrid.monkhorstpack",
-        "dos.kgrid.monkhorstpack",
+        "dos.kgrid.monkhorstpack", "bandlines", "bandpoints", "optical.mesh", "optical.vector",
     }
     output: list[str] = []
     skipping_block: str | None = None
@@ -1170,6 +1172,123 @@ class GroundStateToDOSPDOSRecipe:
                 "Run a hash-bound SIESTA ground-state to DOS/PDOS continuation",
                 "ELECTRONIC_STATE_CONTINUATION_DENSITY_OF_STATES",
             ),
+        )
+
+
+class GroundStateToElectronicAnalysisTaskBuilder:
+    """Fan out one verified SCF density matrix into three analysis tasks."""
+
+    _PARAMETERS = {"ground_state_fdf", "dos_pdos_fdf", "bands_fdf", "optics_fdf", "pseudopotentials"}
+
+    def build_task(self, intent: ScientificIntent) -> dict[str, Any]:
+        raise NotImplementedError("ground-state-to-electronic-analysis is a multi-task recipe")
+
+    def build_workflow(self, intent: ScientificIntent, registry: CapabilityRegistry) -> dict[str, Any]:
+        if set(intent.parameters) != self._PARAMETERS:
+            raise ValueError(
+                "ground_state_to_electronic_analysis requires four FDFs and pseudopotentials"
+            )
+        root = intent.source.parent
+        fdf_keys = ("ground_state_fdf", "dos_pdos_fdf", "bands_fdf", "optics_fdf")
+        relative = {
+            key: _relative(intent.parameters[key], field=f"parameters.{key}")
+            for key in fdf_keys
+        }
+        paths = {
+            key: root / Path(*PurePosixPath(value).parts)
+            for key, value in relative.items()
+        }
+        if not all(path.is_file() for path in paths.values()):
+            raise ValueError("ground_state_to_electronic_analysis FDF input is missing")
+        parent_label, expected_pseudos = GroundStateToDOSPDOSTaskBuilder._ground_state_spec(
+            paths["ground_state_fdf"]
+        )
+        specs = {
+            "dos_pdos": (
+                DOSPDOSTaskBuilder._analysis_spec(paths["dos_pdos_fdf"]),
+                "dos-pdos.fdf",
+                (
+                    ("total_dos", ".DOS", "siestaflow.total-density-of-states"),
+                    ("projected_dos", ".PDOS", "siestaflow.projected-density-of-states"),
+                ),
+            ),
+            "bands": (
+                BandStructureTaskBuilder._band_spec(paths["bands_fdf"]),
+                "bands.fdf",
+                (("band_structure", ".bands", "siestaflow.band-structure"),),
+            ),
+            "optics": (
+                OpticalSpectrumTaskBuilder._optical_spec(paths["optics_fdf"]),
+                "optics.fdf",
+                (("imaginary_dielectric", ".EPSIMG", "siestaflow.imaginary-dielectric-function"),),
+            ),
+        }
+        restart_identity = _restart_identity(paths["ground_state_fdf"])
+        for task_id, (spec, _, _) in specs.items():
+            child_path = paths[f"{task_id}_fdf"]
+            restart = FDFParser().parse_path(child_path).scalars("DM.UseSaveDM")
+            if len(restart) != 1 or restart[0].value.casefold() not in {"t", "true"}:
+                raise ValueError(f"{task_id} restart FDF requires explicit DM.UseSaveDM T")
+            if spec[1] != expected_pseudos or _restart_identity(child_path) != restart_identity:
+                raise ValueError(f"ground-state and {task_id} FDFs are not restart-compatible")
+        pseudos = GroundStateToDOSPDOSTaskBuilder._pseudopotentials(
+            intent, expected_pseudos
+        )
+        resources = _resources(intent.resources)
+        parent_inputs, _ = GroundStateToDOSPDOSTaskBuilder._inputs(
+            root, relative["ground_state_fdf"], "ground-state.fdf", pseudos
+        )
+        tasks = [{
+            "task_id": "ground_state", "kind": "calculation",
+            "capability": "siestaflow.engine.siesta", "inputs": parent_inputs,
+            "outputs": [{
+                "name": "density_matrix", "path": f"{parent_label}.DM",
+                "artifact_type": "siestaflow.siesta-density-matrix",
+                "media_type": "application/octet-stream", "required": True,
+            }],
+            "resources": resources, "settings": {},
+        }]
+        for task_id, (spec, destination, outputs) in specs.items():
+            label, _ = spec
+            inputs, _ = GroundStateToDOSPDOSTaskBuilder._inputs(
+                root, relative[f"{task_id}_fdf"], destination, pseudos
+            )
+            inputs.append({
+                "name": "ground_state_dm",
+                "from": {"task": "ground_state", "output": "density_matrix"},
+                "destination": f"{label}.DM", "media_type": "application/octet-stream",
+            })
+            tasks.append({
+                "task_id": task_id, "kind": "calculation",
+                "capability": "siestaflow.engine.siesta", "depends_on": ["ground_state"],
+                "inputs": inputs,
+                "outputs": [{
+                    "name": name, "path": f"{label}{suffix}",
+                    "artifact_type": artifact_type, "media_type": "text/plain",
+                    "required": True,
+                } for name, suffix, artifact_type in outputs],
+                "resources": resources, "settings": {},
+            })
+        return {
+            "schema_version": "1.0", "workflow_id": intent.intent_id,
+            "project_id": intent.project_id,
+            "description": "Hash-bound SIESTA SCF fan-out into DOS/PDOS, bands and optics",
+            "metadata": {
+                **dict(intent.metadata),
+                "recipe_id": GROUND_STATE_TO_ELECTRONIC_ANALYSIS_RECIPE,
+                "execution_authorized": False,
+                "restart_identity_sha256": restart_identity,
+            },
+            "tasks": tasks,
+        }
+
+
+class GroundStateToElectronicAnalysisRecipe:
+    def build_workflow(
+        self, intent: ScientificIntent, registry: CapabilityRegistry
+    ) -> dict[str, Any]:
+        return GroundStateToElectronicAnalysisTaskBuilder().build_workflow(
+            intent, registry
         )
 
 
@@ -1464,6 +1583,26 @@ def builtin_authoring_registry() -> CapabilityRegistry:
         implementation_version="1.0.0", input_contracts=(SCIENTIFIC_INTENT,), output_contracts=(WORKFLOW_DEFINITION,), engine="siesta",
         metadata={"requires": [OPTICAL_SPECTRUM_CAPABILITY], "runs_engine": True, "execution_authorized": False},
     )
+    electronic_analysis = CapabilityDescriptor(
+        capability_id=GROUND_STATE_TO_ELECTRONIC_ANALYSIS_CAPABILITY,
+        kind=CapabilityKind.WORKFLOW_BUILDER,
+        implementation_version="1.0.0", input_contracts=(SCIENTIFIC_INTENT,),
+        output_contracts=(WORKFLOW_DEFINITION,), engine="siesta",
+        metadata={
+            "scope": "hash-bound SCF fan-out into DOS/PDOS, bands, and optics",
+            "runs_engine": True,
+        },
+    )
+    electronic_analysis_recipe = CapabilityDescriptor(
+        capability_id=GROUND_STATE_TO_ELECTRONIC_ANALYSIS_RECIPE,
+        kind=CapabilityKind.RECIPE,
+        implementation_version="1.0.0", input_contracts=(SCIENTIFIC_INTENT,),
+        output_contracts=(WORKFLOW_DEFINITION,), engine="siesta",
+        metadata={
+            "requires": [GROUND_STATE_TO_ELECTRONIC_ANALYSIS_CAPABILITY],
+            "runs_engine": True, "execution_authorized": False,
+        },
+    )
     plugin = PluginDescriptor(
         plugin_id="siestaflow.builtin.scientific-authoring",
         plugin_version="1.0.0",
@@ -1472,7 +1611,8 @@ def builtin_authoring_registry() -> CapabilityRegistry:
                       composition_recipe, relaxation, relaxation_recipe, converge_then_relax,
                       converge_then_relax_recipe, dos_pdos, dos_pdos_recipe,
                       ground_state_to_dos_pdos, ground_state_to_dos_pdos_recipe,
-                      band_structure, band_structure_recipe, optical_spectrum, optical_spectrum_recipe),
+                      band_structure, band_structure_recipe, optical_spectrum, optical_spectrum_recipe,
+                      electronic_analysis, electronic_analysis_recipe),
         provider="SIESTAFLOW",
         metadata={"registration": "explicit", "global_import_side_effects": False},
     )
@@ -1497,6 +1637,8 @@ def builtin_authoring_registry() -> CapabilityRegistry:
         BAND_STRUCTURE_RECIPE: BandStructureRecipe(),
         OPTICAL_SPECTRUM_CAPABILITY: OpticalSpectrumTaskBuilder(),
         OPTICAL_SPECTRUM_RECIPE: OpticalSpectrumRecipe(),
+        GROUND_STATE_TO_ELECTRONIC_ANALYSIS_CAPABILITY: GroundStateToElectronicAnalysisTaskBuilder(),
+        GROUND_STATE_TO_ELECTRONIC_ANALYSIS_RECIPE: GroundStateToElectronicAnalysisRecipe(),
     })
     registry.freeze()
     return registry
