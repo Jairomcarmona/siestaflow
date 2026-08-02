@@ -263,6 +263,10 @@ def resolve_candidates(*, profile: Any, snapshot: Mapping[str, Any], required_fe
         maximum = walltime_seconds(variant.get("walltime")); requested = walltime_seconds(profile.walltime)
         if maximum is None: review.append("UNKNOWN_REQUIRED_CAPABILITY")
         elif requested is not None and maximum < requested: reasons.append("INSUFFICIENT_WALLTIME")
+        if variant.get("min_nodes") is not None and profile.nodes < int(variant["min_nodes"]):
+            reasons.append("MIN_NODES_INCOMPATIBLE")
+        if variant.get("max_nodes") is not None and profile.nodes > int(variant["max_nodes"]):
+            reasons.append("MAX_NODES_INCOMPATIBLE")
         if variant.get("usable_nodes") is not None and int(variant["usable_nodes"]) < profile.nodes: reasons.append("INSUFFICIENT_NODES")
         if variant.get("cpus_per_node") is None: review.append("UNKNOWN_REQUIRED_CAPABILITY")
         elif int(variant["cpus_per_node"]) < int(profile.processes_per_node or profile.total_cpus): reasons.append("INSUFFICIENT_CPUS_PER_NODE")

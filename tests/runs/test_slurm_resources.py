@@ -100,6 +100,63 @@ def test_resolution_explains_rejection_and_preserves_zero_idle_capacity(tmp_path
     assert [item["rank"] for item in result["candidates"]] == [1, 2, 3]
 
 
+def test_candidate_ranking_enforces_partition_node_bounds(tmp_path: Path) -> None:
+    profile = SlurmExecutionProfile.load(_profile(tmp_path)).resolved(
+        partition="four-node",
+        account="vini",
+        qos="normal",
+        nodes=4,
+        ranks_per_node=1,
+        walltime="00:30:00",
+    )
+    snapshot = {
+        "schema_version": "1.0",
+        "scheduler": "slurm",
+        "cluster_id": "x",
+        "observed_at": "2026-08-01T00:00:00Z",
+        "sources": [],
+        "diagnostics": [],
+        "partitions": [
+            {
+                "variant_id": "four-node:1",
+                "name": "four-node",
+                "walltime": "2-00:00:00",
+                "min_nodes": 4,
+                "max_nodes": 4,
+                "usable_nodes": 52,
+                "idle_nodes": 15,
+                "cpus_per_node": 20,
+                "memory_mb": 128000,
+                "features": ["ttv3", "mem128"],
+                "accounts": ["vini"],
+                "qos": ["normal"],
+            },
+            {
+                "variant_id": "five-node:1",
+                "name": "five-node",
+                "walltime": "2-00:00:00",
+                "min_nodes": 5,
+                "max_nodes": 5,
+                "usable_nodes": 52,
+                "idle_nodes": 15,
+                "cpus_per_node": 20,
+                "memory_mb": 128000,
+                "features": ["ttv3", "mem128"],
+                "accounts": ["vini"],
+                "qos": ["normal"],
+            },
+        ],
+    }
+
+    candidates = resolve_candidates(profile=profile, snapshot=snapshot)["candidates"]
+
+    assert candidates[0]["candidate_id"] == "four-node:1"
+    assert candidates[0]["state"] == "COMPATIBLE"
+    assert candidates[1]["candidate_id"] == "five-node:1"
+    assert candidates[1]["state"] == "INCOMPATIBLE"
+    assert candidates[1]["rejection_reasons"] == ["MIN_NODES_INCOMPATIBLE"]
+
+
 def test_partial_discovery_keeps_unknown_authorization_reviewable(tmp_path: Path) -> None:
     profile = SlurmExecutionProfile.load(_profile(tmp_path))
     snapshot = build_snapshot(cluster_id="x", observed_at="2026-08-01T00:00:00Z", sjstat="p|up|2|1|2|8192|\n")
