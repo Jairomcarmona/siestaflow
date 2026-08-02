@@ -13,6 +13,8 @@ from siestaflow.contracts import SCIENTIFIC_INTENT, WORKFLOW_DEFINITION, contrac
 from siestaflow.execution.allocation_controller import AllocationController, ExecutionStatus
 from siestaflow.run_preparation import RunPreparationRequest, RunPreparer
 from siestaflow.workflow_authoring import (
+    CONVERGE_THEN_RELAX_CAPABILITY,
+    CONVERGE_THEN_RELAX_RECIPE,
     KGRID_EVALUATION_RECIPE,
     KGRID_EVALUATOR_CAPABILITY,
     MESH_EVALUATION_RECIPE,
@@ -24,6 +26,8 @@ from siestaflow.workflow_authoring import (
     STRUCTURAL_RELAXATION_RECIPE,
     WorkflowAuthoringService,
 )
+from siestaflow.scientific_convergence import evaluate_mesh_files
+from siestaflow.scientific_kgrid import evaluate_kgrid_files
 from siestaflow.workflows import WorkflowCompiler, write_workflow_lock
 
 
@@ -138,6 +142,67 @@ MD.NumCGSteps 2
     return intent, root / "relaxation-workflow.json"
 
 
+def approved_mesh_contracts(root: Path) -> tuple[Path, Path, Path]:
+    source_intent, _ = authoring_source(root)
+    raw = json.loads(source_intent.read_text(encoding="utf-8"))
+    report = root / "mesh-convergence-report.json"
+    evaluate_mesh_files(
+        root / raw["parameters"]["rule"],
+        [root / item for item in raw["parameters"]["observations"]], report,
+    )
+    approval = root / "mesh-approval.json"
+    profile = root / "mesh-profile.json"
+    assert main([
+        "scientific", "decide", str(report), "--approval-id", "mesh-approval-01",
+        "--decision", "APPROVE", "--actor", "researcher",
+        "--decided-at", "2026-08-02T00:00:00Z", "--output", str(approval), "--json",
+    ]) == 0
+    assert main([
+        "scientific", "profile", str(report), "--approval", str(approval),
+        "--profile-id", "mesh-200-ry", "--output", str(profile), "--json",
+    ]) == 0
+    return report, approval, profile
+
+
+def converge_then_relaxation_source(root: Path) -> tuple[Path, Path]:
+    report, approval, numerical_profile = approved_mesh_contracts(root)
+    intent, output = structural_relaxation_source(root)
+    fdf = root / "relax.fdf"
+    fdf.write_text(
+        fdf.read_text(encoding="utf-8") + "Mesh.Cutoff 200 Ry\n",
+        encoding="utf-8", newline="\n",
+    )
+    raw = json.loads(intent.read_text(encoding="utf-8"))
+    raw["recipe"] = CONVERGE_THEN_RELAX_RECIPE
+    raw["parameters"]["numerical_profiles"] = [{
+        "profile": numerical_profile.name, "approval": approval.name, "evidence": report.name,
+    }]
+    write_json(intent, raw)
+    return intent, output
+
+
+def approved_kgrid_contracts(root: Path) -> tuple[Path, Path, Path]:
+    source_intent, _ = kgrid_authoring_source(root)
+    raw = json.loads(source_intent.read_text(encoding="utf-8"))
+    report = root / "kgrid-convergence-report.json"
+    evaluate_kgrid_files(
+        root / raw["parameters"]["rule"],
+        [root / item for item in raw["parameters"]["observations"]], report,
+    )
+    approval = root / "kgrid-approval.json"
+    profile = root / "kgrid-profile.json"
+    assert main([
+        "scientific", "decide", str(report), "--approval-id", "kgrid-approval-01",
+        "--decision", "APPROVE", "--actor", "researcher",
+        "--decided-at", "2026-08-02T00:00:00Z", "--output", str(approval), "--json",
+    ]) == 0
+    assert main([
+        "scientific", "profile", str(report), "--approval", str(approval),
+        "--profile-id", "kgrid-3x3x1", "--output", str(profile), "--json",
+    ]) == 0
+    return report, approval, profile
+
+
 def kgrid(dimensions: tuple[int, int, int]) -> dict:
     return {"dimensions": list(dimensions), "shifts": ["0.0", "0.0", "0.0"]}
 
@@ -197,7 +262,7 @@ def test_registry_exposes_recipe_and_builder_without_global_discovery() -> None:
     assert WORKFLOW_DEFINITION in contract_catalog()
     service = WorkflowAuthoringService()
     assert [item["recipe_id"] for item in service.recipes()] == [
-        SCIENTIFIC_COMPOSITION_RECIPE, KGRID_EVALUATION_RECIPE,
+        SCIENTIFIC_COMPOSITION_RECIPE, CONVERGE_THEN_RELAX_RECIPE, KGRID_EVALUATION_RECIPE,
         MESH_EVALUATION_RECIPE, OBSERVATION_PRODUCTION_RECIPE, STRUCTURAL_RELAXATION_RECIPE,
     ]
     detail = service.recipe(MESH_EVALUATION_RECIPE)
@@ -316,6 +381,86 @@ def test_structural_relaxation_rejects_non_psml_or_misnamed_pseudopotentials(tmp
         WorkflowAuthoringService().create_definition(intent, output)
 
 
+def test_approved_convergence_profile_creates_a_new_hash_bound_relaxation_stage(tmp_path: Path, capsys) -> None:
+    intent, definition = converge_then_relaxation_source(tmp_path)
+    capsys.readouterr()
+    service = WorkflowAuthoringService()
+    preview = service.create_definition(intent, definition, dry_run=True)
+    assert preview["side_effects"] == 0 and not definition.exists()
+    result = service.create_definition(intent, definition)
+    assert result["recipe_id"] == CONVERGE_THEN_RELAX_RECIPE
+    compilation = WorkflowCompiler().compile(definition)
+    assert compilation.valid
+    task = compilation.compiled.tasks[0]  # type: ignore[union-attr]
+    assert task.capability_id == "siestaflow.engine.siesta"
+    assert {item.name for item in task.inputs} >= {
+        "numerical_001_profile", "numerical_001_approval", "numerical_001_evidence",
+    }
+    profiles = task.settings["numerical_profiles"]
+    assert profiles[0]["parameter"] == "Mesh.Cutoff"
+    assert profiles[0]["selection"] == {"unit": "Ry", "value": "200"}
+    assert compilation.compiled.metadata["scientific_scope"] == "CONVERGENCE_APPROVED_STRUCTURAL_RELAXATION"  # type: ignore[union-attr]
+    assert compilation.compiled.metadata["execution_authorized"] is False  # type: ignore[union-attr]
+
+
+def test_converge_then_relax_rejects_wrong_fdf_or_unmatched_evidence(tmp_path: Path, capsys) -> None:
+    intent, definition = converge_then_relaxation_source(tmp_path)
+    capsys.readouterr()
+    fdf = tmp_path / "relax.fdf"
+    fdf.write_text(fdf.read_text(encoding="utf-8").replace("200 Ry", "300 Ry"), encoding="utf-8", newline="\n")
+    with pytest.raises(ValueError, match="does not match"):
+        WorkflowAuthoringService().create_definition(intent, definition)
+    fdf.write_text(fdf.read_text(encoding="utf-8").replace("300 Ry", "200 Ry"), encoding="utf-8", newline="\n")
+    report = tmp_path / "mesh-convergence-report.json"
+    report.write_text(report.read_text(encoding="utf-8") + "\n", encoding="utf-8", newline="\n")
+    with pytest.raises(ValueError, match="hash-bound together"):
+        WorkflowAuthoringService().create_definition(intent, definition)
+
+
+def test_converge_then_relax_accepts_a_hash_bound_kgrid_profile(tmp_path: Path, capsys) -> None:
+    report, approval, numerical_profile = approved_kgrid_contracts(tmp_path)
+    capsys.readouterr()
+    intent, definition = structural_relaxation_source(tmp_path)
+    fdf = tmp_path / "relax.fdf"
+    fdf.write_text(
+        fdf.read_text(encoding="utf-8") + """%block kgrid.MonkhorstPack
+  3 0 0 0.0
+  0 3 0 0.0
+  0 0 1 0.0
+%endblock kgrid.MonkhorstPack
+""",
+        encoding="utf-8", newline="\n",
+    )
+    raw = json.loads(intent.read_text(encoding="utf-8"))
+    raw["recipe"] = CONVERGE_THEN_RELAX_RECIPE
+    raw["parameters"]["numerical_profiles"] = [{
+        "profile": numerical_profile.name, "approval": approval.name, "evidence": report.name,
+    }]
+    write_json(intent, raw)
+    WorkflowAuthoringService().create_definition(intent, definition)
+    task = WorkflowCompiler().compile(definition).compiled.tasks[0]  # type: ignore[union-attr]
+    assert task.settings["numerical_profiles"][0]["parameter"] == "kgrid.MonkhorstPack"
+    assert task.settings["numerical_profiles"][0]["selection"]["dimensions"] == [3, 3, 1]
+
+
+def test_rejected_convergence_decision_cannot_propagate_a_profile(tmp_path: Path, capsys) -> None:
+    source_intent, _ = authoring_source(tmp_path)
+    raw = json.loads(source_intent.read_text(encoding="utf-8"))
+    report = tmp_path / "mesh-convergence-report.json"
+    evaluate_mesh_files(tmp_path / raw["parameters"]["rule"], [tmp_path / item for item in raw["parameters"]["observations"]], report)
+    rejection = tmp_path / "rejection.json"
+    assert main([
+        "scientific", "decide", str(report), "--approval-id", "mesh-rejection-01",
+        "--decision", "REJECT", "--actor", "researcher", "--decided-at", "2026-08-02T00:00:00Z",
+        "--output", str(rejection), "--json",
+    ]) == 0
+    assert main([
+        "scientific", "profile", str(report), "--approval", str(rejection),
+        "--profile-id", "not-allowed", "--output", str(tmp_path / "profile.json"), "--json",
+    ]) == 2
+    assert "rejected" in capsys.readouterr().err
+
+
 def test_observation_producer_recipe_builds_a_canonical_postprocess_node(tmp_path: Path) -> None:
     for name in ("input.fdf", "stdout.txt", "FORCE_STRESS", "pseudo.json"):
         (tmp_path / name).write_text("placeholder\n", encoding="utf-8")
@@ -343,7 +488,7 @@ def test_cli_lists_describes_and_creates_recipe_workflow(tmp_path: Path, capsys)
     intent, output = authoring_source(tmp_path)
     assert main(["workflow", "recipes", "--json"]) == 0
     assert [item["recipe_id"] for item in json.loads(capsys.readouterr().out)["recipes"]] == [
-        SCIENTIFIC_COMPOSITION_RECIPE, KGRID_EVALUATION_RECIPE,
+        SCIENTIFIC_COMPOSITION_RECIPE, CONVERGE_THEN_RELAX_RECIPE, KGRID_EVALUATION_RECIPE,
         MESH_EVALUATION_RECIPE, OBSERVATION_PRODUCTION_RECIPE, STRUCTURAL_RELAXATION_RECIPE,
     ]
     assert main(["workflow", "recipe", MESH_EVALUATION_RECIPE, "--json"]) == 0

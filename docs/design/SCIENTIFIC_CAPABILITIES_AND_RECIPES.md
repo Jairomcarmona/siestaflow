@@ -96,6 +96,36 @@ La capacidad no declara convergencia numérica, no selecciona parámetros y no
 aprueba la estructura. Conserva `execution_authorized: false`; su cálculo sólo
 puede llegar a SIESTA tras compilar y usar `run prepare` con un perfil explícito.
 
+## Aprobación y propagación de convergencia
+
+Una recomendación `READY_FOR_HUMAN_REVIEW` no altera el lock que produjo la
+evidencia. El investigador persiste primero una decisión hash-bound y después,
+sólo si la decisión es `APPROVE`, materializa un perfil numérico inmutable:
+
+```text
+reporte de convergencia exacto
+  -> scientific decide (APPROVE o REJECT)
+  -> scientific profile (sólo APPROVE)
+  -> nuevo intent converge-then-relax
+  -> workflow.lock.json nuevo -> run prepare
+```
+
+```text
+siestaflow scientific decide report.json --approval-id mesh-approval-01 \
+  --decision APPROVE --actor researcher --decided-at 2026-08-02T00:00:00Z \
+  --output mesh-approval.json
+siestaflow scientific profile report.json --approval mesh-approval.json \
+  --profile-id mesh-200-ry --output mesh-profile.json
+```
+
+Los contratos persisten la selección exacta y los hashes del candidato, reporte
+y decisión. La receta `siestaflow.recipe.siesta.converge-then-relax` recibe por
+cada parámetro el perfil, la decisión y el reporte. Rechaza una decisión
+`REJECT`, evidencia alterada, hashes no coincidentes o un FDF cuyo
+`Mesh.Cutoff` o `kgrid.MonkhorstPack` no coincide con el perfil aprobado. No
+reescribe el FDF ni autoriza la ejecución; el perfil y su evidencia quedan como
+entradas del nuevo lock autocontenido.
+
 ## Intents de evaluación de convergencia
 
 ```json

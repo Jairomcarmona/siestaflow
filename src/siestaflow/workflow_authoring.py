@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from decimal import Decimal, InvalidOperation
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Mapping, Protocol
@@ -26,6 +27,7 @@ from .contracts import (
 from .project_packages import load_structured
 from .scientific_convergence import MeshConvergenceRule, MeshObservation
 from .scientific_kgrid import KGridConvergenceRule, KGridObservation
+from .scientific_approvals import ApprovedNumericalProfile, load_approved_profile, load_decision
 from .workflow_composition import (
     ArtifactPortContract,
     RecipePolicy,
@@ -46,6 +48,8 @@ OBSERVATION_PRODUCTION_RECIPE = "siestaflow.recipe.siesta.observation-production
 SCIENTIFIC_COMPOSITION_RECIPE = "siestaflow.recipe.scientific.manual-composition"
 STRUCTURAL_RELAXATION_CAPABILITY = "siestaflow.siesta.structural-relaxation"
 STRUCTURAL_RELAXATION_RECIPE = "siestaflow.recipe.siesta.structural-relaxation"
+CONVERGE_THEN_RELAX_CAPABILITY = "siestaflow.siesta.converge-then-relax"
+CONVERGE_THEN_RELAX_RECIPE = "siestaflow.recipe.siesta.converge-then-relax"
 
 
 def _relative(raw: object, *, field: str) -> str:
@@ -572,6 +576,165 @@ class StructuralRelaxationRecipe:
         )
 
 
+class ConvergeThenRelaxationTaskBuilder:
+    """Build the post-approval relaxation stage without changing its FDF.
+
+    The convergence stage has already completed in a prior immutable lock.  A
+    profile, its decision, and the evaluated report are therefore staged as
+    ordinary hash-bound inputs to this new lock.  This is deliberately not an
+    implicit expansion of the previous workflow.
+    """
+
+    _PARAMETERS = {"fdf", "pseudopotentials", "numerical_profiles"}
+
+    def build_task(self, intent: ScientificIntent) -> dict[str, Any]:
+        if set(intent.parameters) != self._PARAMETERS:
+            raise ValueError(
+                "converge_then_relax intent requires fdf, pseudopotentials, and numerical_profiles"
+            )
+        profiles = self._profiles(intent)
+        base_intent = ScientificIntent(
+            source=intent.source, intent_id=intent.intent_id, project_id=intent.project_id,
+            recipe_id=STRUCTURAL_RELAXATION_RECIPE,
+            parameters={"fdf": intent.parameters["fdf"], "pseudopotentials": intent.parameters["pseudopotentials"]},
+            resources=intent.resources, metadata=intent.metadata, sha256=intent.sha256,
+        )
+        task = StructuralRelaxationTaskBuilder().build_task(base_intent)
+        self._fdf_matches_profiles(
+            intent.source.parent / Path(*PurePosixPath(_relative(intent.parameters["fdf"], field="parameters.fdf")).parts),
+            tuple(item["profile"] for item in profiles),
+        )
+        extra_inputs: list[dict[str, Any]] = []
+        records: list[dict[str, Any]] = []
+        for index, item in enumerate(profiles, 1):
+            for kind in ("profile", "approval", "evidence"):
+                extra_inputs.append({
+                    "name": f"numerical_{index:03d}_{kind}", "source": item[kind + "_path"],
+                    "destination": f"numerics/{index:03d}-{kind}.json",
+                    "media_type": "application/json",
+                })
+            profile = item["profile"]
+            records.append({
+                "profile_id": profile.reference.profile_id, "profile_sha256": profile.reference.sha256,
+                "parameter": profile.parameter, "selection": dict(profile.selection),
+                "candidate_sha256": profile.candidate_sha256,
+                "evidence_sha256": profile.evidence_sha256,
+                "approval_id": profile.reference.approval_id,
+                "approval_sha256": profile.reference.approval_sha256,
+            })
+        task["inputs"].extend(extra_inputs)
+        task["settings"] = {"numerical_profiles": records}
+        return task
+
+    def build_fragment(self, intent: ScientificIntent) -> WorkflowFragment:
+        task = self.build_task(intent)
+        contracts = {
+            "fdf": ArtifactPortContract("siestaflow.siesta-relaxation-fdf", "application/x-siesta-fdf"),
+            **{
+                f"pseudo_{index:03d}": ArtifactPortContract("siestaflow.pseudopotential", "application/x-psml")
+                for index, _ in enumerate(intent.parameters["pseudopotentials"], 1)
+            },
+        }
+        for index, _ in enumerate(intent.parameters["numerical_profiles"], 1):
+            for kind, artifact_type in (
+                ("profile", "siestaflow.numerical-profile"),
+                ("approval", "siestaflow.scientific-approval"),
+                ("evidence", "siestaflow.convergence-report"),
+            ):
+                contracts[f"numerical_{index:03d}_{kind}"] = ArtifactPortContract(
+                    artifact_type, "application/json"
+                )
+        return WorkflowFragment.single("converge-then-relax", task, input_contracts=contracts)
+
+    @staticmethod
+    def _profiles(intent: ScientificIntent) -> list[dict[str, Any]]:
+        raw_profiles = intent.parameters["numerical_profiles"]
+        if not isinstance(raw_profiles, list) or not raw_profiles:
+            raise ValueError("converge_then_relax numerical_profiles must be a non-empty list")
+        root = intent.source.parent
+        records: list[dict[str, Any]] = []
+        parameters: set[str] = set()
+        for raw in raw_profiles:
+            if not isinstance(raw, Mapping) or set(raw) != {"profile", "approval", "evidence"}:
+                raise ValueError("each numerical profile requires profile, approval, and evidence")
+            paths = {kind: _relative(raw[kind], field=f"parameters.numerical_profiles.{kind}") for kind in raw}
+            if any(not (root / Path(*PurePosixPath(path).parts)).is_file() for path in paths.values()):
+                raise ValueError("converge_then_relax numerical profile input is missing")
+            profile = load_approved_profile(root / Path(*PurePosixPath(paths["profile"]).parts))
+            candidate, approval, approval_sha256 = load_decision(
+                root / Path(*PurePosixPath(paths["approval"]).parts)
+            )
+            evidence_sha256 = hashlib.sha256(
+                (root / Path(*PurePosixPath(paths["evidence"]).parts)).read_bytes()
+            ).hexdigest()
+            if (
+                approval.decision.value != "APPROVE"
+                or approval_sha256 != profile.reference.approval_sha256
+                or approval.approval_id != profile.reference.approval_id
+                or approval.subject_sha256 != profile.candidate_sha256
+                or approval.evidence_sha256 != profile.evidence_sha256
+                or evidence_sha256 != profile.evidence_sha256
+                or candidate["parameter"] != profile.parameter
+                or canonical_primitive(candidate["selection"]) != canonical_primitive(profile.selection)
+            ):
+                raise ValueError("numerical profile, approval, and evidence are not hash-bound together")
+            if profile.parameter in parameters:
+                raise ValueError("converge_then_relax accepts at most one approved profile per parameter")
+            parameters.add(profile.parameter)
+            records.append({
+                "profile": profile, "profile_path": paths["profile"], "approval_path": paths["approval"],
+                "evidence_path": paths["evidence"],
+            })
+        return records
+
+    @staticmethod
+    def _fdf_matches_profiles(fdf_path: Path, profiles: tuple[ApprovedNumericalProfile, ...]) -> None:
+        document = FDFParser().parse_path(fdf_path)
+        for profile in profiles:
+            if profile.parameter == "Mesh.Cutoff":
+                scalars = document.scalars("Mesh.Cutoff")
+                if len(scalars) != 1 or scalars[0].unit != "Ry":
+                    raise ValueError("converge_then_relax FDF must declare exactly one Mesh.Cutoff in Ry")
+                try:
+                    actual = Decimal(scalars[0].value.replace("D", "E").replace("d", "e"))
+                    expected = Decimal(str(profile.selection["value"]).replace("D", "E").replace("d", "e"))
+                except (InvalidOperation, KeyError) as exc:
+                    raise ValueError("approved Mesh.Cutoff selection is invalid") from exc
+                if actual != expected:
+                    raise ValueError("FDF Mesh.Cutoff does not match the approved numerical profile")
+            elif profile.parameter == "kgrid.MonkhorstPack":
+                blocks = document.blocks("kgrid.MonkhorstPack")
+                if len(blocks) != 1 or not blocks[0].closed:
+                    raise ValueError("converge_then_relax FDF must declare exactly one kgrid.MonkhorstPack block")
+                rows = [line.split("#", 1)[0].strip().split() for line in blocks[0].body_lines]
+                rows = [row for row in rows if row]
+                try:
+                    dimensions = list(profile.selection["dimensions"])
+                    shifts = [Decimal(str(item)) for item in profile.selection["shifts"]]
+                    valid = len(rows) == 3 and all(len(row) == 4 for row in rows)
+                    for row_index, row in enumerate(rows):
+                        valid = valid and all(int(row[column]) == (dimensions[row_index] if column == row_index else 0) for column in range(3))
+                        valid = valid and Decimal(row[3].replace("D", "E").replace("d", "e")) == shifts[row_index]
+                except (InvalidOperation, ValueError, KeyError, TypeError) as exc:
+                    raise ValueError("approved kgrid selection is invalid") from exc
+                if not valid:
+                    raise ValueError("FDF kgrid.MonkhorstPack does not match the approved numerical profile")
+            else:  # Defensive: profile loader currently only admits these types.
+                raise ValueError(f"unsupported approved numerical parameter: {profile.parameter}")
+
+
+class ConvergeThenRelaxationRecipe:
+    def build_workflow(self, intent: ScientificIntent, registry: CapabilityRegistry) -> dict[str, Any]:
+        return _compose_single(
+            intent, registry, capability_id=CONVERGE_THEN_RELAX_CAPABILITY,
+            policy=RecipePolicy(
+                CONVERGE_THEN_RELAX_RECIPE, "1.0.0",
+                "Relax a structure using explicitly approved convergence evidence",
+                "CONVERGENCE_APPROVED_STRUCTURAL_RELAXATION",
+            ),
+        )
+
+
 def builtin_authoring_registry() -> CapabilityRegistry:
     evaluator = CapabilityDescriptor(
         capability_id=MESH_EVALUATOR_CAPABILITY,
@@ -641,12 +804,27 @@ def builtin_authoring_registry() -> CapabilityRegistry:
         metadata={"requires": [STRUCTURAL_RELAXATION_CAPABILITY], "runs_engine": True,
                   "execution_authorized": False},
     )
+    converge_then_relax = CapabilityDescriptor(
+        capability_id=CONVERGE_THEN_RELAX_CAPABILITY, kind=CapabilityKind.WORKFLOW_BUILDER,
+        implementation_version="1.0.0", input_contracts=(SCIENTIFIC_INTENT,),
+        output_contracts=(WORKFLOW_DEFINITION,), engine="siesta",
+        metadata={"scope": "hash-bound approved numerical profile propagation", "runs_engine": True,
+                  "requires_human_approval": True},
+    )
+    converge_then_relax_recipe = CapabilityDescriptor(
+        capability_id=CONVERGE_THEN_RELAX_RECIPE, kind=CapabilityKind.RECIPE,
+        implementation_version="1.0.0", input_contracts=(SCIENTIFIC_INTENT,),
+        output_contracts=(WORKFLOW_DEFINITION,), engine="siesta",
+        metadata={"requires": [CONVERGE_THEN_RELAX_CAPABILITY], "runs_engine": True,
+                  "execution_authorized": False, "requires_human_approval": True},
+    )
     plugin = PluginDescriptor(
         plugin_id="siestaflow.builtin.scientific-authoring",
         plugin_version="1.0.0",
         core_contract_version=CORE_CONTRACT_VERSION,
         capabilities=(evaluator, recipe, kgrid_evaluator, kgrid_recipe, producer, producer_recipe,
-                      composition_recipe, relaxation, relaxation_recipe),
+                      composition_recipe, relaxation, relaxation_recipe, converge_then_relax,
+                      converge_then_relax_recipe),
         provider="SIESTAFLOW",
         metadata={"registration": "explicit", "global_import_side_effects": False},
     )
@@ -661,6 +839,8 @@ def builtin_authoring_registry() -> CapabilityRegistry:
         SCIENTIFIC_COMPOSITION_RECIPE: ManualCompositionRecipe(),
         STRUCTURAL_RELAXATION_CAPABILITY: StructuralRelaxationTaskBuilder(),
         STRUCTURAL_RELAXATION_RECIPE: StructuralRelaxationRecipe(),
+        CONVERGE_THEN_RELAX_CAPABILITY: ConvergeThenRelaxationTaskBuilder(),
+        CONVERGE_THEN_RELAX_RECIPE: ConvergeThenRelaxationRecipe(),
     })
     registry.freeze()
     return registry

@@ -59,6 +59,7 @@ from .workflows import (
 from .validation_render import render_validation_report
 from .workflow_preflight import WorkflowPreflightValidator
 from .workflow_authoring import WorkflowAuthoringService
+from .scientific_approvals import create_approved_profile, create_decision
 
 
 def _repo_root() -> Path:
@@ -250,6 +251,29 @@ def build_parser() -> argparse.ArgumentParser:
     workflow_compile.add_argument("--dry-run", action="store_true")
     workflow_compile.add_argument("--json", action="store_true")
 
+    scientific = sub.add_parser(
+        "scientific", help="persist explicit human scientific decisions and approved profiles"
+    )
+    scientific_sub = scientific.add_subparsers(dest="action", required=True)
+    scientific_decide = scientific_sub.add_parser(
+        "decide", help="record APPROVE or REJECT for reviewed convergence evidence"
+    )
+    scientific_decide.add_argument("report", type=Path)
+    scientific_decide.add_argument("--approval-id", required=True)
+    scientific_decide.add_argument("--decision", choices=("APPROVE", "REJECT"), required=True)
+    scientific_decide.add_argument("--actor", required=True)
+    scientific_decide.add_argument("--decided-at", required=True)
+    scientific_decide.add_argument("--output", type=Path, required=True)
+    scientific_decide.add_argument("--json", action="store_true")
+    scientific_profile = scientific_sub.add_parser(
+        "profile", help="materialize an approved numerical profile from matching decision and evidence"
+    )
+    scientific_profile.add_argument("report", type=Path)
+    scientific_profile.add_argument("--approval", type=Path, required=True)
+    scientific_profile.add_argument("--profile-id", required=True)
+    scientific_profile.add_argument("--output", type=Path, required=True)
+    scientific_profile.add_argument("--json", action="store_true")
+
     prepared_run = sub.add_parser(
         "run",
         help="prepare and inspect hash-bound, manually submitted run packages",
@@ -387,6 +411,17 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _dispatch(args: argparse.Namespace) -> int:
+    if args.domain == "scientific":
+        if args.action == "decide":
+            _emit(create_decision(
+                args.report, approval_id=args.approval_id, decision=args.decision,
+                actor=args.actor, decided_at=args.decided_at, output=args.output,
+            ), args.json)
+        else:
+            _emit(create_approved_profile(
+                args.report, args.approval, profile_id=args.profile_id, output=args.output,
+            ), args.json)
+        return 0
     if args.domain == "environment":
         report = EnvironmentChecker().check(
             EnvironmentCheckRequest(
