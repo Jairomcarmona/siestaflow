@@ -25,6 +25,12 @@ RUN_LOCK = ContractRef("siestaflow.run-lock", CORE_CONTRACT_VERSION)
 PLUGIN_DESCRIPTOR = ContractRef(
     "siestaflow.plugin-descriptor", CORE_CONTRACT_VERSION
 )
+SCIENTIFIC_INTENT = ContractRef(
+    "siestaflow.scientific-intent", CORE_CONTRACT_VERSION
+)
+WORKFLOW_DEFINITION = ContractRef(
+    "siestaflow.workflow-definition", CORE_CONTRACT_VERSION
+)
 
 CORE_CONTRACTS = (
     VALIDATION_REPORT,
@@ -35,6 +41,8 @@ CORE_CONTRACTS = (
     WORKFLOW_LOCK,
     RUN_LOCK,
     PLUGIN_DESCRIPTOR,
+    SCIENTIFIC_INTENT,
+    WORKFLOW_DEFINITION,
 )
 
 

@@ -10,7 +10,7 @@ import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 from .contracts import DecisionStatus, PreparedRun
 from .contracts.workflow import require_local_id
@@ -33,6 +33,8 @@ _RESOURCE_FIELDS = {
     "walltime_seconds",
 }
 _ADAPTIVE_GATE_SCRIPT = "src/siestaflow/execution/adaptive_gate.py"
+_MESH_EVALUATOR_SCRIPT = "src/siestaflow/scientific_convergence.py"
+_MESH_EVALUATOR_CAPABILITY = "siestaflow.siesta.mesh-evidence-evaluator"
 _ADAPTIVE_CAPABILITIES = {
     "sweep": "siestaflow.gate.deterministic-metric",
     "selection_minimum": "siestaflow.gate.minimum-selector",
@@ -119,9 +121,23 @@ class RunPreparer:
         repository_root: Path,
         *,
         validator: SiestaContextualValidator | None = None,
+        task_adapters: Mapping[str, Callable[..., dict[str, Any]]] | None = None,
     ) -> None:
         self.repository_root = repository_root.resolve()
         self.validator = validator or SiestaContextualValidator()
+        self._task_adapters: dict[str, Callable[..., dict[str, Any]]] = {
+            _MESH_EVALUATOR_CAPABILITY: self._mesh_evaluator_task,
+        }
+        for capability_id, adapter in (task_adapters or {}).items():
+            if capability_id in self._task_adapters:
+                raise ValueError(f"run task adapter already registered: {capability_id}")
+            if not callable(adapter):
+                raise TypeError(f"run task adapter must be callable: {capability_id}")
+            self._task_adapters[capability_id] = adapter
+
+    @property
+    def task_adapter_ids(self) -> tuple[str, ...]:
+        return tuple(sorted(self._task_adapters))
 
     def prepare(self, request: RunPreparationRequest) -> RunPreparationResult:
         lock_path = request.workflow_lock.expanduser().resolve()
@@ -485,6 +501,98 @@ class RunPreparer:
             return common
         raise ValueError(f"unsupported adaptive task kind: {task.kind.value}")
 
+    def _mesh_evaluator_task(
+        self,
+        task: Any,
+        *,
+        by_task: Mapping[str, Any],
+        artifacts: Mapping[str, Any],
+        resolved_sources: Mapping[str, Path],
+        profile: SlurmExecutionProfile,
+        protected: dict[str, Path],
+    ) -> dict[str, Any]:
+        if task.kind.value != "validation" or task.capability_id != _MESH_EVALUATOR_CAPABILITY:
+            raise ValueError(f"unsupported scientific evaluator: {task.task_id}")
+        if set(task.settings) != {"rule_id"}:
+            raise ValueError(f"mesh evaluator settings mismatch: {task.task_id}")
+        self._local_setting(task.settings["rule_id"], field="rule_id")
+        output = self._gate_output(task, name="report")
+        port = next(item for item in task.outputs if item.name == "report")
+        if port.artifact_type != "siestaflow.mesh-convergence-report":
+            raise ValueError(f"mesh evaluator report artifact type mismatch: {task.task_id}")
+        script = self.repository_root / _MESH_EVALUATOR_SCRIPT
+        if not script.is_file():
+            raise ValueError("mesh evaluator runtime script is missing")
+        script_relative = (
+            PurePosixPath("protected") / task.task_id / "scientific_convergence.py"
+        ).as_posix()
+        protected[script_relative] = script
+        hashes = {script_relative: _sha256(script)}
+        destinations = {script_relative: "scientific_convergence.py"}
+        transfers: list[dict[str, str]] = []
+        rule_destination: str | None = None
+        observation_destinations: list[str] = []
+        for binding in sorted(task.inputs, key=lambda item: item.name):
+            if binding.name == "rule":
+                rule_destination = binding.destination
+            elif binding.name.startswith("observation_"):
+                observation_destinations.append(binding.destination)
+            else:
+                raise ValueError(f"unexpected mesh evaluator input: {binding.name}")
+            if binding.media_type != "application/json":
+                raise ValueError(f"mesh evaluator inputs must use application/json: {binding.name}")
+            if binding.external_artifact_id is not None:
+                artifact = artifacts[binding.external_artifact_id]
+                package_source = (
+                    PurePosixPath("protected")
+                    / task.task_id
+                    / binding.name
+                    / PurePosixPath(artifact.relative_path).name
+                ).as_posix()
+                protected[package_source] = resolved_sources[artifact.artifact_id]
+                hashes[package_source] = artifact.sha256
+                destinations[package_source] = binding.destination
+            else:
+                parent = by_task[str(binding.source_task_id)]
+                parent_output = next(
+                    (item for item in parent.outputs if item.name == binding.source_output_name),
+                    None,
+                )
+                if parent_output is None or not parent_output.required:
+                    raise ValueError(f"mesh evaluator input is not a required parent output: {binding.name}")
+                transfers.append({
+                    "from_task": parent.task_id,
+                    "artifact": parent_output.relative_path,
+                    "destination": binding.destination,
+                })
+        if rule_destination is None or not observation_destinations:
+            raise ValueError("mesh evaluator requires one rule and observation inputs")
+        arguments: list[str] = []
+        for destination in sorted(observation_destinations):
+            arguments.extend(("--observation", destination))
+        walltime, cpus = self._gate_resources(task, profile)
+        return {
+            "task_id": task.task_id,
+            "kind": "gate",
+            "input": script_relative,
+            "input_hashes": hashes,
+            "input_destinations": destinations,
+            "required_artifacts": [output],
+            "optional_artifacts": [],
+            "depends_on": list(task.dependencies),
+            "transfers": transfers,
+            "nodes": 0,
+            "mpi_processes": 1,
+            "cpus_per_process": cpus,
+            "estimated_runtime_seconds": walltime,
+            "max_attempts": profile.max_attempts,
+            "require_scf_converged": False,
+            "command": [
+                "python3", "scientific_convergence.py", "evaluate",
+                "--rule", rule_destination, *arguments, "--output", output,
+            ],
+        }
+
     def _campaign(
         self,
         run_id: str,
@@ -497,6 +605,17 @@ class RunPreparer:
         protected: dict[str, Path] = {}
         by_task = {task.task_id: task for task in workflow.tasks}
         for task in workflow.tasks:
+            adapter = self._task_adapters.get(task.capability_id)
+            if adapter is not None:
+                tasks.append(adapter(
+                    task,
+                    by_task=by_task,
+                    artifacts=artifacts,
+                    resolved_sources=resolved_sources,
+                    profile=profile,
+                    protected=protected,
+                ))
+                continue
             if task.kind.value in {"sweep", "selection", "transformation"}:
                 tasks.append(
                     self._adaptive_gate_task(

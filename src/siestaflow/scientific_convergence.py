@@ -7,8 +7,12 @@ the same contract can be reused for different systems and pseudopotentials.
 
 from __future__ import annotations
 
+import argparse
+import hashlib
+import json
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
+from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 
@@ -369,3 +373,64 @@ def mesh_adaptive_dag(rule: MeshConvergenceRule) -> dict[str, Any]:
         "execution_authorized": False,
         "final_authority": "HUMAN_REVIEW",
     }
+
+
+def evaluate_mesh_files(
+    rule_path: Path, observation_paths: Sequence[Path], output: Path
+) -> MeshConvergenceReport:
+    try:
+        rule_raw = json.loads(rule_path.read_text(encoding="utf-8"))
+        observations_raw = [
+            json.loads(path.read_text(encoding="utf-8"))
+            for path in observation_paths
+        ]
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"cannot load mesh convergence evidence: {exc}") from exc
+    if not isinstance(rule_raw, Mapping) or any(
+        not isinstance(item, Mapping) for item in observations_raw
+    ):
+        raise ValueError("mesh convergence evidence must contain JSON mappings")
+    rule = MeshConvergenceRule.from_mapping(rule_raw)
+    observations = tuple(
+        MeshObservation.from_mapping(item) for item in observations_raw
+    )
+    report = MeshConvergenceEvaluator().evaluate(rule, observations)
+    payload = {
+        "schema_version": "1.0",
+        "rule_id": rule.rule_id,
+        "rule_sha256": hashlib.sha256(rule_path.read_bytes()).hexdigest(),
+        "observations": [
+            {
+                "observation_id": observation.observation_id,
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            }
+            for observation, path in zip(observations, observation_paths)
+        ],
+        **report.as_dict(),
+    }
+    output.write_text(
+        json.dumps(payload, sort_keys=True, indent=2, ensure_ascii=False)
+        + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    return report
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser()
+    commands = parser.add_subparsers(dest="command", required=True)
+    evaluate = commands.add_parser("evaluate")
+    evaluate.add_argument("--rule", required=True, type=Path)
+    evaluate.add_argument("--observation", required=True, action="append", type=Path)
+    evaluate.add_argument("--output", required=True, type=Path)
+    args = parser.parse_args(argv)
+    try:
+        evaluate_mesh_files(args.rule, args.observation, args.output)
+    except ValueError as exc:
+        parser.error(str(exc))
+    return 0
+
+
+if __name__ == "__main__":  # pragma: no cover - exercised in prepared package.
+    raise SystemExit(main())

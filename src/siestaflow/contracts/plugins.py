@@ -27,6 +27,8 @@ class CapabilityKind(str, Enum):
     ARTIFACT_PROCESSOR = "ARTIFACT_PROCESSOR"
     POSTPROCESSOR = "POSTPROCESSOR"
     SCHEDULER = "SCHEDULER"
+    WORKFLOW_BUILDER = "WORKFLOW_BUILDER"
+    RECIPE = "RECIPE"
 
 
 _REQUIRED_METHODS = {
@@ -45,6 +47,8 @@ _REQUIRED_METHODS = {
     CapabilityKind.ARTIFACT_PROCESSOR: ("process",),
     CapabilityKind.POSTPROCESSOR: ("process",),
     CapabilityKind.SCHEDULER: ("submit", "status"),
+    CapabilityKind.WORKFLOW_BUILDER: ("build_task",),
+    CapabilityKind.RECIPE: ("build_workflow",),
 }
 
 
@@ -209,4 +213,3 @@ class CapabilityRegistry:
             if kind is None or item.descriptor.kind is kind
         )
         return tuple(sorted(values, key=lambda item: item.capability_id))
-

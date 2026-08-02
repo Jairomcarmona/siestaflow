@@ -58,6 +58,7 @@ from .workflows import (
 )
 from .validation_render import render_validation_report
 from .workflow_preflight import WorkflowPreflightValidator
+from .workflow_authoring import WorkflowAuthoringService
 
 
 def _repo_root() -> Path:
@@ -188,6 +189,22 @@ def build_parser() -> argparse.ArgumentParser:
         "workflow", help="validate and compile scientific workflow DAGs"
     )
     workflow_sub = workflow.add_subparsers(dest="action", required=True)
+    workflow_recipes = workflow_sub.add_parser(
+        "recipes", help="list registered workflow recipes"
+    )
+    workflow_recipes.add_argument("--json", action="store_true")
+    workflow_recipe = workflow_sub.add_parser(
+        "recipe", help="show one registered workflow recipe"
+    )
+    workflow_recipe.add_argument("recipe_id")
+    workflow_recipe.add_argument("--json", action="store_true")
+    workflow_create = workflow_sub.add_parser(
+        "create", help="create a canonical WorkflowDefinition from a scientific intent"
+    )
+    workflow_create.add_argument("intent", type=Path)
+    workflow_create.add_argument("--output", type=Path, required=True)
+    workflow_create.add_argument("--dry-run", action="store_true")
+    workflow_create.add_argument("--json", action="store_true")
     workflow_validate = workflow_sub.add_parser(
         "validate", help="validate schema, artifacts, and graph consistency"
     )
@@ -387,6 +404,19 @@ def _dispatch(args: argparse.Namespace) -> int:
             else 0
         )
     if args.domain == "workflow":
+        if args.action in {"recipes", "recipe", "create"}:
+            service = WorkflowAuthoringService()
+            if args.action == "recipes":
+                _emit({"recipes": service.recipes()}, args.json)
+                return 0
+            if args.action == "recipe":
+                _emit(service.recipe(args.recipe_id), args.json)
+                return 0
+            result = service.create_definition(
+                args.intent, args.output, dry_run=args.dry_run
+            )
+            _emit(result, args.json)
+            return 0
         if args.action == "preflight":
             profile = (
                 SiestaValidationProfile.load(args.profile)
