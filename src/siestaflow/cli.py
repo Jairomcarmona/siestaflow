@@ -35,6 +35,7 @@ from .execution.campaign_progress import read_campaign_progress, render_campaign
 from .m4_remote_package import M4RemoteSmokePackager
 from .controller_package import ControllerPackageBuilder
 from .band_results import BandResultExporter
+from .optical_results import OpticalResultExporter
 from .dos_pdos_results import DOSPDOSResultExporter
 from .run_inspection import RunInspector
 from .run_preparation import RunPreparer, RunPreparationRequest
@@ -360,6 +361,9 @@ def build_parser() -> argparse.ArgumentParser:
     bands.add_argument("--output", type=Path, required=True)
     bands.add_argument("--dry-run", action="store_true")
     bands.add_argument("--json", action="store_true")
+    optics = results_sub.add_parser("optics", help="export EPSIMG without interpretation")
+    optics.add_argument("package", type=Path); optics.add_argument("--output", type=Path, required=True)
+    optics.add_argument("--dry-run", action="store_true"); optics.add_argument("--json", action="store_true")
 
     examples = sub.add_parser("examples")
     example_sub = examples.add_subparsers(dest="action", required=True)
@@ -433,7 +437,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def _dispatch(args: argparse.Namespace) -> int:
     if args.domain == "results":
-        exporter = DOSPDOSResultExporter() if args.action == "dos-pdos" else BandResultExporter()
+        exporter = {"dos-pdos": DOSPDOSResultExporter, "bands": BandResultExporter, "optics": OpticalResultExporter}[args.action]()
         _emit(exporter.export(args.package, args.output, dry_run=args.dry_run), args.json)
         return 0
     if args.domain == "scientific":
