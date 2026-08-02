@@ -181,6 +181,12 @@ la siguiente etapa. La interfaz puede presentar el recorrido como un solo ciclo
 de usuario, pero cada ejecución deriva de un lock inmutable por la ruta
 canónica.
 
+La API canónica expone la composición como una receta explícita y la CLI la
+presenta mediante `workflow compose <intent> --dry-run`. El preview construye
+el mismo `WorkflowDefinition` que se compilaría, no crea un lock ni autoriza
+ejecución. Sólo después de la revisión humana se materializa, compila y prepara
+por la ruta ordinaria.
+
 ## 8. Descubrimiento de entornos HPC
 
 El descubrimiento sigue una promoción explícita:

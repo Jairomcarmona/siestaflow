@@ -36,6 +36,7 @@ antes de generar el lock y se repite mediante las reglas ordinarias del DAG.
 siestaflow workflow recipes [--json]
 siestaflow workflow recipe <recipe-id> [--json]
 siestaflow workflow create <intent.json> --output <workflow.json> [--dry-run]
+siestaflow workflow compose <intent.json> --output <workflow.json> [--dry-run]
 siestaflow workflow validate <workflow.json>
 siestaflow workflow plan <workflow.json>
 siestaflow workflow compile <workflow.json> --output workflow.lock.json
@@ -44,6 +45,42 @@ siestaflow run prepare workflow.lock.json ...
 
 `workflow create` no sobrescribe archivos y exige que intención, definición y
 entradas permanezcan en el mismo árbol autocontenido. `--dry-run` no escribe.
+
+`workflow compose` aplica el mismo recorrido, pero exige la receta genérica de
+composición manual y sirve como vista previa del DAG antes de materializarlo.
+
+## Composición manual de módulos
+
+La receta `siestaflow.recipe.scientific.manual-composition` deja elegir uno o
+varios builders registrados. Cada módulo declara sus propios parámetros,
+recursos y metadata; el intent padre no necesita recursos de ejecución. Esta
+es la interfaz para los ciclos parciales: un solo módulo, un subconjunto o una
+cadena completa. No contiene nombres de materiales ni de análisis en el núcleo.
+
+```json
+{
+  "schema_version": "1.0",
+  "intent_id": "researcher-cycle",
+  "project_id": "my-project",
+  "recipe": "siestaflow.recipe.scientific.manual-composition",
+  "parameters": {
+    "modules": [{
+      "module_id": "mesh",
+      "capability": "siestaflow.siesta.mesh-evidence-evaluator",
+      "parameters": {"rule": "rule.json", "observations": ["observations/001.json"]},
+      "resources": {"nodes": 1, "mpi_processes": 1, "processes_per_node": 1, "cpus_per_process": 1, "walltime_seconds": 30},
+      "metadata": {"authority": "HUMAN_REVIEW"}
+    }]
+  },
+  "resources": {},
+  "metadata": {"requested_by": "researcher"}
+}
+```
+
+La receta resuelve exclusivamente `WORKFLOW_BUILDER` ya registrados, deriva un
+hash determinista por módulo y exige que cada fragmento declare contratos de
+puerto. La composición conserva `execution_authorized: false`; después se usa
+la secuencia ordinaria `workflow compile` y `run prepare`.
 
 ## Intents de evaluación de convergencia
 

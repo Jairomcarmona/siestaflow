@@ -205,6 +205,13 @@ def build_parser() -> argparse.ArgumentParser:
     workflow_create.add_argument("--output", type=Path, required=True)
     workflow_create.add_argument("--dry-run", action="store_true")
     workflow_create.add_argument("--json", action="store_true")
+    workflow_compose = workflow_sub.add_parser(
+        "compose", help="preview or create a researcher-selected modular workflow"
+    )
+    workflow_compose.add_argument("intent", type=Path)
+    workflow_compose.add_argument("--output", type=Path, required=True)
+    workflow_compose.add_argument("--dry-run", action="store_true")
+    workflow_compose.add_argument("--json", action="store_true")
     workflow_validate = workflow_sub.add_parser(
         "validate", help="validate schema, artifacts, and graph consistency"
     )
@@ -404,7 +411,7 @@ def _dispatch(args: argparse.Namespace) -> int:
             else 0
         )
     if args.domain == "workflow":
-        if args.action in {"recipes", "recipe", "create"}:
+        if args.action in {"recipes", "recipe", "create", "compose"}:
             service = WorkflowAuthoringService()
             if args.action == "recipes":
                 _emit({"recipes": service.recipes()}, args.json)
@@ -412,8 +419,10 @@ def _dispatch(args: argparse.Namespace) -> int:
             if args.action == "recipe":
                 _emit(service.recipe(args.recipe_id), args.json)
                 return 0
-            result = service.create_definition(
-                args.intent, args.output, dry_run=args.dry_run
+            result = (
+                service.compose_definition(args.intent, args.output, dry_run=args.dry_run)
+                if args.action == "compose"
+                else service.create_definition(args.intent, args.output, dry_run=args.dry_run)
             )
             _emit(result, args.json)
             return 0

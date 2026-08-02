@@ -32,6 +32,7 @@ from .workflow_composition import (
     WorkflowComposer,
     WorkflowFragment,
 )
+from .contracts.workflow import require_local_id
 from .workflows import WorkflowCompiler
 
 
@@ -41,6 +42,7 @@ KGRID_EVALUATOR_CAPABILITY = "siestaflow.siesta.kgrid-evidence-evaluator"
 KGRID_EVALUATION_RECIPE = "siestaflow.recipe.siesta.kgrid-evidence-evaluation"
 OBSERVATION_PRODUCER_CAPABILITY = "siestaflow.siesta.observation-producer"
 OBSERVATION_PRODUCTION_RECIPE = "siestaflow.recipe.siesta.observation-production"
+SCIENTIFIC_COMPOSITION_RECIPE = "siestaflow.recipe.scientific.manual-composition"
 
 
 def _relative(raw: object, *, field: str) -> str:
@@ -365,6 +367,93 @@ class ObservationProductionRecipe:
         )
 
 
+def _module_intent(
+    parent: ScientificIntent,
+    raw: object,
+    *,
+    position: int,
+) -> tuple[str, str, ScientificIntent]:
+    """Derive a deterministic, in-memory intent for one selected module."""
+    if not isinstance(raw, Mapping):
+        raise ValueError("composition modules must be mappings")
+    expected = {"module_id", "capability", "parameters", "resources", "metadata"}
+    if set(raw) != expected:
+        raise ValueError("composition module fields mismatch")
+    module_id = require_local_id(str(raw["module_id"]), field_name="composition module id")
+    capability_id = str(raw["capability"]).strip()
+    if not capability_id:
+        raise ValueError("composition module capability is required")
+    for field in ("parameters", "resources", "metadata"):
+        if not isinstance(raw[field], Mapping):
+            raise ValueError(f"composition module {field} must be a mapping")
+        canonical_primitive(raw[field])
+    module_record = {
+        "parent_intent_sha256": parent.sha256,
+        "position": position,
+        "module_id": module_id,
+        "capability": capability_id,
+        "parameters": dict(raw["parameters"]),
+        "resources": dict(raw["resources"]),
+        "metadata": dict(raw["metadata"]),
+    }
+    digest = hashlib.sha256(
+        json.dumps(module_record, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
+    return module_id, capability_id, ScientificIntent(
+        source=parent.source,
+        intent_id=f"{parent.intent_id}-{module_id}",
+        project_id=parent.project_id,
+        recipe_id=capability_id,
+        parameters=dict(raw["parameters"]),
+        resources=dict(raw["resources"]),
+        metadata={**dict(parent.metadata), **dict(raw["metadata"]), "composition_module_id": module_id},
+        sha256=digest,
+    )
+
+
+class ManualCompositionRecipe:
+    """Compose an explicit subset of registered builders without authorizing a run."""
+
+    def build_workflow(self, intent: ScientificIntent, registry: CapabilityRegistry) -> dict[str, Any]:
+        if set(intent.parameters) != {"modules"}:
+            raise ValueError("manual composition intent requires modules")
+        modules = intent.parameters["modules"]
+        if not isinstance(modules, list) or not modules:
+            raise ValueError("composition modules must be a non-empty list")
+        selected_modules = [
+            _module_intent(intent, raw, position=position)
+            for position, raw in enumerate(modules, 1)
+        ]
+        selected = [module_id for module_id, _, _ in selected_modules]
+        if len(set(selected)) != len(selected):
+            raise ValueError("composition module ids must be unique")
+        fragments: list[WorkflowFragment] = []
+        for _, capability_id, module_intent in selected_modules:
+            registered = registry.resolve(
+                capability_id,
+                required_inputs=(SCIENTIFIC_INTENT,),
+                required_outputs=(WORKFLOW_DEFINITION,),
+            )
+            if registered.descriptor.kind is not CapabilityKind.WORKFLOW_BUILDER:
+                raise ValueError(f"composition capability is not a workflow builder: {capability_id}")
+            build_fragment = getattr(registered.implementation, "build_fragment", None)
+            if not callable(build_fragment):
+                raise TypeError(f"composable workflow capability cannot build a fragment: {capability_id}")
+            fragment = build_fragment(module_intent)
+            if not isinstance(fragment, WorkflowFragment):
+                raise TypeError(f"workflow capability returned an invalid fragment: {capability_id}")
+            fragments.append(fragment)
+        return WorkflowComposer().compose(
+            intent,
+            RecipePolicy(
+                SCIENTIFIC_COMPOSITION_RECIPE, "1.0.0",
+                "Researcher-selected composition of registered scientific modules",
+                "USER_SELECTED_MODULES",
+            ),
+            tuple(fragments),
+        )
+
+
 def builtin_authoring_registry() -> CapabilityRegistry:
     evaluator = CapabilityDescriptor(
         capability_id=MESH_EVALUATOR_CAPABILITY,
@@ -414,11 +503,18 @@ def builtin_authoring_registry() -> CapabilityRegistry:
         output_contracts=(WORKFLOW_DEFINITION,), engine="siesta",
         metadata={"requires": [OBSERVATION_PRODUCER_CAPABILITY], "runs_engine": False},
     )
+    composition_recipe = CapabilityDescriptor(
+        capability_id=SCIENTIFIC_COMPOSITION_RECIPE, kind=CapabilityKind.RECIPE,
+        implementation_version="1.0.0", input_contracts=(SCIENTIFIC_INTENT,),
+        output_contracts=(WORKFLOW_DEFINITION,), engine=None,
+        metadata={"requires": "user-selected registered WORKFLOW_BUILDER capabilities", "runs_engine": False,
+                  "execution_authorized": False},
+    )
     plugin = PluginDescriptor(
         plugin_id="siestaflow.builtin.scientific-authoring",
         plugin_version="1.0.0",
         core_contract_version=CORE_CONTRACT_VERSION,
-        capabilities=(evaluator, recipe, kgrid_evaluator, kgrid_recipe, producer, producer_recipe),
+        capabilities=(evaluator, recipe, kgrid_evaluator, kgrid_recipe, producer, producer_recipe, composition_recipe),
         provider="SIESTAFLOW",
         metadata={"registration": "explicit", "global_import_side_effects": False},
     )
@@ -430,6 +526,7 @@ def builtin_authoring_registry() -> CapabilityRegistry:
         KGRID_EVALUATION_RECIPE: KGridEvidenceRecipe(),
         OBSERVATION_PRODUCER_CAPABILITY: ObservationProducerTaskBuilder(),
         OBSERVATION_PRODUCTION_RECIPE: ObservationProductionRecipe(),
+        SCIENTIFIC_COMPOSITION_RECIPE: ManualCompositionRecipe(),
     })
     registry.freeze()
     return registry
@@ -480,9 +577,12 @@ class WorkflowAuthoringService:
         return intent, definition
 
     def create_definition(
-        self, intent_path: Path, output: Path, *, dry_run: bool = False
+        self, intent_path: Path, output: Path, *, dry_run: bool = False,
+        expected_recipe_id: str | None = None,
     ) -> dict[str, Any]:
         intent, definition = self.build(intent_path)
+        if expected_recipe_id is not None and intent.recipe_id != expected_recipe_id:
+            raise ValueError(f"intent must use recipe: {expected_recipe_id}")
         destination = output.resolve()
         if destination.parent != intent.source.parent:
             raise ValueError("workflow definition must remain beside its scientific intent")
@@ -523,3 +623,14 @@ class WorkflowAuthoringService:
             "workflow_lock_sha256": final.lock_dict()["content_sha256"],
             "execution_authorized": False,
         }
+
+    def compose_definition(
+        self, intent_path: Path, output: Path, *, dry_run: bool = False
+    ) -> dict[str, Any]:
+        """Create or preview a manually selected composition through the normal gate."""
+        if ScientificIntent.load(intent_path).recipe_id != SCIENTIFIC_COMPOSITION_RECIPE:
+            raise ValueError(f"intent must use recipe: {SCIENTIFIC_COMPOSITION_RECIPE}")
+        return self.create_definition(
+            intent_path, output, dry_run=dry_run,
+            expected_recipe_id=SCIENTIFIC_COMPOSITION_RECIPE,
+        )

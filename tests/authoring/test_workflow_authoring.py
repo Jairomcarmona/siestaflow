@@ -19,6 +19,7 @@ from siestaflow.workflow_authoring import (
     MESH_EVALUATOR_CAPABILITY,
     OBSERVATION_PRODUCTION_RECIPE,
     OBSERVATION_PRODUCER_CAPABILITY,
+    SCIENTIFIC_COMPOSITION_RECIPE,
     WorkflowAuthoringService,
 )
 from siestaflow.workflows import WorkflowCompiler, write_workflow_lock
@@ -83,6 +84,22 @@ def authoring_source(root: Path) -> tuple[Path, Path]:
     return intent, root / "workflow.json"
 
 
+def manual_composition_source(root: Path) -> tuple[Path, Path]:
+    intent, output = authoring_source(root)
+    original = json.loads(intent.read_text(encoding="utf-8"))
+    write_json(intent, {
+        "schema_version": "1.0", "intent_id": "researcher-selected-cycle",
+        "project_id": original["project_id"], "recipe": SCIENTIFIC_COMPOSITION_RECIPE,
+        "parameters": {"modules": [{
+            "module_id": "mesh", "capability": MESH_EVALUATOR_CAPABILITY,
+            "parameters": original["parameters"], "resources": original["resources"],
+            "metadata": {"selection": "isolated-convergence"},
+        }]},
+        "resources": {}, "metadata": {"requested_by": "researcher"},
+    })
+    return intent, output
+
+
 def kgrid(dimensions: tuple[int, int, int]) -> dict:
     return {"dimensions": list(dimensions), "shifts": ["0.0", "0.0", "0.0"]}
 
@@ -142,7 +159,8 @@ def test_registry_exposes_recipe_and_builder_without_global_discovery() -> None:
     assert WORKFLOW_DEFINITION in contract_catalog()
     service = WorkflowAuthoringService()
     assert [item["recipe_id"] for item in service.recipes()] == [
-        KGRID_EVALUATION_RECIPE, MESH_EVALUATION_RECIPE, OBSERVATION_PRODUCTION_RECIPE,
+        SCIENTIFIC_COMPOSITION_RECIPE, KGRID_EVALUATION_RECIPE,
+        MESH_EVALUATION_RECIPE, OBSERVATION_PRODUCTION_RECIPE,
     ]
     detail = service.recipe(MESH_EVALUATION_RECIPE)
     assert detail["metadata"]["requires"] == [MESH_EVALUATOR_CAPABILITY]
@@ -175,6 +193,37 @@ def test_application_builds_a_canonical_deterministic_workflow(tmp_path: Path) -
     assert all(item["artifact_type"].startswith("siestaflow.") for item in composition["ports"])
 
 
+def test_manual_composition_preview_is_deterministic_and_never_authorizes_execution(tmp_path: Path) -> None:
+    intent, output = manual_composition_source(tmp_path)
+    service = WorkflowAuthoringService()
+    first = service.compose_definition(intent, output, dry_run=True)
+    second = service.compose_definition(intent, output, dry_run=True)
+    assert first == second
+    assert first["status"] == "WORKFLOW_DEFINITION_PREVIEW"
+    assert first["execution_authorized"] is False and not output.exists()
+    assert first["definition"]["metadata"]["recipe_id"] == SCIENTIFIC_COMPOSITION_RECIPE
+    assert first["definition"]["metadata"]["composition"]["fragments"] == ["mesh-evidence-evaluation"]
+    result = service.compose_definition(intent, output)
+    assert result["status"] == "WORKFLOW_DEFINITION_CREATED"
+    assert WorkflowCompiler().compile(output).valid
+
+
+def test_manual_composition_rejects_duplicate_modules_and_non_builder_capabilities(tmp_path: Path) -> None:
+    intent, output = manual_composition_source(tmp_path)
+    raw = json.loads(intent.read_text(encoding="utf-8"))
+    raw["parameters"]["modules"].append(dict(raw["parameters"]["modules"][0]))
+    write_json(intent, raw)
+    with pytest.raises(ValueError, match="module ids must be unique"):
+        WorkflowAuthoringService().compose_definition(intent, output)
+    raw["parameters"]["modules"] = [{
+        **raw["parameters"]["modules"][0],
+        "module_id": "not-a-builder", "capability": MESH_EVALUATION_RECIPE,
+    }]
+    write_json(intent, raw)
+    with pytest.raises(ValueError, match="not a workflow builder"):
+        WorkflowAuthoringService().compose_definition(intent, output)
+
+
 def test_observation_producer_recipe_builds_a_canonical_postprocess_node(tmp_path: Path) -> None:
     for name in ("input.fdf", "stdout.txt", "FORCE_STRESS", "pseudo.json"):
         (tmp_path / name).write_text("placeholder\n", encoding="utf-8")
@@ -202,13 +251,19 @@ def test_cli_lists_describes_and_creates_recipe_workflow(tmp_path: Path, capsys)
     intent, output = authoring_source(tmp_path)
     assert main(["workflow", "recipes", "--json"]) == 0
     assert [item["recipe_id"] for item in json.loads(capsys.readouterr().out)["recipes"]] == [
-        KGRID_EVALUATION_RECIPE, MESH_EVALUATION_RECIPE, OBSERVATION_PRODUCTION_RECIPE,
+        SCIENTIFIC_COMPOSITION_RECIPE, KGRID_EVALUATION_RECIPE,
+        MESH_EVALUATION_RECIPE, OBSERVATION_PRODUCTION_RECIPE,
     ]
     assert main(["workflow", "recipe", MESH_EVALUATION_RECIPE, "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["metadata"]["runs_engine"] is False
     assert main(["workflow", "create", str(intent), "--output", str(output), "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["status"] == "WORKFLOW_DEFINITION_CREATED"
     assert output.is_file()
+    compose_intent, compose_output = manual_composition_source(tmp_path / "compose")
+    assert main(["workflow", "compose", str(compose_intent), "--output", str(compose_output), "--dry-run", "--json"]) == 0
+    preview = json.loads(capsys.readouterr().out)
+    assert preview["status"] == "WORKFLOW_DEFINITION_PREVIEW"
+    assert preview["execution_authorized"] is False and not compose_output.exists()
 
 
 def test_mesh_recipe_compiles_prepares_and_executes_through_canonical_gate(tmp_path: Path) -> None:
