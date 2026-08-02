@@ -82,10 +82,18 @@ class SiestaInputValidator:
         for required, present in (("ChemicalSpeciesLabel", species_block), ("AtomicCoordinatesAndAtomicSpecies", coordinates), ("LatticeVectors", lattice)):
             if present is None:
                 findings.append(ValidationFinding("MISSING_REQUIRED_BLOCK", DecisionStatus.FAIL, f"missing required block {required}"))
-        for declared in ("NetCharge", "Spin", "MD.Steps", "MD.TypeOfRun"):
+        for declared in ("NetCharge", "Spin", "MD.TypeOfRun"):
             if not document.scalars(declared):
                 findings.append(ValidationFinding("UNDECLARED_GOVERNED_VALUE", DecisionStatus.REVIEW, f"{declared} is not explicitly declared; no default assumed"))
-        _integer_scalar(document, "MD.Steps", findings)
+        step_labels = ("MD.Steps", "MD.NumCGSteps")
+        if not any(document.scalars(label) for label in step_labels):
+            findings.append(ValidationFinding(
+                "UNDECLARED_GOVERNED_VALUE", DecisionStatus.REVIEW,
+                "MD.Steps or MD.NumCGSteps is not explicitly declared; no default assumed",
+            ))
+        for label in step_labels:
+            if document.scalars(label):
+                _integer_scalar(document, label, findings)
 
         if pseudo_result is not None:
             findings.append(ValidationFinding("PSEUDOPOTENTIAL_AUDIT", pseudo_result.status, "pseudopotential manifest verification", pseudo_result.findings))

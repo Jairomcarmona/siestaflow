@@ -77,3 +77,18 @@ def test_documented_density_matrix_restart_keyword_is_recognized(sanity_fdf: Pat
         item.code == "UNKNOWN_LABEL" and item.label == "DM.UseSaveDM"
         for item in result.findings
     )
+
+
+def test_cg_steps_are_recognized_as_the_explicit_relaxation_step_limit(sanity_fdf: Path):
+    source = sanity_fdf.read_text(encoding="utf-8").replace(
+        "MD.Steps 0", "MD.NumCGSteps 1"
+    )
+    result = SiestaInputValidator().validate(FDFParser().parse(source))
+    assert not any(
+        item.code == "UNKNOWN_LABEL" and "MD.NumCGSteps" in item.message
+        for item in result.findings
+    )
+    assert not any(
+        item.code == "UNDECLARED_GOVERNED_VALUE" and "MD.Steps" in item.message
+        for item in result.findings
+    )
