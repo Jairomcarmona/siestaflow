@@ -703,7 +703,23 @@ class RunPreparer:
                 raise ValueError(
                     f"unsupported execution capability: {task.capability_id}"
                 )
-            if task.settings:
+            scientific_propagation: list[dict[str, Any]] | None = None
+            if task.settings and set(task.settings) == {"numerical_profiles"}:
+                raw_profiles = task.settings["numerical_profiles"]
+                if not isinstance(raw_profiles, list) or not raw_profiles:
+                    raise ValueError(
+                        f"invalid approved numerical profile propagation: {task.task_id}"
+                    )
+                expected = {
+                    "profile_id", "profile_sha256", "parameter", "selection",
+                    "candidate_sha256", "evidence_sha256", "approval_id", "approval_sha256",
+                }
+                if any(not isinstance(item, Mapping) or set(item) != expected for item in raw_profiles):
+                    raise ValueError(
+                        f"invalid approved numerical profile propagation: {task.task_id}"
+                    )
+                scientific_propagation = [dict(item) for item in raw_profiles]
+            elif task.settings:
                 raise ValueError(
                     f"task settings require an explicit engine adapter: {task.task_id}"
                 )
@@ -805,8 +821,7 @@ class RunPreparer:
                 raise ValueError(
                     f"SIESTA task has no external FDF input: {task.task_id}"
                 )
-            tasks.append(
-                {
+            record = {
                     "task_id": task.task_id,
                     "kind": "siesta",
                     "input": primary,
@@ -828,8 +843,12 @@ class RunPreparer:
                     "estimated_runtime_seconds": walltime,
                     "max_attempts": profile.max_attempts,
                     "require_scf_converged": profile.require_scf_converged,
-                }
-            )
+            }
+            if scientific_propagation is not None:
+                # The controller does not consume these values as engine flags.
+                # They are immutable provenance retained in campaign/run hashes.
+                record["scientific_propagation"] = scientific_propagation
+            tasks.append(record)
         campaign = {
             "schema_version": "2.0",
             "campaign_id": run_id,

@@ -401,6 +401,16 @@ def test_approved_convergence_profile_creates_a_new_hash_bound_relaxation_stage(
     assert profiles[0]["selection"] == {"unit": "Ry", "value": "200"}
     assert compilation.compiled.metadata["scientific_scope"] == "CONVERGENCE_APPROVED_STRUCTURAL_RELAXATION"  # type: ignore[union-attr]
     assert compilation.compiled.metadata["execution_authorized"] is False  # type: ignore[union-attr]
+    lock = tmp_path / "workflow.lock.json"
+    write_workflow_lock(compilation, lock)
+    prepared = RunPreparer(REPO).prepare(RunPreparationRequest(
+        workflow_lock=lock, source_root=tmp_path, execution_profile=profile(tmp_path),
+        output_root=tmp_path / "packages", run_id="approved-convergence-relaxation",
+    ))
+    campaign = json.loads((Path(prepared.package_path) / "campaign.yaml").read_text(encoding="utf-8"))
+    propagation = campaign["tasks"][0]["scientific_propagation"]
+    assert propagation[0]["profile_id"] == "mesh-200-ry"
+    assert propagation[0]["parameter"] == "Mesh.Cutoff"
 
 
 def test_converge_then_relax_rejects_wrong_fdf_or_unmatched_evidence(tmp_path: Path, capsys) -> None:
