@@ -125,6 +125,23 @@ que deja fuera sólo etiquetas, control de movimiento y opciones de análisis;
 cualquier cambio de geometría, pseudo-etiqueta, carga, spin, XC, base, malla,
 k-grid o SCF impide crear el workflow.
 
+## Bandas iniciales
+
+`siestaflow.recipe.siesta.band-structure` materializa una tarea SIESTA con un
+FDF y PSML explícitos del investigador. Exige `MD.TypeOfRun CG` y
+`MD.NumCGSteps 0`, un único `SystemLabel`, `BandLinesScale` explícito y un
+bloque `BandLines` cerrado. La primera fila debe tener conteo uno y las demás
+un conteo positivo; las coordenadas y etiquetas de la trayectoria siguen siendo
+decisiones del investigador. No se generan puntos de alta simetría, no se usa
+`BandPoints` en este corte, ni se infiere dimensionalidad, simetría o material.
+
+La salida requerida es `<SystemLabel>.bands`
+(`siestaflow.band-structure`). El consumidor `results bands` valida la
+procedencia del paquete y exporta una tabla larga con distancia k, índice de
+punto, espín, banda y energía, junto con un manifiesto que conserva Fermi y los
+rangos declarados por SIESTA. No desplaza energías, identifica gaps, ni produce
+una conclusión científica.
+
 ## Aprobación y propagación de convergencia
 
 Una recomendación `READY_FOR_HUMAN_REVIEW` no altera el lock que produjo la

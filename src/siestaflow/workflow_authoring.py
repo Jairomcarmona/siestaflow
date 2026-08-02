@@ -54,6 +54,8 @@ DOS_PDOS_CAPABILITY = "siestaflow.siesta.dos-pdos"
 DOS_PDOS_RECIPE = "siestaflow.recipe.siesta.dos-pdos"
 GROUND_STATE_TO_DOS_PDOS_CAPABILITY = "siestaflow.siesta.ground-state-to-dos-pdos"
 GROUND_STATE_TO_DOS_PDOS_RECIPE = "siestaflow.recipe.siesta.ground-state-to-dos-pdos"
+BAND_STRUCTURE_CAPABILITY = "siestaflow.siesta.band-structure"
+BAND_STRUCTURE_RECIPE = "siestaflow.recipe.siesta.band-structure"
 
 
 def _relative(raw: object, *, field: str) -> str:
@@ -722,6 +724,126 @@ class DOSPDOSRecipe:
         )
 
 
+class BandStructureTaskBuilder:
+    """Build a researcher-defined SIESTA band-path calculation.
+
+    The researcher supplies the reciprocal-space path.  This contract verifies
+    only that SIESTA can consume it safely and declares the resulting ``.bands``
+    artifact; it never generates high-symmetry points or interprets energies.
+    """
+
+    _PARAMETERS = {"fdf", "pseudopotentials"}
+
+    def build_task(self, intent: ScientificIntent) -> dict[str, Any]:
+        if set(intent.parameters) != self._PARAMETERS:
+            raise ValueError("band_structure intent requires fdf and pseudopotentials")
+        root = intent.source.parent
+        fdf = _relative(intent.parameters["fdf"], field="parameters.fdf")
+        fdf_path = root / Path(*PurePosixPath(fdf).parts)
+        if not fdf_path.is_file():
+            raise ValueError(f"band_structure FDF is missing: {fdf}")
+        label, expected_pseudos = self._band_spec(fdf_path)
+        pseudos = intent.parameters["pseudopotentials"]
+        if not isinstance(pseudos, list) or not pseudos:
+            raise ValueError("band_structure pseudopotentials must be a non-empty list")
+        inputs: list[dict[str, Any]] = [{
+            "name": "fdf", "source": fdf, "destination": "bands.fdf",
+            "media_type": "application/x-siesta-fdf",
+        }]
+        destinations = {"bands.fdf"}
+        for index, item in enumerate(pseudos, 1):
+            if not isinstance(item, Mapping) or set(item) != {"source", "destination"}:
+                raise ValueError("each band_structure pseudopotential requires source and destination")
+            source = _relative(item["source"], field="parameters.pseudopotentials.source")
+            destination = _relative(item["destination"], field="parameters.pseudopotentials.destination")
+            if not source.casefold().endswith(".psml") or not (root / Path(*PurePosixPath(source).parts)).is_file():
+                raise ValueError("band_structure pseudopotential must be an existing PSML file")
+            if destination in destinations:
+                raise ValueError(f"band_structure input destination is duplicated: {destination}")
+            destinations.add(destination)
+            inputs.append({"name": f"pseudo_{index:03d}", "source": source, "destination": destination,
+                           "media_type": "application/x-psml"})
+        if destinations - {"bands.fdf"} != set(expected_pseudos):
+            raise ValueError("band_structure pseudopotential destinations must match ChemicalSpeciesLabel")
+        return {
+            "task_id": "bands", "kind": "calculation", "capability": "siestaflow.engine.siesta",
+            "inputs": inputs,
+            "outputs": [{
+                "name": "band_structure", "path": f"{label}.bands",
+                "artifact_type": "siestaflow.band-structure", "media_type": "text/plain", "required": True,
+            }],
+            "resources": _resources(intent.resources), "settings": {},
+        }
+
+    def build_fragment(self, intent: ScientificIntent) -> WorkflowFragment:
+        task = self.build_task(intent)
+        return WorkflowFragment.single(
+            "bands", task,
+            input_contracts={
+                "fdf": ArtifactPortContract("siestaflow.siesta-band-structure-fdf", "application/x-siesta-fdf"),
+                **{f"pseudo_{index:03d}": ArtifactPortContract("siestaflow.pseudopotential", "application/x-psml")
+                   for index, _ in enumerate(intent.parameters["pseudopotentials"], 1)},
+            },
+        )
+
+    @staticmethod
+    def _band_spec(path: Path) -> tuple[str, tuple[str, ...]]:
+        document = FDFParser().parse_path(path)
+        labels = document.scalars("SystemLabel")
+        run_type = document.scalars("MD.TypeOfRun")
+        steps = document.scalars("MD.NumCGSteps")
+        scale = document.scalars("BandLinesScale")
+        lines = document.blocks("BandLines")
+        if len(labels) != 1:
+            raise ValueError("band_structure requires exactly one SystemLabel")
+        if len(run_type) != 1 or run_type[0].value.casefold() != "cg":
+            raise ValueError("band_structure requires explicit MD.TypeOfRun CG")
+        if len(steps) != 1 or steps[0].value != "0":
+            raise ValueError("band_structure requires explicit MD.NumCGSteps 0")
+        if document.blocks("BandPoints"):
+            raise ValueError("band_structure currently requires BandLines, not BandPoints")
+        if len(scale) != 1 or scale[0].value.casefold() not in {"reciprocallatticevectors", "pi/a"}:
+            raise ValueError("band_structure requires explicit BandLinesScale ReciprocalLatticeVectors or pi/a")
+        if len(lines) != 1 or not lines[0].closed:
+            raise ValueError("band_structure requires exactly one closed BandLines block")
+        rows = [raw.split("#", 1)[0].strip().split() for raw in lines[0].body_lines]
+        rows = [row for row in rows if row and not row[0].startswith(("!", ";"))]
+        if len(rows) < 2:
+            raise ValueError("BandLines requires at least two explicit path endpoints")
+        for index, row in enumerate(rows):
+            if len(row) < 4:
+                raise ValueError("BandLines row requires point count and three coordinates")
+            try:
+                count = int(row[0])
+                tuple(Decimal(value) for value in row[1:4])
+            except (ValueError, InvalidOperation) as exc:
+                raise ValueError("BandLines has invalid count or reciprocal coordinates") from exc
+            if count < 1 or (index == 0 and count != 1):
+                raise ValueError("first BandLines row must have count 1; later rows must have positive counts")
+        species_blocks = document.blocks("ChemicalSpeciesLabel")
+        if len(species_blocks) != 1:
+            raise ValueError("band_structure requires exactly one ChemicalSpeciesLabel block")
+        species: set[str] = set()
+        for raw in species_blocks[0].body_lines:
+            fields = raw.split("#", 1)[0].strip().split()
+            if not fields or fields[0].startswith(("!", ";")):
+                continue
+            if len(fields) < 3:
+                raise ValueError("band_structure has an invalid ChemicalSpeciesLabel row")
+            species.add(require_local_id(fields[2], field_name="SIESTA species label"))
+        if not species:
+            raise ValueError("band_structure requires ChemicalSpeciesLabel rows")
+        return require_local_id(labels[0].value, field_name="SIESTA SystemLabel"), tuple(f"{item}.psml" for item in sorted(species))
+
+
+class BandStructureRecipe:
+    def build_workflow(self, intent: ScientificIntent, registry: CapabilityRegistry) -> dict[str, Any]:
+        return _compose_single(
+            intent, registry, capability_id=BAND_STRUCTURE_CAPABILITY,
+            policy=RecipePolicy(BAND_STRUCTURE_RECIPE, "1.0.0", "Run a user-declared SIESTA band-path calculation", "BAND_STRUCTURE_ANALYSIS"),
+        )
+
+
 def _restart_identity(path: Path) -> str:
     """Hash scientific input common to an SCF parent and a DOS/PDOS child.
 
@@ -1211,6 +1333,19 @@ def builtin_authoring_registry() -> CapabilityRegistry:
         metadata={"requires": [GROUND_STATE_TO_DOS_PDOS_CAPABILITY], "runs_engine": True,
                   "execution_authorized": False},
     )
+    band_structure = CapabilityDescriptor(
+        capability_id=BAND_STRUCTURE_CAPABILITY, kind=CapabilityKind.WORKFLOW_BUILDER,
+        implementation_version="1.0.0", input_contracts=(SCIENTIFIC_INTENT,),
+        output_contracts=(WORKFLOW_DEFINITION,), engine="siesta",
+        metadata={"scope": "explicit SIESTA BandLines path", "runs_engine": True},
+    )
+    band_structure_recipe = CapabilityDescriptor(
+        capability_id=BAND_STRUCTURE_RECIPE, kind=CapabilityKind.RECIPE,
+        implementation_version="1.0.0", input_contracts=(SCIENTIFIC_INTENT,),
+        output_contracts=(WORKFLOW_DEFINITION,), engine="siesta",
+        metadata={"requires": [BAND_STRUCTURE_CAPABILITY], "runs_engine": True,
+                  "execution_authorized": False},
+    )
     plugin = PluginDescriptor(
         plugin_id="siestaflow.builtin.scientific-authoring",
         plugin_version="1.0.0",
@@ -1218,7 +1353,8 @@ def builtin_authoring_registry() -> CapabilityRegistry:
         capabilities=(evaluator, recipe, kgrid_evaluator, kgrid_recipe, producer, producer_recipe,
                       composition_recipe, relaxation, relaxation_recipe, converge_then_relax,
                       converge_then_relax_recipe, dos_pdos, dos_pdos_recipe,
-                      ground_state_to_dos_pdos, ground_state_to_dos_pdos_recipe),
+                      ground_state_to_dos_pdos, ground_state_to_dos_pdos_recipe,
+                      band_structure, band_structure_recipe),
         provider="SIESTAFLOW",
         metadata={"registration": "explicit", "global_import_side_effects": False},
     )
@@ -1239,6 +1375,8 @@ def builtin_authoring_registry() -> CapabilityRegistry:
         DOS_PDOS_RECIPE: DOSPDOSRecipe(),
         GROUND_STATE_TO_DOS_PDOS_CAPABILITY: GroundStateToDOSPDOSTaskBuilder(),
         GROUND_STATE_TO_DOS_PDOS_RECIPE: GroundStateToDOSPDOSRecipe(),
+        BAND_STRUCTURE_CAPABILITY: BandStructureTaskBuilder(),
+        BAND_STRUCTURE_RECIPE: BandStructureRecipe(),
     })
     registry.freeze()
     return registry

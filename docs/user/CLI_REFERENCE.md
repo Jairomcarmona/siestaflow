@@ -22,6 +22,7 @@ run inspect PACKAGE [--json]
 run status PACKAGE [--json]
 run resume PACKAGE [--previous-job-terminal] [--json]
 results dos-pdos PACKAGE --output DIRECTORY [--dry-run] [--json]
+results bands PACKAGE --output DIRECTORY [--dry-run] [--json]
 campaign create --project PATH --campaign-id ID [--dry-run] [--json]
 campaign validate CAMPAIGN [--dry-run] [--json]
 campaign simulate CAMPAIGN [--dry-run] [--json]
@@ -109,3 +110,10 @@ fresh directory containing `total_dos.csv` and `dos_pdos_export.json`. The
 manifest binds the table to the workflow lock, run lock, task attempt, raw DOS,
 raw PDOS, and any restart transfer. It exports numbers only: it never infers a
 gap, peak, orbital assignment, or scientific conclusion.
+
+`results bands` is the equivalent read-only consumer for one completed task
+that declares a SIESTA `.bands` artifact. It verifies immutable provenance,
+successful SCF completion, and the artifact hash, then writes `bands.csv` in
+long form plus `bands_export.json`. The latter records the Fermi energy and the
+declared k/energy ranges exactly as written by SIESTA. It does not shift bands,
+identify a gap, generate a k-path, or assign physical meaning to the result.

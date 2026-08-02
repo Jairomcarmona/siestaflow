@@ -13,6 +13,8 @@ from siestaflow.contracts import SCIENTIFIC_INTENT, WORKFLOW_DEFINITION, contrac
 from siestaflow.execution.allocation_controller import AllocationController, ExecutionStatus
 from siestaflow.run_preparation import RunPreparationRequest, RunPreparer
 from siestaflow.workflow_authoring import (
+    BAND_STRUCTURE_CAPABILITY,
+    BAND_STRUCTURE_RECIPE,
     CONVERGE_THEN_RELAX_CAPABILITY,
     CONVERGE_THEN_RELAX_RECIPE,
     DOS_PDOS_CAPABILITY,
@@ -185,6 +187,47 @@ MD.NumCGSteps 0
     return intent, root / "dos-pdos-workflow.json"
 
 
+def band_structure_source(root: Path) -> tuple[Path, Path]:
+    fdf = root / "bands.fdf"
+    fdf.write_text("""SystemName Local technical band fixture
+SystemLabel bands_local
+NumberOfAtoms 1
+NumberOfSpecies 1
+%block ChemicalSpeciesLabel
+  1 6 C
+%endblock ChemicalSpeciesLabel
+LatticeConstant 1.0 Ang
+%block LatticeVectors
+  8.0 0.0 0.0
+  0.0 8.0 0.0
+  0.0 0.0 8.0
+%endblock LatticeVectors
+AtomicCoordinatesFormat Ang
+%block AtomicCoordinatesAndAtomicSpecies
+  0.0 0.0 0.0 1
+%endblock AtomicCoordinatesAndAtomicSpecies
+NetCharge 0
+Spin non-polarized
+MD.TypeOfRun CG
+MD.NumCGSteps 0
+BandLinesScale ReciprocalLatticeVectors
+%block BandLines
+  1 0.0 0.0 0.0 Gamma
+  4 0.5 0.0 0.0 X
+%endblock BandLines
+""", encoding="utf-8", newline="\n")
+    (root / "C.psml").write_text("technical fixture only\n", encoding="utf-8")
+    intent = root / "bands-intent.json"
+    write_json(intent, {
+        "schema_version": "1.0", "intent_id": "bands-local", "project_id": "test-project",
+        "recipe": BAND_STRUCTURE_RECIPE,
+        "parameters": {"fdf": "bands.fdf", "pseudopotentials": [{"source": "C.psml", "destination": "C.psml"}]},
+        "resources": {"nodes": 1, "mpi_processes": 1, "processes_per_node": 1, "cpus_per_process": 1, "walltime_seconds": 60},
+        "metadata": {"classification": "TECHNICAL_BANDS_CONTRACT_TEST"},
+    })
+    return intent, root / "bands-workflow.json"
+
+
 def ground_state_to_dos_pdos_source(root: Path) -> tuple[Path, Path]:
     _, _ = dos_pdos_source(root)
     child = root / "dos-pdos.fdf"
@@ -333,7 +376,7 @@ def test_registry_exposes_recipe_and_builder_without_global_discovery() -> None:
     assert WORKFLOW_DEFINITION in contract_catalog()
     service = WorkflowAuthoringService()
     assert [item["recipe_id"] for item in service.recipes()] == [
-        SCIENTIFIC_COMPOSITION_RECIPE, CONVERGE_THEN_RELAX_RECIPE, DOS_PDOS_RECIPE,
+        SCIENTIFIC_COMPOSITION_RECIPE, BAND_STRUCTURE_RECIPE, CONVERGE_THEN_RELAX_RECIPE, DOS_PDOS_RECIPE,
         GROUND_STATE_TO_DOS_PDOS_RECIPE, KGRID_EVALUATION_RECIPE,
         MESH_EVALUATION_RECIPE, OBSERVATION_PRODUCTION_RECIPE, STRUCTURAL_RELAXATION_RECIPE,
     ]
@@ -510,6 +553,42 @@ def test_dos_pdos_recipe_builds_a_canonical_siesta_task_and_package(tmp_path: Pa
     assert campaign["tasks"][0]["required_artifacts"] == ["dos_local.PDOS", "dos_local.DOS"]
 
 
+def test_band_structure_recipe_requires_explicit_path_and_declares_bands(tmp_path: Path) -> None:
+    intent, definition = band_structure_source(tmp_path)
+    result = WorkflowAuthoringService().create_definition(intent, definition)
+    assert result["recipe_id"] == BAND_STRUCTURE_RECIPE
+    compilation = WorkflowCompiler().compile(definition)
+    assert compilation.valid
+    task = compilation.compiled.tasks[0]  # type: ignore[union-attr]
+    assert [(item.name, item.relative_path, item.artifact_type) for item in task.outputs] == [
+        ("band_structure", "bands_local.bands", "siestaflow.band-structure"),
+    ]
+    lock = tmp_path / "workflow.lock.json"
+    write_workflow_lock(compilation, lock)
+    prepared = RunPreparer(REPO).prepare(RunPreparationRequest(
+        workflow_lock=lock, source_root=tmp_path, execution_profile=profile(tmp_path),
+        output_root=tmp_path / "packages", run_id="bands-local",
+    ))
+    campaign = json.loads((Path(prepared.package_path) / "campaign.yaml").read_text(encoding="utf-8"))
+    assert campaign["tasks"][0]["required_artifacts"] == ["bands_local.bands"]
+
+
+@pytest.mark.parametrize("replacement", [
+    "BandLinesScale pi/b", "  2 0.0 0.0 0.0 Gamma", "%block BandPoints\n  0.0 0.0 0.0\n%endblock BandPoints",
+])
+def test_band_structure_rejects_invalid_or_ambiguous_path_contract(tmp_path: Path, replacement: str) -> None:
+    intent, definition = band_structure_source(tmp_path)
+    fdf = tmp_path / "bands.fdf"
+    if replacement.startswith("%block"):
+        fdf.write_text(fdf.read_text(encoding="utf-8") + replacement + "\n", encoding="utf-8", newline="\n")
+    elif replacement.startswith("  2"):
+        fdf.write_text(fdf.read_text(encoding="utf-8").replace("  1 0.0 0.0 0.0 Gamma", replacement), encoding="utf-8", newline="\n")
+    else:
+        fdf.write_text(fdf.read_text(encoding="utf-8").replace("BandLinesScale ReciprocalLatticeVectors", replacement), encoding="utf-8", newline="\n")
+    with pytest.raises(ValueError):
+        WorkflowAuthoringService().create_definition(intent, definition)
+
+
 def test_ground_state_to_dos_pdos_transfers_only_hash_bound_dm(tmp_path: Path) -> None:
     intent, definition = ground_state_to_dos_pdos_source(tmp_path)
     result = WorkflowAuthoringService().create_definition(intent, definition)
@@ -649,7 +728,7 @@ def test_cli_lists_describes_and_creates_recipe_workflow(tmp_path: Path, capsys)
     intent, output = authoring_source(tmp_path)
     assert main(["workflow", "recipes", "--json"]) == 0
     assert [item["recipe_id"] for item in json.loads(capsys.readouterr().out)["recipes"]] == [
-        SCIENTIFIC_COMPOSITION_RECIPE, CONVERGE_THEN_RELAX_RECIPE, DOS_PDOS_RECIPE,
+        SCIENTIFIC_COMPOSITION_RECIPE, BAND_STRUCTURE_RECIPE, CONVERGE_THEN_RELAX_RECIPE, DOS_PDOS_RECIPE,
         GROUND_STATE_TO_DOS_PDOS_RECIPE, KGRID_EVALUATION_RECIPE,
         MESH_EVALUATION_RECIPE, OBSERVATION_PRODUCTION_RECIPE, STRUCTURAL_RELAXATION_RECIPE,
     ]

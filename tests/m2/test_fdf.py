@@ -127,3 +127,19 @@ MD.NumCGSteps 0
         item.code == "UNKNOWN_LABEL" and "ProjectedDensityOfStates" in item.message
         for item in result.findings
     )
+
+
+def test_band_path_labels_are_recognized_by_the_versioned_registry(sanity_fdf: Path):
+    source = sanity_fdf.read_text(encoding="utf-8") + """
+BandLinesScale ReciprocalLatticeVectors
+%block BandLines
+  1 0.0 0.0 0.0 Gamma
+  4 0.5 0.0 0.0 X
+%endblock BandLines
+"""
+    result = SiestaInputValidator().validate(FDFParser().parse(source))
+
+    assert not any(
+        item.code == "UNKNOWN_LABEL" and any(label in item.message for label in ("BandLinesScale", "BandLines"))
+        for item in result.findings
+    )

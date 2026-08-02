@@ -34,6 +34,7 @@ from .execution.allocation_controller import AllocationController, ExecutionStat
 from .execution.campaign_progress import read_campaign_progress, render_campaign_progress
 from .m4_remote_package import M4RemoteSmokePackager
 from .controller_package import ControllerPackageBuilder
+from .band_results import BandResultExporter
 from .dos_pdos_results import DOSPDOSResultExporter
 from .run_inspection import RunInspector
 from .run_preparation import RunPreparer, RunPreparationRequest
@@ -352,6 +353,13 @@ def build_parser() -> argparse.ArgumentParser:
     dos_pdos.add_argument("--output", type=Path, required=True)
     dos_pdos.add_argument("--dry-run", action="store_true")
     dos_pdos.add_argument("--json", action="store_true")
+    bands = results_sub.add_parser(
+        "bands", help="export a SIESTA band table without interpretation"
+    )
+    bands.add_argument("package", type=Path)
+    bands.add_argument("--output", type=Path, required=True)
+    bands.add_argument("--dry-run", action="store_true")
+    bands.add_argument("--json", action="store_true")
 
     examples = sub.add_parser("examples")
     example_sub = examples.add_subparsers(dest="action", required=True)
@@ -425,7 +433,8 @@ def main(argv: list[str] | None = None) -> int:
 
 def _dispatch(args: argparse.Namespace) -> int:
     if args.domain == "results":
-        _emit(DOSPDOSResultExporter().export(args.package, args.output, dry_run=args.dry_run), args.json)
+        exporter = DOSPDOSResultExporter() if args.action == "dos-pdos" else BandResultExporter()
+        _emit(exporter.export(args.package, args.output, dry_run=args.dry_run), args.json)
         return 0
     if args.domain == "scientific":
         if args.action == "decide":
