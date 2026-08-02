@@ -27,6 +27,7 @@ from siestaflow.workflow_authoring import (
     MESH_EVALUATOR_CAPABILITY,
     OBSERVATION_PRODUCTION_RECIPE,
     OBSERVATION_PRODUCER_CAPABILITY,
+    OPTICAL_SPECTRUM_RECIPE,
     SCIENTIFIC_COMPOSITION_RECIPE,
     STRUCTURAL_RELAXATION_CAPABILITY,
     STRUCTURAL_RELAXATION_RECIPE,
@@ -378,7 +379,7 @@ def test_registry_exposes_recipe_and_builder_without_global_discovery() -> None:
     assert [item["recipe_id"] for item in service.recipes()] == [
         SCIENTIFIC_COMPOSITION_RECIPE, BAND_STRUCTURE_RECIPE, CONVERGE_THEN_RELAX_RECIPE, DOS_PDOS_RECIPE,
         GROUND_STATE_TO_DOS_PDOS_RECIPE, KGRID_EVALUATION_RECIPE,
-        MESH_EVALUATION_RECIPE, OBSERVATION_PRODUCTION_RECIPE, STRUCTURAL_RELAXATION_RECIPE,
+        MESH_EVALUATION_RECIPE, OBSERVATION_PRODUCTION_RECIPE, OPTICAL_SPECTRUM_RECIPE, STRUCTURAL_RELAXATION_RECIPE,
     ]
     detail = service.recipe(MESH_EVALUATION_RECIPE)
     assert detail["metadata"]["requires"] == [MESH_EVALUATOR_CAPABILITY]
@@ -730,7 +731,7 @@ def test_cli_lists_describes_and_creates_recipe_workflow(tmp_path: Path, capsys)
     assert [item["recipe_id"] for item in json.loads(capsys.readouterr().out)["recipes"]] == [
         SCIENTIFIC_COMPOSITION_RECIPE, BAND_STRUCTURE_RECIPE, CONVERGE_THEN_RELAX_RECIPE, DOS_PDOS_RECIPE,
         GROUND_STATE_TO_DOS_PDOS_RECIPE, KGRID_EVALUATION_RECIPE,
-        MESH_EVALUATION_RECIPE, OBSERVATION_PRODUCTION_RECIPE, STRUCTURAL_RELAXATION_RECIPE,
+        MESH_EVALUATION_RECIPE, OBSERVATION_PRODUCTION_RECIPE, OPTICAL_SPECTRUM_RECIPE, STRUCTURAL_RELAXATION_RECIPE,
     ]
     assert main(["workflow", "recipe", MESH_EVALUATION_RECIPE, "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["metadata"]["runs_engine"] is False

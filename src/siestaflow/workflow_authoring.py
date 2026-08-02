@@ -56,6 +56,8 @@ GROUND_STATE_TO_DOS_PDOS_CAPABILITY = "siestaflow.siesta.ground-state-to-dos-pdo
 GROUND_STATE_TO_DOS_PDOS_RECIPE = "siestaflow.recipe.siesta.ground-state-to-dos-pdos"
 BAND_STRUCTURE_CAPABILITY = "siestaflow.siesta.band-structure"
 BAND_STRUCTURE_RECIPE = "siestaflow.recipe.siesta.band-structure"
+OPTICAL_SPECTRUM_CAPABILITY = "siestaflow.siesta.optical-spectrum"
+OPTICAL_SPECTRUM_RECIPE = "siestaflow.recipe.siesta.optical-spectrum"
 
 
 def _relative(raw: object, *, field: str) -> str:
@@ -844,6 +846,112 @@ class BandStructureRecipe:
         )
 
 
+class OpticalSpectrumTaskBuilder:
+    """Build an explicit SIESTA EPSIMG calculation without selecting physics."""
+
+    _PARAMETERS = {"fdf", "pseudopotentials"}
+
+    def build_task(self, intent: ScientificIntent) -> dict[str, Any]:
+        if set(intent.parameters) != self._PARAMETERS:
+            raise ValueError("optical_spectrum intent requires fdf and pseudopotentials")
+        root = intent.source.parent
+        fdf = _relative(intent.parameters["fdf"], field="parameters.fdf")
+        path = root / Path(*PurePosixPath(fdf).parts)
+        if not path.is_file():
+            raise ValueError(f"optical_spectrum FDF is missing: {fdf}")
+        label, expected = self._optical_spec(path)
+        raw = intent.parameters["pseudopotentials"]
+        if not isinstance(raw, list) or not raw:
+            raise ValueError("optical_spectrum pseudopotentials must be a non-empty list")
+        inputs: list[dict[str, Any]] = [{"name": "fdf", "source": fdf, "destination": "optics.fdf", "media_type": "application/x-siesta-fdf"}]
+        destinations = {"optics.fdf"}
+        for index, item in enumerate(raw, 1):
+            if not isinstance(item, Mapping) or set(item) != {"source", "destination"}:
+                raise ValueError("each optical_spectrum pseudopotential requires source and destination")
+            source = _relative(item["source"], field="parameters.pseudopotentials.source")
+            destination = _relative(item["destination"], field="parameters.pseudopotentials.destination")
+            if not source.casefold().endswith(".psml") or not (root / Path(*PurePosixPath(source).parts)).is_file():
+                raise ValueError("optical_spectrum pseudopotential must be an existing PSML file")
+            if destination in destinations:
+                raise ValueError("optical_spectrum input destination is duplicated")
+            destinations.add(destination)
+            inputs.append({"name": f"pseudo_{index:03d}", "source": source, "destination": destination, "media_type": "application/x-psml"})
+        if destinations - {"optics.fdf"} != set(expected):
+            raise ValueError("optical_spectrum pseudopotential destinations must match ChemicalSpeciesLabel")
+        return {"task_id": "optics", "kind": "calculation", "capability": "siestaflow.engine.siesta", "inputs": inputs,
+                "outputs": [{"name": "imaginary_dielectric", "path": f"{label}.EPSIMG", "artifact_type": "siestaflow.imaginary-dielectric-function", "media_type": "text/plain", "required": True}],
+                "resources": _resources(intent.resources), "settings": {}}
+
+    def build_fragment(self, intent: ScientificIntent) -> WorkflowFragment:
+        task = self.build_task(intent)
+        return WorkflowFragment.single("optics", task, input_contracts={
+            "fdf": ArtifactPortContract("siestaflow.siesta-optical-spectrum-fdf", "application/x-siesta-fdf"),
+            **{f"pseudo_{index:03d}": ArtifactPortContract("siestaflow.pseudopotential", "application/x-psml") for index, _ in enumerate(intent.parameters["pseudopotentials"], 1)},
+        })
+
+    @staticmethod
+    def _optical_spec(path: Path) -> tuple[str, tuple[str, ...]]:
+        document = FDFParser().parse_path(path)
+        def single(name: str):
+            values = document.scalars(name)
+            if len(values) != 1:
+                raise ValueError(f"optical_spectrum requires exactly one {name}")
+            return values[0]
+        label = single("SystemLabel")
+        if single("MD.TypeOfRun").value.casefold() != "cg" or single("MD.NumCGSteps").value != "0":
+            raise ValueError("optical_spectrum requires explicit MD.TypeOfRun CG and MD.NumCGSteps 0")
+        if single("OpticalCalculation").value.casefold() not in {"t", "true"}:
+            raise ValueError("optical_spectrum requires OpticalCalculation T")
+        energies: list[Decimal] = []
+        for name in ("Optical.Energy.Minimum", "Optical.Energy.Maximum", "Optical.Broaden"):
+            item = single(name)
+            if (item.unit or "").casefold() != "ev":
+                raise ValueError(f"{name} requires an explicit eV unit")
+            try:
+                energies.append(Decimal(item.value))
+            except InvalidOperation as exc:
+                raise ValueError(f"{name} requires a valid numeric energy") from exc
+        if energies[0] >= energies[1] or energies[2] <= 0:
+            raise ValueError("optical energy range must be ordered and broadening positive")
+        try:
+            if int(single("Optical.NumberOfBands").value) < 1:
+                raise ValueError
+        except ValueError as exc:
+            raise ValueError("Optical.NumberOfBands requires a positive integer") from exc
+        if single("Optical.PolarizationType").value.casefold() != "polycrystal":
+            raise ValueError("initial optical_spectrum supports explicit Optical.PolarizationType polycrystal only")
+        meshes = document.blocks("Optical.Mesh")
+        if len(meshes) != 1 or not meshes[0].closed:
+            raise ValueError("optical_spectrum requires exactly one closed Optical.Mesh block")
+        rows = [line.split("#", 1)[0].strip().split() for line in meshes[0].body_lines]
+        rows = [row for row in rows if row and not row[0].startswith(("!", ";"))]
+        try:
+            if len(rows) != 1 or len(rows[0]) != 3 or any(int(value) < 1 for value in rows[0]):
+                raise ValueError
+        except ValueError as exc:
+            raise ValueError("Optical.Mesh requires exactly three positive integers") from exc
+        species_blocks = document.blocks("ChemicalSpeciesLabel")
+        if len(species_blocks) != 1:
+            raise ValueError("optical_spectrum requires exactly one ChemicalSpeciesLabel block")
+        species = set()
+        for raw in species_blocks[0].body_lines:
+            fields = raw.split("#", 1)[0].strip().split()
+            if not fields or fields[0].startswith(("!", ";")):
+                continue
+            if len(fields) < 3:
+                raise ValueError("optical_spectrum has an invalid ChemicalSpeciesLabel row")
+            species.add(require_local_id(fields[2], field_name="SIESTA species label"))
+        if not species:
+            raise ValueError("optical_spectrum requires ChemicalSpeciesLabel rows")
+        return require_local_id(label.value, field_name="SIESTA SystemLabel"), tuple(f"{item}.psml" for item in sorted(species))
+
+
+class OpticalSpectrumRecipe:
+    def build_workflow(self, intent: ScientificIntent, registry: CapabilityRegistry) -> dict[str, Any]:
+        return _compose_single(intent, registry, capability_id=OPTICAL_SPECTRUM_CAPABILITY,
+                               policy=RecipePolicy(OPTICAL_SPECTRUM_RECIPE, "1.0.0", "Run a user-declared SIESTA optical spectrum", "OPTICAL_SPECTRUM_ANALYSIS"))
+
+
 def _restart_identity(path: Path) -> str:
     """Hash scientific input common to an SCF parent and a DOS/PDOS child.
 
@@ -1346,6 +1454,16 @@ def builtin_authoring_registry() -> CapabilityRegistry:
         metadata={"requires": [BAND_STRUCTURE_CAPABILITY], "runs_engine": True,
                   "execution_authorized": False},
     )
+    optical_spectrum = CapabilityDescriptor(
+        capability_id=OPTICAL_SPECTRUM_CAPABILITY, kind=CapabilityKind.WORKFLOW_BUILDER,
+        implementation_version="1.0.0", input_contracts=(SCIENTIFIC_INTENT,), output_contracts=(WORKFLOW_DEFINITION,), engine="siesta",
+        metadata={"scope": "explicit SIESTA EPSIMG optical spectrum", "runs_engine": True},
+    )
+    optical_spectrum_recipe = CapabilityDescriptor(
+        capability_id=OPTICAL_SPECTRUM_RECIPE, kind=CapabilityKind.RECIPE,
+        implementation_version="1.0.0", input_contracts=(SCIENTIFIC_INTENT,), output_contracts=(WORKFLOW_DEFINITION,), engine="siesta",
+        metadata={"requires": [OPTICAL_SPECTRUM_CAPABILITY], "runs_engine": True, "execution_authorized": False},
+    )
     plugin = PluginDescriptor(
         plugin_id="siestaflow.builtin.scientific-authoring",
         plugin_version="1.0.0",
@@ -1354,7 +1472,7 @@ def builtin_authoring_registry() -> CapabilityRegistry:
                       composition_recipe, relaxation, relaxation_recipe, converge_then_relax,
                       converge_then_relax_recipe, dos_pdos, dos_pdos_recipe,
                       ground_state_to_dos_pdos, ground_state_to_dos_pdos_recipe,
-                      band_structure, band_structure_recipe),
+                      band_structure, band_structure_recipe, optical_spectrum, optical_spectrum_recipe),
         provider="SIESTAFLOW",
         metadata={"registration": "explicit", "global_import_side_effects": False},
     )
@@ -1377,6 +1495,8 @@ def builtin_authoring_registry() -> CapabilityRegistry:
         GROUND_STATE_TO_DOS_PDOS_RECIPE: GroundStateToDOSPDOSRecipe(),
         BAND_STRUCTURE_CAPABILITY: BandStructureTaskBuilder(),
         BAND_STRUCTURE_RECIPE: BandStructureRecipe(),
+        OPTICAL_SPECTRUM_CAPABILITY: OpticalSpectrumTaskBuilder(),
+        OPTICAL_SPECTRUM_RECIPE: OpticalSpectrumRecipe(),
     })
     registry.freeze()
     return registry

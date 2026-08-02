@@ -8,7 +8,7 @@ from pathlib import Path
 from .models import ArtifactDescriptor
 
 
-SUFFIXES = (".DM", ".XV", ".CG", ".HSX", ".WFSX", ".RHO", ".DRHO", ".STRUCT_OUT", ".bands", ".DOS", ".PDOS")
+SUFFIXES = (".DM", ".XV", ".CG", ".HSX", ".WFSX", ".RHO", ".DRHO", ".STRUCT_OUT", ".bands", ".DOS", ".PDOS", ".EPSIMG")
 
 
 def discover_siesta_artifacts(workspace: Path, *, task_id: str, attempt_id: str) -> tuple[ArtifactDescriptor, ...]:

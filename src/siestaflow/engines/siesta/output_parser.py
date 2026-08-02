@@ -74,7 +74,7 @@ class SiestaOutputParser:
                 elapsed = float(match.group(1))
             if "spin polarized" in lowered or "magnetization" in lowered:
                 spin = line.strip()
-            for suffix in (".DM", ".XV", ".CG", ".HSX", ".WFSX", ".RHO", ".DRHO", ".STRUCT_OUT", ".bands", ".DOS", ".PDOS"):
+            for suffix in (".DM", ".XV", ".CG", ".HSX", ".WFSX", ".RHO", ".DRHO", ".STRUCT_OUT", ".bands", ".DOS", ".PDOS", ".EPSIMG"):
                 if suffix.casefold() in lowered:
                     artifacts.add(suffix)
             if "warning" in lowered:
