@@ -2,6 +2,10 @@
 
 ## Unreleased — governance and roadmap
 
+- Recorded the independent audit of `cf62127` as `CONDITIONALLY_APPROVED`,
+  narrowed the documented scope of the `781102` interruption and host-set
+  checks, and distinguished retained local package identity from an unavailable
+  remote-upload checksum record.
 - Incorporated sanitized real Yoltla evidence for job `781102`, which completed
   all five remote adversarial cases with exit `0:0`; remote Phase 3 engineering
   evidence is complete while formal independent audit and human transition

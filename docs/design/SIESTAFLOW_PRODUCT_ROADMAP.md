@@ -2,7 +2,7 @@
 
 Estado del roadmap: 2026-08-01
 Estado del software: SIESTAFLOW 0.2 alpha
-Estado vinculante: `REMOTE_ACCEPTANCE_EVIDENCE_COMPLETE / FORMAL_TRANSITION_PENDING`
+Estado vinculante: `REMOTE_EVIDENCE_CONDITIONALLY_APPROVED / HUMAN_DECISION_PENDING`
 
 Este documento registra estado mutable, prioridades y dependencias. Los
 principios estables pertenecen a
@@ -28,9 +28,10 @@ workflow.lock.json
 → reconciliación e importación de evidencia
 ```
 
-La prioridad restante es la auditoría independiente y la aceptación humana
-formal de la transición. El trabajo local que no interfiera con este gate puede
-continuar, pero no se amplía el alcance científico para sustituirla.
+La auditoría independiente emitió `CONDITIONALLY_APPROVED`; la prioridad
+restante es la aceptación humana formal de la transición, con los límites de
+proveniencia y alcance registrados. El trabajo local que no interfiera con este
+gate puede continuar, pero no se amplía el alcance científico para sustituirla.
 
 ## Estado por fase
 
@@ -39,7 +40,7 @@ continuar, pero no se amplía el alcance científico para sustituirla.
 | 0 — Contratos | `LOCAL_VERTICAL_IMPLEMENTED` | Core Contracts 1.0, envelopes, artefactos, ejecución, eventos, validación, plugins y adaptadores | política completa de migraciones y prueba de que nuevos adaptadores no fuerzan cambios independientes |
 | 1 — Compilador | `LOCAL_VERTICAL_IMPLEMENTED` | DAG tipado, validación, resolución, orden topológico, plan, grafo y `workflow.lock.json` determinista | derivación universal desde la representación canónica y migración de rutas paralelas |
 | 2 — Experiencia | `PARTIAL_LOCAL_ACCEPTANCE` | `environment check`, `project init`, validación explicable, plan y grafo | importar un cálculo existente hasta un WorkflowDefinition canónico sin reconstruir contratos internos |
-| 3 — Ejecutor | `REMOTE_ACCEPTANCE_EVIDENCE_COMPLETE / FORMAL_TRANSITION_PENDING` | job `781100`: paquete canónico, Hydra multinodo, padre → DM con SHA-256 → lectura confirmada → hijo; job `781102`: cinco casos adversariales remotos PASS | auditoría independiente y aceptación humana formal de la transición |
+| 3 — Ejecutor | `REMOTE_EVIDENCE_CONDITIONALLY_APPROVED / HUMAN_DECISION_PENDING` | job `781100`: paquete canónico, Hydra multinodo, padre → DM con SHA-256 → lectura confirmada → hijo; job `781102`: cinco casos adversariales técnicos PASS; auditoría `cf62127`: `CONDITIONALLY_APPROVED` | aceptación humana formal de la transición, con límites de evidencia reconocidos |
 | 4 — DAG adaptativo | `PARTIAL_NONCANONICAL_SLICES` | campañas, sweeps sintéticos y gates existen en rutas previas o ejemplos | integrar sweep/selection/fan-in y `converge_then_relax` en la representación y runtime canónicos |
 | 5 — Portabilidad HPC | `PARTIAL_EVIDENCE` | launchers Hydra/srun, perfiles, probes de entorno y colocación | flujo completo de perfil aceptado, multinodo, continuación entre asignaciones y equivalencia de backends |
 | 6 — Validación | `LOCAL_FOUNDATION_ACCEPTED` | catálogo SIESTA 5.4.2, contexto declarado, preflight y reglas versionadas | ampliar cobertura y campañas reales; resolver mediante ADR la separación entre severidad diagnóstica y estados contractuales |
@@ -72,7 +73,7 @@ Los hitos son cortes verticales, no equivalencias automáticas con fases:
 
 | Versión objetivo | Corte utilizable | Gate mínimo |
 |---|---|---|
-| 0.2 alpha | fundamento de ejecución padre → DM → hijo | evidencia remota positiva y adversarial completa; transición formal pendiente |
+| 0.2 alpha | fundamento de ejecución padre → DM → hijo | evidencia remota condicionalmente aprobada; decisión humana formal pendiente |
 | 0.3 alpha | campaña autónoma de convergencia y selección | Fase 3 cerrada y selección canónica con procedencia |
 | 0.4 alpha | convergencia → relajación escalonada → validación → tabla | Fases 4 y 7 integradas para ese flujo |
 | 0.5 alpha/beta | continuación y robustez HPC | evidencia multinodo, recuperación entre asignaciones y perfiles aceptados |

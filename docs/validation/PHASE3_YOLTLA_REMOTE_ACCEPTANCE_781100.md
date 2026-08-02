@@ -36,12 +36,14 @@ remote_tests:
 cluster: "Yoltla / tt2d-80p / ttv3,mem128 / siesta/5.4.2 / Hydra"
 job_ids: [781058, 781100]
 package_sha256: "e372601a5320012ae42ff5ead5776d5ec657c1013ccf02e3db31180a9b36f9e3"
+package_sha256_evidence: "RECALCULATED_FROM_RETAINED_LOCAL_PREPARED_ZIP; remote-upload SHA-256 record not retained"
 workflow_lock_sha256: "bdd26b75f5a719069232499b2172fe3d1ff592a54df71d0234144a88e0e63f70"
 run_lock_sha256: "5cf56deed1a3685e6292aeb9b194935bbd6937c1cea804f231b0eebc0c1beedc"
 execution_profile_sha256: "0232801ef3957dcc2a296f6e89f0af24075da94fbc3aebc9d6f2716a14a8d948"
 audit_status: "CONDITIONALLY_APPROVED"
 known_limitations:
-  - "The remote adversarial matrix for failed parent, altered hash, absent DM, recoverable interruption and independent-task non-overlap remains pending."
+  - "The later adversarial record 781102 is technical and has its own provenance limitations."
+  - "The retained local prepared ZIP recalculates to package_sha256; a primary remote-upload sha256sum record was not retained."
   - "This is technical execution acceptance, not scientific validation."
 accepted_by: "NOT_YET_ACCEPTED"
 date: "2026-08-01"
@@ -76,6 +78,13 @@ It includes both locks, the resolved profile, compatibility evidence,
 accounting, campaign summary, result manifests, DM hashes, package verifier
 markers and the restart-reading excerpt. Personal absolute paths are redacted;
 the original ZIP remains outside Git.
+
+The retained local prepared ZIP recalculates to the declared package SHA-256
+`e372601a5320012ae42ff5ead5776d5ec657c1013ccf02e3db31180a9b36f9e3` and is
+included in the independent-audit handoff. A primary `sha256sum` record made on
+the remote copy immediately before submission was not retained; this does not
+prove byte identity of the uploaded file beyond the package manifest and
+checksums preserved in the post-execution evidence.
 
 This acceptance proves engineering behavior only. It makes no claim about the
 scientific validity or publishability of the technical carbon fixture.

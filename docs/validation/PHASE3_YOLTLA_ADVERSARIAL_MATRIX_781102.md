@@ -1,6 +1,6 @@
 # Phase 3 Yoltla remote adversarial matrix — job 781102
 
-Status: `REMOTE_ADVERSARIAL_MATRIX_PASS / FORMAL_TRANSITION_PENDING`.
+Status: `REMOTE_ADVERSARIAL_MATRIX_PASS / CONDITIONALLY_APPROVED`.
 
 This record incorporates sanitized real Yoltla evidence for the technical
 adversarial matrix that complements the canonical positive acceptance recorded
@@ -27,7 +27,10 @@ package_sha256: "2c0b98923a2720a635ef3c365e6a1ac9e8498ad4dd97a4dd50c24e4e2f37620
 audit_status: "CONDITIONALLY_APPROVED"
 known_limitations:
   - "This technical matrix complements, but does not replace, the canonical scientific-engine execution of job 781100."
-  - "Formal independent audit and identified human acceptance of the Phase 3 transition remain pending."
+  - "The remote post-execution directory was not retained as a raw immutable ZIP; this record is based on operator-provided sanitized accounting, stdout and structured result fixtures."
+  - "Interruption recovery is an injected controller shutdown and resume within one allocation, not a Slurm-signal or cross-allocation continuation test."
+  - "Disjoint hosts are verified in controller StepLaunchSpec allocation with ScriptedLauncher, not by concurrent physical MPI steps."
+  - "Identified human acceptance of the Phase 3 transition remains pending."
 accepted_by: "NOT_YET_ACCEPTED"
 date: "2026-08-01"
 ```
@@ -38,14 +41,16 @@ date: "2026-08-01"
 - Missing DM: the parent was classified `INCOMPLETE` and the child was never
   launched.
 - Altered transfer hash: the child was rejected as `FAILED_BEFORE_LAUNCH`.
-- Recoverable interruption: the first attempt was `INTERRUPTED`; the resumed
-  attempt completed, with two attempts recorded.
-- Independent tasks: concurrent two-node tasks used disjoint host sets
-  `tt30,tt31` and `tt32,tt33`.
+- Recoverable controller interruption: an injected shutdown made the first
+  attempt `INTERRUPTED`; a second controller invocation in the same allocation
+  completed, with two attempts recorded. This is not a Slurm-signal or
+  cross-allocation continuation claim.
+- Independent technical tasks: concurrent ScriptedLauncher tasks received
+  disjoint controller host sets `tt30,tt31` and `tt32,tt33`. This is not a
+  physical MPI-placement claim.
 
 Slurm job `781102` and its batch step both report `COMPLETED`, exit `0:0`, on
-`tt[30-33]`. The package verifier ran inside the allocation, the Slurm stderr
-file was empty, and the result identifies itself as
+`tt[30-33]`. The package verifier ran inside the allocation and the result identifies itself as
 `REAL_REMOTE_TECHNICAL_ADVERSARIAL_EVIDENCE` with
 `scientific_calculation_performed=false`.
 
@@ -56,8 +61,10 @@ The executed package ZIP has SHA-256
 The repository retains the operator-provided accounting, package stdout and
 structured matrix result under
 [`tests/fixtures/phase3/yoltla_job_781102/`](../../tests/fixtures/phase3/yoltla_job_781102/).
+The original post-execution remote directory, including raw `OUT`, `ERROR`,
+case-state and event files, was not retained as an immutable evidence ZIP.
 
-Together, jobs `781100` and `781102` complete the required positive and
-adversarial remote engineering evidence. The phase transition still requires
-an independent audit and identified human acceptance under development
-governance.
+Together, jobs `781100` and `781102` provide the positive and adversarial
+remote engineering evidence, conditionally approved by the independent audit
+of `cf62127`. The phase transition still requires identified human acceptance
+under development governance.
