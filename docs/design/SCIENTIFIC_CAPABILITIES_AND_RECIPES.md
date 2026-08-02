@@ -142,6 +142,26 @@ punto, espín, banda y energía, junto con un manifiesto que conserva Fermi y lo
 rangos declarados por SIESTA. No desplaza energías, identifica gaps, ni produce
 una conclusión científica.
 
+## Integración CLI del estado electrónico
+
+`siestaflow.recipe.siesta.ground-state-to-electronic-analysis` materializa un
+DAG técnico completo desde la misma superficie `workflow create`:
+
+```text
+ground_state
+├─ DM → bands
+├─ DM → dos_pdos
+└─ DM → optics
+```
+
+Cada hijo tiene su propio FDF explícito, exige `DM.UseSaveDM T` y recibe una
+copia hash-bound de la DM del padre. La identidad de reinicio permite que
+cambien únicamente etiquetas, control de movimiento y solicitudes de análisis;
+geometría, especies, carga, spin, XC, base, malla, k-grid y SCF permanecen
+ligados. La receta no contiene nombres de materiales ni parámetros físicos.
+Los consumidores `results bands`, `results dos-pdos` y `results optics`
+operan directamente sobre el mismo paquete completado.
+
 ## Aprobación y propagación de convergencia
 
 Una recomendación `READY_FOR_HUMAN_REVIEW` no altera el lock que produjo la
