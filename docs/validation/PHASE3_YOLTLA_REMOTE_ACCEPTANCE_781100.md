@@ -1,11 +1,15 @@
 # Phase 3 Yoltla remote two-stage acceptance — job 781100
 
-Status: `REMOTE_TWO_STAGE_ACCEPTANCE_PASS / ADVERSARIAL_MATRIX_PENDING`.
+Status at incorporation: `REMOTE_TWO_STAGE_ACCEPTANCE_PASS / ADVERSARIAL_MATRIX_PENDING`.
+Current companion status: job `781102` subsequently completed the adversarial
+matrix; the formal phase transition remains pending.
 
 This record incorporates sanitized real Yoltla evidence for the canonical
 `workflow.lock.json → run prepare → run.lock.json → self-contained package`
-path. It accepts the positive parent-to-DM-restart path only; it does not yet
-close all of Phase 3 because the remote adversarial matrix remains pending.
+path. It accepts the positive parent-to-DM-restart path only. The later
+adversarial record is
+[`PHASE3_YOLTLA_ADVERSARIAL_MATRIX_781102.md`](PHASE3_YOLTLA_ADVERSARIAL_MATRIX_781102.md);
+neither record alone closes Phase 3.
 
 ```yaml
 phase: "PHASE_3"

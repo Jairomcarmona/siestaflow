@@ -2,7 +2,7 @@
 
 Fecha de corte documental: 2026-08-01
 
-Estado: `REMOTE_TWO_STAGE_ACCEPTANCE_PASS / ADVERSARIAL_MATRIX_PENDING`
+Estado: `REMOTE_ACCEPTANCE_EVIDENCE_COMPLETE / FORMAL_TRANSITION_PENDING`
 
 Este estado es vinculante hasta que exista un expediente remoto canónico. La
 arquitectura estable está en
@@ -60,10 +60,15 @@ transferencia por SHA-256 y el hijo registró lectura satisfactoria de la DM.
 El expediente y el subconjunto sanitizado están en
 [`PHASE3_YOLTLA_REMOTE_ACCEPTANCE_781100.md`](../validation/PHASE3_YOLTLA_REMOTE_ACCEPTANCE_781100.md).
 
-La Fase 3 completa todavía no se declara cerrada. La matriz posterior debe
-cubrir padre fallido, hash alterado, DM
-ausente, interrupción recuperable y tareas independientes sin solapamiento de
-recursos, seguida de auditoría independiente y aceptación humana formal.
+El job Yoltla `781102` completó la matriz adversarial técnica con estado
+`COMPLETED`, exit `0:0`, en `tt[30-33]`. Demostró bloqueo del hijo ante padre
+fallido, ausencia de DM y hash alterado; recuperación tras interrupción; y
+asignación disjunta de nodos para tareas independientes. El expediente está en
+[`PHASE3_YOLTLA_ADVERSARIAL_MATRIX_781102.md`](../validation/PHASE3_YOLTLA_ADVERSARIAL_MATRIX_781102.md).
+
+La evidencia remota de ingeniería requerida está completa entre los jobs
+`781100` y `781102`. La Fase 3 todavía no se declara cerrada: quedan la
+auditoría independiente y la aceptación humana identificada de la transición.
 
 ## Empaquetado y trazabilidad
 
@@ -90,7 +95,6 @@ hace push como parte de esta auditoría documental.
 
 ```text
 Fase 3
-→ matriz adversarial remota
 → auditoría independiente
 → aceptación humana de la transición
 ```

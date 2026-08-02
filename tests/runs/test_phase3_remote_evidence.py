@@ -4,7 +4,8 @@ import json
 from pathlib import Path
 
 
-EVIDENCE = Path(__file__).parents[1] / "fixtures" / "phase3" / "yoltla_job_781100"
+FIXTURES = Path(__file__).parents[1] / "fixtures" / "phase3"
+EVIDENCE = FIXTURES / "yoltla_job_781100"
 
 
 def _json(name: str) -> dict:
@@ -43,3 +44,33 @@ def test_yoltla_job_781100_proves_canonical_parent_dm_child_path() -> None:
     verification = (EVIDENCE / "package-verification-781100.txt").read_text(encoding="utf-8")
     assert "SIESTAFLOW_CONTROLLER_PACKAGE_VERIFIED" in verification
     assert "NO_LOGIN_PERSISTENT_PROCESS_REQUIRED" in verification
+
+
+def test_yoltla_job_781102_proves_remote_adversarial_matrix() -> None:
+    evidence = FIXTURES / "yoltla_job_781102"
+    matrix = json.loads((evidence / "phase3_adversarial_matrix.json").read_text(encoding="utf-8"))
+    accounting = (evidence / "slurm-sacct-781102.txt").read_text(encoding="utf-8")
+    stdout = (evidence / "slurm-stdout-781102.txt").read_text(encoding="utf-8")
+
+    assert "781102|COMPLETED|0:0|00:00:03|tt[30-33]" in accounting
+    assert matrix["status"] == "PASS"
+    assert matrix["classification"] == "REAL_REMOTE_TECHNICAL_ADVERSARIAL_EVIDENCE"
+    assert matrix["scientific_calculation_performed"] is False
+    assert matrix["source_commit"] == "594e0e5"
+    assert matrix["hosts"] == ["tt30", "tt31", "tt32", "tt33"]
+    assert set(matrix["cases"]) == {
+        "absent_dm_prevents_child",
+        "altered_hash_prevents_child_launch",
+        "failed_parent_blocks_child",
+        "independent_tasks_use_disjoint_hosts",
+        "interruption_is_recoverable",
+    }
+    assert all(case["status"] == "PASS" for case in matrix["cases"].values())
+    assert matrix["cases"]["failed_parent_blocks_child"]["observed"]["child_attempts"] == 0
+    assert matrix["cases"]["absent_dm_prevents_child"]["observed"]["child_attempts"] == 0
+    assert matrix["cases"]["altered_hash_prevents_child_launch"]["observed"]["child"] == "FAILED_BEFORE_LAUNCH"
+    assert matrix["cases"]["interruption_is_recoverable"]["observed"]["attempts"] == 2
+    independent = matrix["cases"]["independent_tasks_use_disjoint_hosts"]["observed"]
+    assert set(independent["left"]).isdisjoint(independent["right"])
+    assert "PHASE3_ADVERSARIAL_MATRIX_PACKAGE_VERIFIED" in stdout
+    assert "NO_SCIENTIFIC_CALCULATION_CONFIGURED" in stdout

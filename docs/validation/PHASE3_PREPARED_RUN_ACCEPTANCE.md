@@ -1,6 +1,6 @@
 # Phase 3 prepared-run vertical acceptance
 
-Status: `REMOTE_TWO_STAGE_ACCEPTANCE_PASS_ADVERSARIAL_MATRIX_PENDING`.
+Status: `REMOTE_ACCEPTANCE_EVIDENCE_COMPLETE_FORMAL_TRANSITION_PENDING`.
 
 The implemented slice connects the deterministic workflow DAG to the existing
 persistent-allocation controller without granting execution authority.
@@ -39,11 +39,22 @@ Accepted remotely:
 The primary record is
 [`PHASE3_YOLTLA_REMOTE_ACCEPTANCE_781100.md`](PHASE3_YOLTLA_REMOTE_ACCEPTANCE_781100.md).
 
+Remote adversarial acceptance:
+
+- job `781102` completed `0:0` on `tt[30-33]`;
+- failed parent and absent DM blocked the child without launching it;
+- an altered transfer hash failed before child launch;
+- an interrupted attempt resumed and completed;
+- independent concurrent tasks received disjoint two-node host sets;
+- the technical harness performed no scientific calculation.
+
+The adversarial record is
+[`PHASE3_YOLTLA_ADVERSARIAL_MATRIX_781102.md`](PHASE3_YOLTLA_ADVERSARIAL_MATRIX_781102.md).
+
 Not yet accepted:
 
-- remote adversarial acceptance for parent failure, altered transfer hash,
-  absent DM, recoverable interruption and independent-task resource
-  non-overlap;
+- formal Phase 3 transition pending independent audit and identified human
+  acceptance;
 - execution adapters for non-SIESTA task capabilities;
 - automatic scheduler submission or queue selection;
 - automatic scientific parameter selection;
@@ -67,6 +78,6 @@ siestaflow run prepare workflow.lock.json --source-root source \
 Neither mode executes `sbatch`; unknown authorization stays visible for remote
 `sbatch --test-only` review.
 
-The feature remains within version `0.2.0`. The positive remote path is
-accepted; the complete phase remains open until the adversarial matrix,
+The feature remains within version `0.2.0`. Positive and adversarial remote
+engineering evidence are accepted; the complete phase remains open until the
 independent audit and human phase-transition acceptance are recorded.

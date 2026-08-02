@@ -2,6 +2,10 @@
 
 ## Unreleased — governance and roadmap
 
+- Incorporated sanitized real Yoltla evidence for job `781102`, which completed
+  all five remote adversarial cases with exit `0:0`; remote Phase 3 engineering
+  evidence is complete while formal independent audit and human transition
+  acceptance remain pending.
 - Incorporated sanitized real Yoltla evidence for job `781100`, which completed
   the canonical four-node parent → SHA-256-bound DM transfer → verified restart
   child path with exit `0:0`; Phase 3 remains open for its remote adversarial
