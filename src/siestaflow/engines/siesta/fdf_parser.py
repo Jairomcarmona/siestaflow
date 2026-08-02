@@ -29,6 +29,8 @@ _END = re.compile(r"^\s*%endblock(?:\s+([^\s#;!]+))?", re.IGNORECASE)
 _INCLUDE = re.compile(r"^\s*%include\s+(.+?)\s*(?:[#;!].*)?$", re.IGNORECASE)
 _REDIRECT = re.compile(r"^\s*([A-Za-z][\w.:-]*)\s*<\s*(\S+)")
 _SCALAR = re.compile(r"^\s*([A-Za-z][\w.:-]*)(?:\s+(.*?))?\s*$")
+_NUMBER = re.compile(r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eEdD][+-]?\d+)?$")
+_COMPOUND_UNIT = re.compile(r"[A-Za-z][A-Za-z0-9]*(?:[*/^][A-Za-z0-9]+)*$")
 
 
 class FDFParser:
@@ -128,7 +130,13 @@ class FDFParser:
                 tail = scalar_match.group(2) or ""
                 value_part = _strip_inline_comment(tail).strip()
                 tokens = value_part.split()
-                unit = tokens[-1] if len(tokens) > 1 and re.fullmatch(r"[A-Za-z]+", tokens[-1]) else None
+                unit = (
+                    tokens[-1]
+                    if len(tokens) > 1
+                    and _NUMBER.fullmatch(tokens[-2])
+                    and _COMPOUND_UNIT.fullmatch(tokens[-1])
+                    else None
+                )
                 value = " ".join(tokens[:-1]) if unit else value_part
                 nodes.append(FDFScalar(raw, span, label, value, unit))
                 index += 1

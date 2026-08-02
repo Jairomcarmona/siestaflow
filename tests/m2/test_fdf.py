@@ -16,6 +16,16 @@ def test_round_trip_preserves_comments_blocks_includes_unknown_and_windows_eol()
     assert any(isinstance(node, FDFUnknown) for node in document.nodes)
 
 
+def test_scalar_parser_preserves_compound_units_and_unqualified_text() -> None:
+    document = FDFParser().parse(
+        "MD.MaxForceTol 0.05 eV/Ang\nSystemName Water molecule\n"
+    )
+    force = document.scalars("MD.MaxForceTol")[0]
+    name = document.scalars("SystemName")[0]
+    assert (force.value, force.unit) == ("0.05", "eV/Ang")
+    assert (name.value, name.unit) == ("Water molecule", None)
+
+
 @pytest.mark.parametrize("source,code", [
     ("%block A\n1\n", "UNCLOSED_BLOCK"),
     ("%endblock A\n", "ORPHAN_ENDBLOCK"),
