@@ -52,6 +52,8 @@ CONVERGE_THEN_RELAX_CAPABILITY = "siestaflow.siesta.converge-then-relax"
 CONVERGE_THEN_RELAX_RECIPE = "siestaflow.recipe.siesta.converge-then-relax"
 DOS_PDOS_CAPABILITY = "siestaflow.siesta.dos-pdos"
 DOS_PDOS_RECIPE = "siestaflow.recipe.siesta.dos-pdos"
+GROUND_STATE_TO_DOS_PDOS_CAPABILITY = "siestaflow.siesta.ground-state-to-dos-pdos"
+GROUND_STATE_TO_DOS_PDOS_RECIPE = "siestaflow.recipe.siesta.ground-state-to-dos-pdos"
 
 
 def _relative(raw: object, *, field: str) -> str:
@@ -720,6 +722,227 @@ class DOSPDOSRecipe:
         )
 
 
+def _restart_identity(path: Path) -> str:
+    """Hash scientific input common to an SCF parent and a DOS/PDOS child.
+
+    Restart control, file labels, ionic-motion controls and the PDOS request do
+    not change the electronic state represented by the transferred DM.  Every
+    other normalized FDF line remains bound, so a geometry, pseudo label, XC,
+    basis, mesh or SCF change is rejected before a package is written.
+    """
+    excluded_scalars = {"systemname", "systemlabel", "dm.usesavedm"}
+    excluded_prefixes = ("md.",)
+    excluded_blocks = {
+        "projecteddensityofstates", "pdos.kgrid.monkhorstpack",
+        "dos.kgrid.monkhorstpack",
+    }
+    output: list[str] = []
+    skipping_block: str | None = None
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.split("#", 1)[0].strip()
+        if not line or line.startswith(("!", ";")):
+            continue
+        lowered = line.casefold()
+        if skipping_block is not None:
+            if lowered.startswith("%endblock") and skipping_block in lowered:
+                skipping_block = None
+            continue
+        if lowered.startswith("%block"):
+            parts = lowered.split()
+            if len(parts) >= 2 and parts[1] in excluded_blocks:
+                skipping_block = parts[1]
+                continue
+        label = lowered.split(None, 1)[0]
+        if label in excluded_scalars or label.startswith(excluded_prefixes):
+            continue
+        output.append(" ".join(line.split()))
+    if skipping_block is not None:
+        raise ValueError("restart identity FDF has an unclosed excluded block")
+    return hashlib.sha256(("\n".join(output) + "\n").encode("utf-8")).hexdigest()
+
+
+class GroundStateToDOSPDOSTaskBuilder:
+    """Build a parent SCF task and a dependent DOS/PDOS restart task."""
+
+    _PARAMETERS = {"ground_state_fdf", "dos_pdos_fdf", "pseudopotentials"}
+
+    def build_task(self, intent: ScientificIntent) -> dict[str, Any]:
+        raise NotImplementedError("ground-state-to-dos-pdos is a two-task recipe")
+
+    def build_fragment(self, intent: ScientificIntent) -> WorkflowFragment:
+        workflow = self.build_workflow(intent, CapabilityRegistry())
+        tasks = tuple(workflow["tasks"])
+        contracts: dict[str, ArtifactPortContract] = {}
+        for task in tasks:
+            for item in task["inputs"]:
+                key = f"{task['task_id']}.{item['name']}"
+                if item["name"] == "ground_state_dm":
+                    contracts[key] = ArtifactPortContract(
+                        "siestaflow.siesta-density-matrix", "application/octet-stream"
+                    )
+                elif item["name"] == "fdf":
+                    contracts[key] = ArtifactPortContract(
+                        "siestaflow.siesta-ground-state-fdf"
+                        if task["task_id"] == "ground_state"
+                        else "siestaflow.siesta-dos-pdos-fdf",
+                        "application/x-siesta-fdf",
+                    )
+                else:
+                    contracts[key] = ArtifactPortContract(
+                        "siestaflow.pseudopotential", "application/x-psml"
+                    )
+        return WorkflowFragment("ground-state-to-dos-pdos", tasks, contracts)
+
+    def build_workflow(self, intent: ScientificIntent, registry: CapabilityRegistry) -> dict[str, Any]:
+        if set(intent.parameters) != self._PARAMETERS:
+            raise ValueError("ground_state_to_dos_pdos requires ground_state_fdf, dos_pdos_fdf, and pseudopotentials")
+        root = intent.source.parent
+        parent_relative = _relative(intent.parameters["ground_state_fdf"], field="parameters.ground_state_fdf")
+        child_relative = _relative(intent.parameters["dos_pdos_fdf"], field="parameters.dos_pdos_fdf")
+        parent_path = root / Path(*PurePosixPath(parent_relative).parts)
+        child_path = root / Path(*PurePosixPath(child_relative).parts)
+        if not parent_path.is_file() or not child_path.is_file():
+            raise ValueError("ground_state_to_dos_pdos FDF input is missing")
+        parent_label, expected_pseudos = self._ground_state_spec(parent_path)
+        child_label, child_pseudos = DOSPDOSTaskBuilder._analysis_spec(child_path)
+        restart = FDFParser().parse_path(child_path).scalars("DM.UseSaveDM")
+        if len(restart) != 1 or restart[0].value.casefold() not in {"t", "true"}:
+            raise ValueError("DOS/PDOS restart FDF requires explicit DM.UseSaveDM T")
+        if expected_pseudos != child_pseudos or _restart_identity(parent_path) != _restart_identity(child_path):
+            raise ValueError("ground-state and DOS/PDOS FDFs are not restart-compatible")
+        pseudos = self._pseudopotentials(intent, expected_pseudos)
+        parent_inputs, _ = self._inputs(
+            root, parent_relative, "ground-state.fdf", pseudos,
+        )
+        child_inputs, _ = self._inputs(root, child_relative, "dos-pdos.fdf", pseudos)
+        child_inputs.append({
+            "name": "ground_state_dm", "from": {"task": "ground_state", "output": "density_matrix"},
+            "destination": f"{child_label}.DM",
+            "media_type": "application/octet-stream",
+        })
+        resources = _resources(intent.resources)
+        parent = {
+            "task_id": "ground_state", "kind": "calculation",
+            "capability": "siestaflow.engine.siesta", "inputs": parent_inputs,
+            "outputs": [{
+                "name": "density_matrix", "path": f"{parent_label}.DM",
+                "artifact_type": "siestaflow.siesta-density-matrix",
+                "media_type": "application/octet-stream", "required": True,
+            }],
+            "resources": resources, "settings": {},
+        }
+        child = {
+            "task_id": "dos_pdos", "kind": "calculation",
+            "capability": "siestaflow.engine.siesta", "depends_on": ["ground_state"],
+            "inputs": child_inputs,
+            "outputs": [
+                {
+                    "name": "total_dos", "path": f"{child_label}.DOS",
+                    "artifact_type": "siestaflow.total-density-of-states",
+                    "media_type": "text/plain", "required": True,
+                },
+                {
+                    "name": "projected_dos", "path": f"{child_label}.PDOS",
+                    "artifact_type": "siestaflow.projected-density-of-states",
+                    "media_type": "text/plain", "required": True,
+                },
+            ],
+            "resources": resources, "settings": {},
+        }
+        return {
+            "schema_version": "1.0", "workflow_id": intent.intent_id,
+            "project_id": intent.project_id,
+            "description": "Hash-bound SIESTA ground-state to DOS/PDOS continuation",
+            "metadata": {
+                **dict(intent.metadata), "recipe_id": GROUND_STATE_TO_DOS_PDOS_RECIPE,
+                "execution_authorized": False,
+                "restart_identity_sha256": _restart_identity(parent_path),
+            },
+            "tasks": [parent, child],
+        }
+
+    @staticmethod
+    def _ground_state_spec(path: Path) -> tuple[str, tuple[str, ...]]:
+        document = FDFParser().parse_path(path)
+        labels = document.scalars("SystemLabel")
+        run_type = document.scalars("MD.TypeOfRun")
+        steps = document.scalars("MD.NumCGSteps")
+        if len(labels) != 1:
+            raise ValueError("ground state requires exactly one SystemLabel")
+        if len(run_type) != 1 or run_type[0].value.casefold() != "cg":
+            raise ValueError("ground state requires explicit MD.TypeOfRun CG")
+        if len(steps) != 1 or steps[0].value != "0":
+            raise ValueError("ground state requires explicit MD.NumCGSteps 0")
+        if document.blocks("ProjectedDensityOfStates"):
+            raise ValueError("ground state FDF must not request ProjectedDensityOfStates")
+        species_blocks = document.blocks("ChemicalSpeciesLabel")
+        if len(species_blocks) != 1:
+            raise ValueError("ground state requires exactly one ChemicalSpeciesLabel block")
+        species: set[str] = set()
+        for raw in species_blocks[0].body_lines:
+            fields = raw.split("#", 1)[0].strip().split()
+            if not fields or fields[0].startswith(("!", ";")):
+                continue
+            if len(fields) < 3:
+                raise ValueError("ground state has an invalid ChemicalSpeciesLabel row")
+            species.add(require_local_id(fields[2], field_name="SIESTA species label"))
+        if not species:
+            raise ValueError("ground state requires ChemicalSpeciesLabel rows")
+        return require_local_id(labels[0].value, field_name="SIESTA SystemLabel"), tuple(
+            f"{item}.psml" for item in sorted(species)
+        )
+
+    @staticmethod
+    def _pseudopotentials(intent: ScientificIntent, expected: tuple[str, ...]) -> list[dict[str, str]]:
+        raw = intent.parameters["pseudopotentials"]
+        if not isinstance(raw, list) or not raw:
+            raise ValueError("ground_state_to_dos_pdos pseudopotentials must be a non-empty list")
+        result: list[dict[str, str]] = []
+        destinations: set[str] = set()
+        root = intent.source.parent
+        for item in raw:
+            if not isinstance(item, Mapping) or set(item) != {"source", "destination"}:
+                raise ValueError("each ground_state_to_dos_pdos pseudopotential requires source and destination")
+            source = _relative(item["source"], field="parameters.pseudopotentials.source")
+            destination = _relative(item["destination"], field="parameters.pseudopotentials.destination")
+            if not source.casefold().endswith(".psml") or not (root / Path(*PurePosixPath(source).parts)).is_file():
+                raise ValueError("ground_state_to_dos_pdos pseudopotential must be an existing PSML file")
+            if destination in destinations:
+                raise ValueError("ground_state_to_dos_pdos pseudopotential destination is duplicated")
+            destinations.add(destination)
+            result.append({"source": source, "destination": destination})
+        if destinations != set(expected):
+            raise ValueError("ground_state_to_dos_pdos pseudopotential destinations must match ChemicalSpeciesLabel")
+        return result
+
+    @staticmethod
+    def _inputs(root: Path, fdf: str, destination: str, pseudos: list[dict[str, str]]) -> tuple[list[dict[str, str]], set[str]]:
+        inputs: list[dict[str, str]] = [{
+            "name": "fdf", "source": fdf, "destination": destination,
+            "media_type": "application/x-siesta-fdf",
+        }]
+        destinations = {destination}
+        for index, item in enumerate(pseudos, 1):
+            inputs.append({
+                "name": f"pseudo_{index:03d}", "source": item["source"],
+                "destination": item["destination"], "media_type": "application/x-psml",
+            })
+            destinations.add(item["destination"])
+        return inputs, destinations
+
+
+class GroundStateToDOSPDOSRecipe:
+    def build_workflow(self, intent: ScientificIntent, registry: CapabilityRegistry) -> dict[str, Any]:
+        return _compose_single(
+            intent, registry, capability_id=GROUND_STATE_TO_DOS_PDOS_CAPABILITY,
+            policy=RecipePolicy(
+                GROUND_STATE_TO_DOS_PDOS_RECIPE, "1.0.0",
+                "Run a hash-bound SIESTA ground-state to DOS/PDOS continuation",
+                "ELECTRONIC_STATE_CONTINUATION_DENSITY_OF_STATES",
+            ),
+        )
+
+
 class ConvergeThenRelaxationTaskBuilder:
     """Build the post-approval relaxation stage without changing its FDF.
 
@@ -975,13 +1198,27 @@ def builtin_authoring_registry() -> CapabilityRegistry:
         metadata={"requires": [DOS_PDOS_CAPABILITY], "runs_engine": True,
                   "execution_authorized": False},
     )
+    ground_state_to_dos_pdos = CapabilityDescriptor(
+        capability_id=GROUND_STATE_TO_DOS_PDOS_CAPABILITY, kind=CapabilityKind.WORKFLOW_BUILDER,
+        implementation_version="1.0.0", input_contracts=(SCIENTIFIC_INTENT,),
+        output_contracts=(WORKFLOW_DEFINITION,), engine="siesta",
+        metadata={"scope": "hash-bound electronic restart into DOS/PDOS", "runs_engine": True},
+    )
+    ground_state_to_dos_pdos_recipe = CapabilityDescriptor(
+        capability_id=GROUND_STATE_TO_DOS_PDOS_RECIPE, kind=CapabilityKind.RECIPE,
+        implementation_version="1.0.0", input_contracts=(SCIENTIFIC_INTENT,),
+        output_contracts=(WORKFLOW_DEFINITION,), engine="siesta",
+        metadata={"requires": [GROUND_STATE_TO_DOS_PDOS_CAPABILITY], "runs_engine": True,
+                  "execution_authorized": False},
+    )
     plugin = PluginDescriptor(
         plugin_id="siestaflow.builtin.scientific-authoring",
         plugin_version="1.0.0",
         core_contract_version=CORE_CONTRACT_VERSION,
         capabilities=(evaluator, recipe, kgrid_evaluator, kgrid_recipe, producer, producer_recipe,
                       composition_recipe, relaxation, relaxation_recipe, converge_then_relax,
-                      converge_then_relax_recipe, dos_pdos, dos_pdos_recipe),
+                      converge_then_relax_recipe, dos_pdos, dos_pdos_recipe,
+                      ground_state_to_dos_pdos, ground_state_to_dos_pdos_recipe),
         provider="SIESTAFLOW",
         metadata={"registration": "explicit", "global_import_side_effects": False},
     )
@@ -1000,6 +1237,8 @@ def builtin_authoring_registry() -> CapabilityRegistry:
         CONVERGE_THEN_RELAX_RECIPE: ConvergeThenRelaxationRecipe(),
         DOS_PDOS_CAPABILITY: DOSPDOSTaskBuilder(),
         DOS_PDOS_RECIPE: DOSPDOSRecipe(),
+        GROUND_STATE_TO_DOS_PDOS_CAPABILITY: GroundStateToDOSPDOSTaskBuilder(),
+        GROUND_STATE_TO_DOS_PDOS_RECIPE: GroundStateToDOSPDOSRecipe(),
     })
     registry.freeze()
     return registry

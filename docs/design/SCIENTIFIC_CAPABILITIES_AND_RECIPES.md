@@ -114,6 +114,16 @@ ejecutar un análisis aislado desde CLI hoy, y un consumidor futuro podrá enlaz
 estos artefactos a un módulo de tabla, gráfica o comparación sin alterar el
 motor ni nombrar un material en el núcleo.
 
+La receta `siestaflow.recipe.siesta.ground-state-to-dos-pdos` añade el ciclo
+encadenado mínimo. Materializa un padre SCF (`CG` con cero pasos) que declara su
+`<SystemLabel>.DM` como salida requerida, y un hijo DOS/PDOS que exige
+`DM.UseSaveDM T`. La DM se transfiere por la arista del DAG, se vuelve a nombrar
+para el `SystemLabel` del hijo y se verifica mediante SHA-256 y evidencia de
+lectura de SIESTA. Antes de compilar, el autor compara una identidad de reinicio
+que deja fuera sólo etiquetas, control de movimiento y opciones de análisis;
+cualquier cambio de geometría, pseudo-etiqueta, carga, spin, XC, base, malla,
+k-grid o SCF impide crear el workflow.
+
 ## Aprobación y propagación de convergencia
 
 Una recomendación `READY_FOR_HUMAN_REVIEW` no altera el lock que produjo la
