@@ -304,11 +304,11 @@ set -euo pipefail
 ROOT="$(cd "${{SLURM_SUBMIT_DIR:?SLURM_SUBMIT_DIR required}}" && pwd -P)"
 cd "$ROOT"
 {module_lines}
+{environment_text}
 if ! command -v {siesta_executable} >/dev/null 2>&1; then
   echo "SIESTAFLOW_SIESTA_EXECUTABLE_UNAVAILABLE: {siesta_executable}" >&2
   exit 127
 fi
-{environment_text}
 export PYTHONPATH="$ROOT/runtime"
 export PYTHONDONTWRITEBYTECODE=1
 python3 verify_package.py
