@@ -114,10 +114,8 @@ class ExecutionSpec:
         if self.mpi_ranks % self.nodes:
             raise ValueError("mpi_ranks must be divisible by nodes")
         launcher = self.launcher.casefold()
-        if launcher not in {"direct", "srun", "hydra"}:
-            raise ValueError("launcher must be direct, srun, or hydra")
-        if launcher == "direct" and self.mpi_ranks != 1:
-            raise ValueError("direct launcher supports exactly one MPI rank")
+        if not launcher.replace("-", "").replace("_", "").isalnum():
+            raise ValueError("launcher must be a portable non-empty identifier")
         object.__setattr__(self, "launcher", launcher)
         object.__setattr__(
             self,

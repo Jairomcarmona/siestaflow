@@ -79,8 +79,8 @@ def test_writer_renders_header_paths_nodes_messages_and_failure_summary(tmp_path
     writer.finish({"Campaign status": "FAILED", "Failed": 1})
     text = writer.path.read_text(encoding="utf-8")
     for expected in (
-        "Q R A F T", "qraft-output-schema : 1.0", "[RESOLVED CONFIGURATION]",
-        "[DAG]", "[NODE run]", "attempt-0001", "stdout.txt", "stderr.txt",
+        "Q R A F T", "qraft-output-schema : 1.1", "[RESOLVED CONFIGURATION]",
+        "[DAG]", "[NODE STATE — run]", "attempt-0001", "stdout.txt", "stderr.txt",
         "[ERROR TECHNICAL_FAILURE]", "Technical state", "DAG action",
         "QRAFT CAMPAIGN SUMMARY", "FAILED",
     ):
@@ -155,7 +155,7 @@ def test_concurrent_appends_keep_node_blocks_intact(tmp_path: Path) -> None:
     for thread in threads:
         thread.join()
     text = writer.path.read_text(encoding="utf-8")
-    assert text.count("[NODE alpha]") == text.count("[NODE beta]") == 1
+    assert text.count("[NODE STATE — alpha]") == text.count("[NODE STATE — beta]") == 1
     assert "alpha" * 50 in text and "beta" * 50 in text
 
 
@@ -183,7 +183,9 @@ def test_single_fdf_functional_output_and_recovery_do_not_mutate_attempt(tmp_pat
     assert manifest.read_bytes() == original
     text = (runs / "qraft.out").read_text(encoding="utf-8")
     for expected in (
-        "single_fdf:calc", "[RESOLVED CONFIGURATION]", "[DAG]", "[NODE run_siesta]",
+        "single_fdf:calc", "QRAFT EXECUTION SESSION", "[EXECUTION]", "[IDENTITY]",
+        "[RESOLVED CONFIGURATION]", "[DAG]", "[NODE START — run_siesta]",
+        "[NODE RESULT — run_siesta]",
         first["attempt"]["attempt_id"], "stdout.txt", "stderr.txt", "technical status", "PASS",
         "[RECOVERY]", "REUSED_VALIDATED_ATTEMPT", "no SIESTA relaunch required",
         "QRAFT CAMPAIGN SUMMARY",
@@ -218,8 +220,8 @@ def test_allocation_controller_writes_success_failure_and_resume_output(tmp_path
     campaign, _ = make_package(tmp_path, ["FAIL", "SUCCESS"], max_parallel=1)
     controller(campaign, "job-1").run(install_signal_handlers=False)
     text = (tmp_path / "qraft.out").read_text(encoding="utf-8")
-    assert "[NODE task-1]" in text and "[ERROR FAILED]" in text
-    assert "[NODE task-2]" in text and "Technical validation : PASS" in text
+    assert "[NODE RESULT — task-1]" in text and "[ERROR FAILED]" in text
+    assert "[NODE RESULT — task-2]" in text and "Technical validation : PASS" in text
     assert "Campaign status" in text and "FAILED" in text
     controller(campaign, "job-2").run(install_signal_handlers=False)
     resumed = (tmp_path / "qraft.out").read_text(encoding="utf-8")

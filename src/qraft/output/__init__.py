@@ -4,6 +4,7 @@ from .contributor import OutputContributor, collect_output
 from .csv_exporter import CsvExporter
 from .model import (
     DagEntry,
+    ExecutionSession,
     NodeEntry,
     OutputMatrix,
     OutputMessage,
@@ -15,6 +16,7 @@ from .text_writer import QraftOutputWriter
 __all__ = [
     "CsvExporter",
     "DagEntry",
+    "ExecutionSession",
     "NodeEntry",
     "OutputContributor",
     "OutputMatrix",

@@ -7,6 +7,8 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Mapping
 
+from .execution.adapters import launcher_registry
+
 from .contracts import contract_sha256
 from .contracts.workflow import require_local_id
 from .project_packages import load_structured
@@ -81,24 +83,25 @@ class SlurmExecutionProfile:
             )
         if not self.siesta_executable.strip():
             raise ValueError("siesta_executable must be non-empty")
-        if self.launcher_kind not in {"srun", "hydra"}:
-            raise ValueError("launcher kind must be srun or hydra")
+        launcher_adapter = launcher_registry.require(self.launcher_kind)
         if not self.launcher_command or any(
             not item.strip() for item in self.launcher_command
         ):
             raise ValueError("launcher command must be non-empty")
-        if self.launcher_bootstrap != "ssh":
-            raise ValueError("the supported Hydra bootstrap is ssh")
-        if self.launcher_kind == "hydra":
+        if launcher_adapter.requires_hosts and not self.launcher_bootstrap.strip():
+            raise ValueError("host-aware launcher bootstrap must be explicit")
+        if launcher_adapter.requires_processes_per_node:
             if self.processes_per_node is None:
-                raise ValueError("Hydra profiles require processes_per_node")
+                raise ValueError(
+                    f"{self.launcher_kind} profiles require processes_per_node"
+                )
             _positive_integer(
                 self.processes_per_node,
                 "processes_per_node",
             )
             if self.nodes * self.processes_per_node != self.total_cpus:
                 raise ValueError(
-                    "Hydra allocation requires nodes * processes_per_node "
+                    f"{self.launcher_kind} allocation requires nodes * processes_per_node "
                     "to equal total_cpus"
                 )
         elif self.processes_per_node is not None:
@@ -302,7 +305,7 @@ class SlurmExecutionProfile:
         walltime: str,
     ) -> "SlurmExecutionProfile":
         """Return an immutable run-specific profile without changing science."""
-        if self.launcher_kind == "hydra":
+        if launcher_registry.require(self.launcher_kind).requires_processes_per_node:
             processes_per_node: int | None = ranks_per_node
         else:
             processes_per_node = self.processes_per_node

@@ -43,11 +43,17 @@ class NodeEntry:
     evidence_path: str | None = None
     resources: Mapping[str, Scalar] = field(default_factory=dict)
     depends_on: tuple[str, ...] = ()
+    event: str = "STATE"
+    started: str | None = None
+    finished: str | None = None
+    elapsed_seconds: float | None = None
+    command: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "node_id", _text(self.node_id, "node_id"))
         object.__setattr__(self, "node_type", _text(self.node_type, "node_type"))
         object.__setattr__(self, "status", _text(self.status, "status").upper())
+        object.__setattr__(self, "event", _text(self.event, "node event").upper())
         object.__setattr__(self, "depends_on", tuple(map(str, self.depends_on)))
         object.__setattr__(self, "resources", dict(self.resources))
 
@@ -122,11 +128,36 @@ class OutputMessage:
 
 
 @dataclass(frozen=True)
+class ExecutionSession:
+    session_id: str
+    controller_epoch: int
+    mode: str
+    started: str
+    command: str
+    previous_state: str | None
+    working_root: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "session_id", _text(self.session_id, "session_id"))
+        if self.controller_epoch <= 0:
+            raise ValueError("controller_epoch must be positive")
+        mode = _text(self.mode, "session mode").upper()
+        if mode not in {"NEW", "RESUME", "RECOVERY"}:
+            raise ValueError(f"unsupported session mode: {mode}")
+        object.__setattr__(self, "mode", mode)
+        object.__setattr__(self, "started", _text(self.started, "session started"))
+        object.__setattr__(self, "command", _text(self.command, "session command"))
+        object.__setattr__(self, "working_root", _text(self.working_root, "working_root"))
+
+
+@dataclass(frozen=True)
 class OutputModel:
     """Generic payload rendered by the one official human-output writer."""
 
     header: Mapping[str, Scalar] = field(default_factory=dict)
     configuration: Mapping[str, Scalar] = field(default_factory=dict)
+    execution: Mapping[str, Scalar] = field(default_factory=dict)
+    identity: Mapping[str, Scalar] = field(default_factory=dict)
     dag: tuple[DagEntry, ...] = ()
     nodes: tuple[NodeEntry, ...] = ()
     metrics: Mapping[str, Scalar] = field(default_factory=dict)
@@ -135,23 +166,35 @@ class OutputModel:
     tables: tuple[OutputTable, ...] = ()
     matrices: tuple[OutputMatrix, ...] = ()
     messages: tuple[OutputMessage, ...] = ()
+    diagnostic: Mapping[str, Scalar] = field(default_factory=dict)
+    relevant_output: tuple[str, ...] = ()
     decisions: Mapping[str, Scalar] = field(default_factory=dict)
     notes: tuple[str, ...] = ()
     summary: Mapping[str, Scalar] = field(default_factory=dict)
-    schema_version: str = "1.0"
+    schema_version: str = "1.1"
 
     def __post_init__(self) -> None:
-        if self.schema_version != "1.0":
+        if self.schema_version not in {"1.0", "1.1"}:
             raise ValueError("unsupported qraft output schema")
-        for name in ("header", "configuration", "metrics", "paths", "artifacts", "decisions", "summary"):
+        for name in (
+            "header", "configuration", "execution", "identity", "metrics", "paths",
+            "artifacts", "diagnostic", "decisions", "summary",
+        ):
             object.__setattr__(self, name, dict(getattr(self, name)))
-        for name in ("dag", "nodes", "tables", "matrices", "messages", "notes"):
+        for name in (
+            "dag", "nodes", "tables", "matrices", "messages", "relevant_output", "notes",
+        ):
             object.__setattr__(self, name, tuple(getattr(self, name)))
 
     @classmethod
     def combine(cls, models: Sequence["OutputModel"]) -> "OutputModel":
-        mappings = ("header", "configuration", "metrics", "paths", "artifacts", "decisions", "summary")
-        sequences = ("dag", "nodes", "tables", "matrices", "messages", "notes")
+        mappings = (
+            "header", "configuration", "execution", "identity", "metrics", "paths",
+            "artifacts", "diagnostic", "decisions", "summary",
+        )
+        sequences = (
+            "dag", "nodes", "tables", "matrices", "messages", "relevant_output", "notes",
+        )
         values: dict[str, Any] = {name: {} for name in mappings}
         values.update({name: [] for name in sequences})
         for model in models:

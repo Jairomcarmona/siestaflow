@@ -5,6 +5,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
+import shlex
 import shutil
 import socket
 import subprocess
@@ -33,11 +35,14 @@ from ..engines.siesta.fdf_parser import FDFParser
 from ..engines.siesta.input_validator import SiestaInputValidator
 from ..engines.siesta.models import FDFBlock, FDFInclude, OutputClassification
 from ..engines.siesta.output_parser import SiestaOutputParser
-from ..execution.hydra_launcher import HydraLauncher
+from ..execution.adapters import launcher_registry
 from ..execution.slurm_environment import SlurmEnvironment
-from ..execution.srun_launcher import SrunLauncher, StepLaunchSpec, StepOutcome
+from ..execution.srun_launcher import StepLaunchSpec, StepOutcome
 from ..models import DecisionStatus
-from ..output import DagEntry, NodeEntry, OutputMessage, OutputModel, QraftOutputWriter
+from ..output import (
+    DagEntry, ExecutionSession, NodeEntry, OutputMessage, OutputModel,
+    QraftOutputWriter,
+)
 
 
 DEFAULT_EXECUTION: dict[str, Any] = {
@@ -85,9 +90,18 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def _read_mapping(path: Path | None) -> dict[str, Any]:
-    if path is None:
+def _read_mapping(source: Path | Mapping[str, Any] | None) -> dict[str, Any]:
+    if source is None:
         return {}
+    if isinstance(source, Mapping):
+        data = dict(source)
+        nested = data.get("execution")
+        if nested is not None:
+            if not isinstance(nested, Mapping):
+                raise ValueError("execution section must be a mapping")
+            data = dict(nested)
+        return data
+    path = Path(source)
     if not path.is_file():
         raise FileNotFoundError(f"execution configuration does not exist: {path}")
     if path.suffix.casefold() == ".toml":
@@ -108,7 +122,7 @@ def _read_mapping(path: Path | None) -> dict[str, Any]:
 
 def resolve_execution_spec(
     *,
-    profile: Path | None = None,
+    profile: Path | Mapping[str, Any] | None = None,
     project_config: Path | None = None,
     recipe: Path | None = None,
     overrides: Mapping[str, Any] | None = None,
@@ -147,7 +161,11 @@ def resolve_execution_spec(
         resolved[name] = tuple(map(str, value))
     if not isinstance(resolved["environment"], Mapping):
         raise ValueError("environment must be a mapping")
-    return ExecutionSpec(**resolved), provenance
+    spec = ExecutionSpec(**resolved)
+    launcher_registry.require(spec.launcher).validate_resources(
+        mpi_ranks=spec.mpi_ranks, nodes=spec.nodes
+    )
+    return spec, provenance
 
 
 def _safe_scientific_path(root: Path, owner: Path, target: str) -> Path:
@@ -327,7 +345,7 @@ def build_fdf_plan(
     fdf: Path,
     *,
     pseudo_manifest: Path | None = None,
-    profile: Path | None = None,
+    profile: Path | Mapping[str, Any] | None = None,
     project_config: Path | None = None,
     recipe: Path | None = None,
     overrides: Mapping[str, Any] | None = None,
@@ -440,17 +458,20 @@ def _render_output(events: Path, operation: str, callback: Any) -> None:
 
 
 def _single_fdf_start_model(
-    plan: Mapping[str, Any], fdf: Path, runs_root: Path
+    plan: Mapping[str, Any], fdf: Path, runs_root: Path,
+    profile_metadata: Mapping[str, Any] | None = None,
 ) -> OutputModel:
     execution = plan["execution_spec"]
     identity = plan["scientific_identity"]
+    adapter = launcher_registry.require(str(execution["launcher"]))
+    scheduler = str((profile_metadata or {}).get("scheduler") or adapter.scheduler)
     return OutputModel(
         header={
             "Version": QRAFT_VERSION,
             "Started": _utc_now(),
             "Campaign": f"single_fdf:{fdf.stem}",
             "Campaign ID": identity["fingerprint"][:16],
-            "Root": str(runs_root.resolve()),
+            "Campaign root": str(runs_root.resolve()),
             "Host": socket.gethostname(),
             "SLURM Job": os.environ.get("SLURM_JOB_ID"),
             "Partition": execution["partition"],
@@ -472,6 +493,26 @@ def _single_fdf_start_model(
             "launcher": execution["launcher"],
             "executable": execution["executable"],
             "walltime seconds": execution["walltime_seconds"],
+        },
+        execution={
+            "Scheduler": scheduler,
+            "Launcher": execution["launcher"],
+            "Executable": execution["executable"],
+            "Command": _resolved_command(execution),
+            "Partition": execution["partition"],
+            "Nodes": execution["nodes"],
+            "MPI ranks": execution["mpi_ranks"],
+            "Ranks/node": execution["ranks_per_node"],
+            "CPUs/rank": execution["cpus_per_rank"],
+            "Profile": (profile_metadata or {}).get("name", "none"),
+        },
+        identity={
+            "Scientific ID": str(identity["fingerprint"])[:16],
+            "Execution ID": str(execution["fingerprint"])[:16],
+            "QRAFT version": QRAFT_VERSION,
+            "QRAFT commit": os.environ.get("QRAFT_COMMIT"),
+            "Engine": "SIESTA",
+            "Engine version": (profile_metadata or {}).get("engine_version", "runtime-resolved"),
         },
         dag=tuple(
             DagEntry(
@@ -573,32 +614,81 @@ def _active_slurm(execution: ExecutionSpec) -> SlurmEnvironment | None:
 
 
 def _launch(execution: ExecutionSpec, spec: StepLaunchSpec) -> StepOutcome:
+    adapter = launcher_registry.require(execution.launcher)
     if execution.launcher == "direct":
         return _direct_launch(spec)
-    if execution.launcher == "srun":
-        _active_slurm(execution)
-        command = execution.launcher_command or ("srun",)
-        return SrunLauncher(
-            srun_command=command,
-            srun_arguments=execution.launcher_arguments,
-            exclusive=True,
-        ).launch(spec)
-    slurm = _active_slurm(execution)
-    if slurm is None:
-        raise ValueError("Hydra launcher requires an active SLURM allocation")
-    hosts = slurm.resolve_hostnames()[: execution.nodes]
-    hydra_spec = StepLaunchSpec(
-        **{
-            **asdict(spec),
-            "hosts": hosts,
-            "processes_per_node": execution.ranks_per_node,
-        }
-    )
-    return HydraLauncher(
-        command=execution.launcher_command or ("mpiexec.hydra",),
+    slurm = _active_slurm(execution) if adapter.scheduler == "slurm" else None
+    if adapter.requires_allocation and slurm is None:
+        raise ValueError(
+            f"{adapter.name} launcher requires an active {adapter.scheduler.upper()} allocation"
+        )
+    launch_spec = spec
+    if adapter.requires_hosts:
+        assert slurm is not None
+        launch_spec = StepLaunchSpec(
+            **{
+                **asdict(spec),
+                "hosts": slurm.resolve_hostnames()[: execution.nodes],
+                "processes_per_node": execution.ranks_per_node,
+            }
+        )
+    launcher = adapter.create(
+        command=execution.launcher_command,
         arguments=execution.launcher_arguments,
         bootstrap="ssh",
-    ).launch(hydra_spec)
+    )
+    return launcher.launch(launch_spec)
+
+
+def _resolved_command(execution: Mapping[str, Any]) -> str:
+    launcher = str(execution["launcher"])
+    adapter = launcher_registry.require(launcher)
+    return shlex.join(adapter.preview_command(
+        command=execution.get("launcher_command", ()),
+        arguments=execution.get("launcher_arguments", ()),
+        executable=str(execution["executable"]),
+        executable_arguments=execution.get("executable_arguments", ()),
+        mpi_ranks=int(execution["mpi_ranks"]),
+        cpus_per_rank=int(execution["cpus_per_rank"]),
+    ))
+
+
+def _next_session_epoch(events: Path) -> int:
+    if not events.is_file():
+        return 1
+    count = 0
+    try:
+        with events.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                try:
+                    if json.loads(line).get("event") == "EXECUTION_SESSION_STARTED":
+                        count += 1
+                except (json.JSONDecodeError, AttributeError):
+                    continue
+    except OSError:
+        return 1
+    return count + 1
+
+
+def _relevant_output(paths: Sequence[Path], *, limit: int = 6) -> tuple[str, ...]:
+    pattern = re.compile(r"error|fatal|abort|termination|converg|scf", re.IGNORECASE)
+    selected: list[str] = []
+    for path in paths:
+        if not path.is_file():
+            continue
+        try:
+            with path.open("rb") as handle:
+                handle.seek(0, os.SEEK_END)
+                size = handle.tell()
+                handle.seek(max(0, size - 65536))
+                text = handle.read().decode("utf-8", errors="replace")
+        except OSError:
+            continue
+        for line in text.splitlines():
+            clean = line.strip()
+            if clean and pattern.search(clean):
+                selected.append(clean[:500])
+    return tuple(selected[-limit:])
 
 
 def _find_reusable_attempt(root: Path, scientific_fingerprint: str) -> dict[str, Any] | None:
@@ -634,16 +724,26 @@ def execute_fdf_plan(
     fdf: Path,
     *,
     pseudo_manifest: Path | None = None,
-    profile: Path | None = None,
+    profile: Path | Mapping[str, Any] | None = None,
     project_config: Path | None = None,
     recipe: Path | None = None,
     overrides: Mapping[str, Any] | None = None,
     runs_root: Path = Path(".qraft-runs"),
     force_new_attempt: bool = False,
+    invocation: str | None = None,
+    profile_metadata: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
+    session_clock = time.monotonic()
+    session_started = _utc_now()
+    session_id = uuid.uuid4().hex
     resolved_runs = runs_root.resolve()
     events = resolved_runs / "events.jsonl"
-    output_writer = QraftOutputWriter(resolved_runs / "qraft.out")
+    output_writer = QraftOutputWriter(
+        resolved_runs / "qraft.out", campaign_root=resolved_runs
+    )
+    initial_output_exists = output_writer.exists
+    epoch = _next_session_epoch(events)
+    session_command = invocation or f"qraft run {shlex.quote(str(fdf))}"
     try:
         plan = build_fdf_plan(
             fdf,
@@ -669,7 +769,7 @@ def execute_fdf_plan(
                         "Version": QRAFT_VERSION,
                         "Started": _utc_now(),
                         "Campaign": f"single_fdf:{fdf.stem}",
-                        "Root": str(resolved_runs),
+                        "Campaign root": str(resolved_runs),
                         "Host": socket.gethostname(),
                         "Engine": "SIESTA",
                         "Engine version": "not-resolved",
@@ -683,6 +783,27 @@ def execute_fdf_plan(
                     paths={"QRAFT output": str(output_writer.path), "Evidence": str(events)},
                 )),
             )
+        _event(
+            events,
+            "EXECUTION_SESSION_STARTED",
+            session_id=session_id,
+            controller_epoch=epoch,
+            mode="RESUME" if initial_output_exists else "NEW",
+            command=session_command,
+        )
+        _render_output(
+            events,
+            "session_started",
+            lambda: output_writer.start_session(ExecutionSession(
+                session_id=session_id,
+                controller_epoch=epoch,
+                mode="RESUME" if initial_output_exists else "NEW",
+                started=session_started,
+                command=session_command,
+                previous_state=None,
+                working_root=str(resolved_runs),
+            )),
+        )
         _render_output(
             events,
             "planning_failure",
@@ -703,6 +824,15 @@ def execute_fdf_plan(
         )
         _render_output(
             events,
+            "session_finished",
+            lambda: output_writer.finish_session(
+                result="BLOCKED",
+                finished=_utc_now(),
+                elapsed_seconds=time.monotonic() - session_clock,
+            ),
+        )
+        _render_output(
+            events,
             "summary",
             lambda: output_writer.finish({
                 "Campaign status": "BLOCKED",
@@ -716,6 +846,12 @@ def execute_fdf_plan(
                 "Evidence": str(events),
             }),
         )
+        _event(
+            events,
+            "EXECUTION_SESSION_FINISHED",
+            session_id=session_id,
+            status="BLOCKED",
+        )
         raise
     scientific_fingerprint = plan["scientific_identity"]["fingerprint"]
     execution = ExecutionSpec(
@@ -727,15 +863,53 @@ def execute_fdf_plan(
         }
     )
     run_root = resolved_runs / scientific_fingerprint
-    if not output_writer.exists:
+    reusable = None if force_new_attempt else _find_reusable_attempt(run_root, scientific_fingerprint)
+    output_existed = output_writer.exists
+    start_model = _single_fdf_start_model(
+        plan, fdf, resolved_runs, profile_metadata=profile_metadata
+    )
+    if not output_existed:
         _render_output(
             events,
             "initialize",
             lambda: output_writer.initialize(
-                _single_fdf_start_model(plan, fdf, resolved_runs)
+                OutputModel(
+                    header=start_model.header,
+                )
             ),
         )
-    reusable = None if force_new_attempt else _find_reusable_attempt(run_root, scientific_fingerprint)
+    previous_state = None
+    state_path = run_root / "state.json"
+    if state_path.is_file():
+        try:
+            previous_state = str(json.loads(state_path.read_text(encoding="utf-8")).get("technical_status"))
+        except (OSError, json.JSONDecodeError, AttributeError):
+            previous_state = "UNKNOWN"
+    mode = "RECOVERY" if reusable is not None else "RESUME" if output_existed else "NEW"
+    _event(
+        events,
+        "EXECUTION_SESSION_STARTED",
+        session_id=session_id,
+        controller_epoch=epoch,
+        mode=mode,
+        command=session_command,
+    )
+    _render_output(
+        events,
+        "session_started",
+        lambda: output_writer.start_session(
+            ExecutionSession(
+                session_id=session_id,
+                controller_epoch=epoch,
+                mode=mode,
+                started=session_started,
+                command=session_command,
+                previous_state=previous_state,
+                working_root=str(resolved_runs),
+            ),
+            start_model,
+        ),
+    )
     if reusable is not None:
         _render_output(
             events,
@@ -747,6 +921,15 @@ def execute_fdf_plan(
                 "Result": "no SIESTA relaunch required",
                 "Evidence": str(run_root / reusable["attempt_id"] / "attempt.json"),
             }),
+        )
+        _render_output(
+            events,
+            "session_finished",
+            lambda: output_writer.finish_session(
+                result="COMPLETED",
+                finished=_utc_now(),
+                elapsed_seconds=time.monotonic() - session_clock,
+            ),
         )
         _render_output(
             events,
@@ -762,6 +945,12 @@ def execute_fdf_plan(
                 "Resume": "validated attempt already reused",
             }),
         )
+        _event(
+            events,
+            "EXECUTION_SESSION_FINISHED",
+            session_id=session_id,
+            status="COMPLETED",
+        )
         return {
             "status": "REUSED_VALIDATED_ATTEMPT",
             "attempt": reusable,
@@ -772,6 +961,7 @@ def execute_fdf_plan(
     attempt_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ-") + uuid.uuid4().hex[:8]
     attempt_dir = run_root / attempt_id
     attempt_dir.mkdir(parents=True, exist_ok=False)
+    started_at = _utc_now()
     _event(
         events,
         "ATTEMPT_STARTED",
@@ -801,11 +991,13 @@ def execute_fdf_plan(
                     "CPUs/rank": execution.cpus_per_rank,
                 },
                 depends_on=("validate_input",),
+                event="START",
+                started=started_at,
+                command=_resolved_command(plan["execution_spec"]),
             ),)),
         ),
     )
     _exclusive_json(attempt_dir / "plan.json", plan)
-    started_at = _utc_now()
     valid_input, input_findings = _validated_input(fdf)
     _exclusive_json(
         attempt_dir / "input_validation.json",
@@ -942,6 +1134,11 @@ def execute_fdf_plan(
                     evidence_path=str(attempt_manifest),
                     resources={"MPI ranks": execution.mpi_ranks},
                     depends_on=("validate_input",),
+                    event="RESULT",
+                    started=attempt.started_at,
+                    finished=attempt.finished_at,
+                    elapsed_seconds=outcome.elapsed_seconds if outcome is not None else None,
+                    command=shlex.join(outcome.command) if outcome is not None else _resolved_command(plan["execution_spec"]),
                 ),),
                 metrics={
                     "exit_code": exit_code,
@@ -953,8 +1150,32 @@ def execute_fdf_plan(
                 },
                 paths={"stdout": str(stdout), "stderr": str(stderr), "attempt manifest": str(attempt_manifest)},
                 messages=messages,
+                diagnostic=(
+                    {
+                        "Classification": technical.classification,
+                        "Exit code": exit_code,
+                        "SCF started": technical.parser_summary.get("scf_started"),
+                        "SCF converged": technical.parser_summary.get("scf_converged"),
+                        "Normal end": technical.parser_summary.get("normal_termination"),
+                        "Reason": "; ".join(technical.reasons),
+                    }
+                    if technical.status != "PASS" else {}
+                ),
+                relevant_output=(
+                    _relevant_output((stdout, stderr))
+                    if technical.status != "PASS" else ()
+                ),
                 decisions={"scientific decision": attempt.result.scientific_decision.value},
             ),
+        ),
+    )
+    _render_output(
+        events,
+        "session_finished",
+        lambda: output_writer.finish_session(
+            result="COMPLETED" if technical.status == "PASS" else "FAILED",
+            finished=_utc_now(),
+            elapsed_seconds=time.monotonic() - session_clock,
         ),
     )
     _render_output(
@@ -972,6 +1193,12 @@ def execute_fdf_plan(
             "Evidence": str(events),
             "Resume": f"qraft run {fdf.resolve()}",
         }),
+    )
+    _event(
+        events,
+        "EXECUTION_SESSION_FINISHED",
+        session_id=session_id,
+        status="COMPLETED" if technical.status == "PASS" else "FAILED",
     )
     return {
         "status": "ATTEMPT_FINISHED",

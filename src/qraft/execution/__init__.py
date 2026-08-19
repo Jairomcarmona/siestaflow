@@ -22,6 +22,17 @@ __all__ = (
 
 from .direct_launcher import DirectLauncher
 from .hydra_launcher import HydraLauncher
+from .openmpi_launcher import OpenMpiLauncher
+from .adapters import (
+    LauncherAdapter, LauncherRegistry, SchedulerAdapter, SchedulerRegistry,
+    launcher_registry, scheduler_registry,
+)
 from .srun_launcher import SrunLauncher, StepLauncher
 
-__all__ = ["DirectLauncher", "HydraLauncher", "SrunLauncher", "StepLauncher"]
+__all__ = [
+    "AllocationController", "DirectLauncher", "ExecutionStatus", "HydraLauncher",
+    "LauncherAdapter", "LauncherRegistry", "OpenMpiLauncher", "SchedulerAdapter",
+    "SchedulerRegistry", "ShutdownRequest", "SlurmEnvironment", "SrunLauncher",
+    "StepLaunchSpec", "StepLauncher", "StepOutcome", "launcher_registry",
+    "scheduler_registry",
+]

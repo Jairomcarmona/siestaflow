@@ -8,7 +8,10 @@ from pathlib import Path
 from typing import Iterable, Mapping
 
 from .csv_exporter import CsvExporter
-from .model import NodeEntry, OutputMatrix, OutputMessage, OutputModel, OutputTable, Scalar
+from .model import (
+    ExecutionSession, NodeEntry, OutputMatrix, OutputMessage, OutputModel,
+    OutputTable, Scalar,
+)
 
 
 _RULE = "=" * 64
@@ -36,9 +39,11 @@ class QraftOutputWriter:
     """The single process-local authority that appends complete output blocks."""
 
     def __init__(
-        self, path: Path, *, matrix_cell_limit: int = 100, table_row_limit: int = 50
+        self, path: Path, *, campaign_root: Path | None = None,
+        matrix_cell_limit: int = 100, table_row_limit: int = 50,
     ) -> None:
         self.path = path.resolve()
+        self.campaign_root = (campaign_root or self.path.parent).resolve()
         self.matrix_cell_limit = matrix_cell_limit
         self.table_row_limit = table_row_limit
         self.csv_exporter = CsvExporter(self.path.parent / "results")
@@ -54,26 +59,61 @@ class QraftOutputWriter:
             "                           Q R A F T",
             "       Quantum Reproducible Automation & Flow Toolkit",
             _RULE,
-            "qraft-output-schema : 1.0",
+            f"qraft-output-schema : {model.schema_version}",
         ]
         _mapping(lines, model.header)
         lines.append(_RULE)
         lines.extend(self._render_model(model, include_header=False))
         return self._append(lines, model)
 
+    def start_session(
+        self, session: ExecutionSession, model: OutputModel | None = None
+    ) -> tuple[str, ...]:
+        lines = [
+            "", _RULE, "QRAFT EXECUTION SESSION", _RULE,
+            f"Session ID       : {session.session_id}",
+            f"Controller epoch : {session.controller_epoch}",
+            f"Mode             : {session.mode}",
+            f"Started          : {session.started}",
+            f"Command          : {session.command}",
+            f"Previous state   : {_display(session.previous_state)}",
+            f"Working root     : {self._path(session.working_root)}",
+            _RULE,
+        ]
+        payload = model or OutputModel()
+        lines.extend(self._render_model(payload, include_header=False))
+        return self._append(lines, payload)
+
+    def finish_session(
+        self, *, result: str, finished: str, elapsed_seconds: float
+    ) -> tuple[str, ...]:
+        lines = [
+            "", _RULE,
+            f"SESSION RESULT : {str(result).upper()}",
+            f"Finished       : {finished}",
+            f"Elapsed        : {max(0.0, elapsed_seconds):.3f} s",
+            _RULE,
+        ]
+        return self._append(lines, OutputModel())
+
     def append(self, title: str, model: OutputModel) -> tuple[str, ...]:
-        lines = ["", f"[{title.strip().upper()}]", ""]
+        normalized = title.strip().upper()
+        compact_node = (
+            len(model.nodes) == 1
+            and normalized in {"NODE START", "NODE RESULT", "NODE STATE"}
+        )
+        lines = [] if compact_node else ["", f"[{normalized}]", ""]
         lines.extend(self._render_model(model, include_header=True))
         return self._append(lines, model)
 
     def append_recovery(self, values: Mapping[str, Scalar]) -> tuple[str, ...]:
         lines = ["", "[RECOVERY]", ""]
-        _mapping(lines, values)
+        _mapping(lines, self._path_mapping(values))
         return self._append(lines, OutputModel())
 
     def finish(self, summary: Mapping[str, Scalar]) -> tuple[str, ...]:
         lines = ["", _RULE, "QRAFT CAMPAIGN SUMMARY", _RULE]
-        _mapping(lines, summary)
+        _mapping(lines, self._path_mapping(summary))
         lines.append(_RULE)
         return self._append(lines, OutputModel())
 
@@ -107,7 +147,13 @@ class QraftOutputWriter:
             _mapping(lines, model.header)
         if model.configuration:
             lines.extend(("", "[RESOLVED CONFIGURATION]"))
-            _mapping(lines, model.configuration)
+            _mapping(lines, self._path_mapping(model.configuration))
+        if model.execution:
+            lines.extend(("", "[EXECUTION]"))
+            _mapping(lines, model.execution)
+        if model.identity:
+            lines.extend(("", "[IDENTITY]"))
+            _mapping(lines, model.identity)
         if model.dag:
             lines.extend(("", "[DAG]", ""))
             for index, node in enumerate(model.dag, 1):
@@ -120,16 +166,22 @@ class QraftOutputWriter:
             _mapping(lines, model.metrics)
         if model.paths:
             lines.extend(("", "[PATHS]"))
-            _mapping(lines, model.paths)
+            _mapping(lines, {key: self._path(value) for key, value in model.paths.items()})
         if model.artifacts:
             lines.extend(("", "[ARTIFACTS]"))
-            _mapping(lines, model.artifacts)
+            _mapping(lines, {key: self._path(value) for key, value in model.artifacts.items()})
         for table in model.tables:
             lines.extend(self._render_table(table))
         for matrix in model.matrices:
             lines.extend(self._render_matrix(matrix))
         for message in model.messages:
             lines.extend(self._render_message(message))
+        if model.diagnostic:
+            lines.extend(("", "[DIAGNOSTIC]"))
+            _mapping(lines, model.diagnostic)
+            if model.relevant_output:
+                lines.extend(("", "Relevant output:"))
+                lines.extend(f"  {line}" for line in model.relevant_output[:8])
         if model.decisions:
             lines.extend(("", "[DECISIONS]"))
             _mapping(lines, model.decisions)
@@ -141,22 +193,25 @@ class QraftOutputWriter:
             _mapping(lines, model.summary)
         return lines
 
-    @staticmethod
-    def _render_node(node: NodeEntry) -> list[str]:
+    def _render_node(self, node: NodeEntry) -> list[str]:
         values: dict[str, Scalar] = {
             "Node type": node.node_type,
             "Attempt": node.attempt_id,
             "Status": node.status,
-            "Workdir": node.workdir,
-            "Input": node.input_path,
-            "stdout": node.stdout_path,
-            "stderr": node.stderr_path,
-            "Evidence": node.evidence_path,
+            "Started": node.started,
+            "Finished": node.finished,
+            "Elapsed": f"{node.elapsed_seconds:.3f} s" if node.elapsed_seconds is not None else None,
+            "Command": node.command,
+            "Workdir": self._path(node.workdir),
+            "Input": self._path(node.input_path),
+            "stdout": self._path(node.stdout_path),
+            "stderr": self._path(node.stderr_path),
+            "Evidence": self._path(node.evidence_path),
             "Dependencies": ",".join(node.depends_on) if node.depends_on else "-",
             **node.resources,
         }
-        lines = ["", f"[NODE {node.node_id}]", ""]
-        _mapping(lines, values)
+        lines = ["", f"[NODE {node.event} — {node.node_id}]", ""]
+        _mapping(lines, {key: value for key, value in values.items() if value is not None})
         return lines
 
     def _render_table(self, table: OutputTable) -> list[str]:
@@ -192,15 +247,36 @@ class QraftOutputWriter:
         _mapping(lines, matrix.summary)
         return lines
 
-    @staticmethod
-    def _render_message(message: OutputMessage) -> list[str]:
+    def _render_message(self, message: OutputMessage) -> list[str]:
         title = message.severity + (f" {message.code}" if message.code else "")
         lines = ["", f"[{title}]", f"Message : {message.text}"]
         details: dict[str, Scalar] = {
             "Node": message.node_id,
             "Attempt": message.attempt_id,
             **message.details,
-            **message.paths,
+            **{key: self._path(value) for key, value in message.paths.items()},
         }
         _mapping(lines, {key: value for key, value in details.items() if value is not None})
         return lines
+
+    def _path(self, value: str | None) -> str | None:
+        if value is None:
+            return None
+        text = str(value)
+        try:
+            path = Path(text)
+            if not path.is_absolute():
+                return path.as_posix()
+            relative = path.resolve().relative_to(self.campaign_root)
+            rendered = relative.as_posix()
+            return rendered or "."
+        except (OSError, ValueError):
+            return text
+
+    def _path_mapping(self, values: Mapping[str, Scalar]) -> dict[str, Scalar]:
+        markers = ("path", "root", "fdf", "workdir", "stdout", "stderr", "evidence", "output")
+        result: dict[str, Scalar] = {}
+        for key, value in values.items():
+            is_path = any(marker in str(key).casefold() for marker in markers)
+            result[str(key)] = self._path(value) if is_path and isinstance(value, str) else value
+        return result

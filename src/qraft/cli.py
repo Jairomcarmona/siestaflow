@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import sys
 import time
 from pathlib import Path
@@ -63,7 +64,8 @@ from .validation_render import render_validation_report
 from .workflow_preflight import WorkflowPreflightValidator
 from .workflow_authoring import WorkflowAuthoringService
 from .scientific_approvals import create_approved_profile, create_decision
-from .protocols.single_fdf import build_fdf_plan, execute_fdf_plan
+from .application import ApplicationConfiguration, QraftApplication, render_plan
+from .execution.adapters import launcher_registry
 
 
 def _repo_root() -> Path:
@@ -73,7 +75,7 @@ def _repo_root() -> Path:
 def _add_single_fdf_arguments(command: argparse.ArgumentParser, *, execute: bool) -> None:
     command.add_argument("fdf", type=Path)
     command.add_argument("--pseudo-manifest", type=Path)
-    command.add_argument("--profile", type=Path)
+    command.add_argument("--profile")
     command.add_argument("--project-config", type=Path)
     command.add_argument("--recipe", type=Path)
     command.add_argument("--partition")
@@ -81,7 +83,7 @@ def _add_single_fdf_arguments(command: argparse.ArgumentParser, *, execute: bool
     command.add_argument("--np", dest="mpi_ranks", type=int)
     command.add_argument("--cpus-per-rank", type=int)
     command.add_argument("--memory-mb", type=int)
-    command.add_argument("--launcher", choices=("direct", "srun", "hydra"))
+    command.add_argument("--launcher", choices=launcher_registry.names())
     command.add_argument("--siesta", dest="executable")
     command.add_argument("--siesta-argument", action="append", default=None)
     command.add_argument("--walltime-seconds", type=int)
@@ -457,12 +459,20 @@ def build_parser() -> argparse.ArgumentParser:
     env_package.add_argument("--dry-run", action="store_true"); env_package.add_argument("--json", action="store_true")
     env_import = environment_sub.add_parser("import")
     env_import.add_argument("bundle", type=Path); env_import.add_argument("--output", type=Path)
+    env_import.add_argument(
+        "--canonical-profile", type=Path,
+        help="optional explicit destination for an accepted external cluster profile",
+    )
     env_import.add_argument("--dry-run", action="store_true"); env_import.add_argument("--json", action="store_true")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     raw = list(sys.argv[1:] if argv is None else argv)
+    if not raw:
+        from .repl import run_repl
+
+        return run_repl()
     legacy_run_actions = {
         "prepare", "candidates", "discover", "snapshot-import",
         "inspect", "status", "resume",
@@ -485,7 +495,9 @@ def main(argv: list[str] | None = None) -> int:
         and not raw[domain_index + 1].startswith("-")
     ):
         raw[domain_index] = "_fdf-run"
+    invocation = shlex.join(("qraft", *raw))
     args = build_parser().parse_args(raw)
+    args._invocation = invocation
     try:
         return _dispatch(args)
     except (
@@ -522,21 +534,25 @@ def _dispatch(args: argparse.Namespace) -> int:
             "launcher_arguments": args.launcher_argument,
             "environment": environment or None,
         }
-        common = {
-            "pseudo_manifest": args.pseudo_manifest,
-            "profile": args.profile,
-            "project_config": args.project_config,
-            "recipe": args.recipe,
-            "overrides": overrides,
-        }
+        application = QraftApplication(ApplicationConfiguration(
+            fdf=args.fdf,
+            profile=args.profile,
+            pseudo_manifest=args.pseudo_manifest,
+            project_config=args.project_config,
+            recipe=args.recipe,
+            runs_root=getattr(args, "runs_root", Path(".qraft-runs")),
+        ))
         if args.domain == "plan":
-            _emit(build_fdf_plan(args.fdf, **common), args.json)
+            result = application.plan(command_overrides=overrides)
+            if args.json:
+                _emit(result, True)
+            else:
+                print(render_plan(result))
             return 0
-        result = execute_fdf_plan(
-            args.fdf,
-            **common,
-            runs_root=args.runs_root,
+        result = application.run(
+            command_overrides=overrides,
             force_new_attempt=args.force_new_attempt,
+            invocation=getattr(args, "_invocation", None),
         )
         _emit(result, args.json)
         return (
@@ -1032,8 +1048,10 @@ def _dispatch(args: argparse.Namespace) -> int:
             plan = EnvironmentProbePackager(requirements, status_data).package(output, dry_run=args.dry_run)
             _emit(primitive(plan), args.json); return 0
         output = args.output or (args.workspace / "environment_imports" / args.bundle.stem)
-        profile_path = _repo_root() / "config" / "cluster_profiles" / "yoltla_siesta.yaml"
-        report = RemoteEnvironmentImporter().import_bundle(args.bundle, output, dry_run=args.dry_run, canonical_profile_path=profile_path)
+        report = RemoteEnvironmentImporter().import_bundle(
+            args.bundle, output, dry_run=args.dry_run,
+            canonical_profile_path=args.canonical_profile,
+        )
         _emit(primitive(report), args.json); return 2 if report.status is RemoteEnvironmentStatus.REMOTE_ENVIRONMENT_FAILED else 0
     raise ValueError("unsupported command")
 

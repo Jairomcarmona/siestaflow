@@ -5,10 +5,13 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shlex
 import shutil
 import socket
+import sys
 import threading
 import time
+import uuid
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 from enum import Enum
@@ -18,11 +21,14 @@ from typing import Any, Mapping
 from .. import __version__ as QRAFT_VERSION
 from ..engines.siesta.output_parser import SiestaOutputParser
 from ..project_packages import load_structured
-from ..output import DagEntry, NodeEntry, OutputMessage, OutputModel, QraftOutputWriter
+from ..output import (
+    DagEntry, ExecutionSession, NodeEntry, OutputMessage, OutputModel,
+    QraftOutputWriter,
+)
 from .direct_launcher import DirectLauncher
-from .hydra_launcher import HydraLauncher
+from .adapters import launcher_registry
 from .slurm_environment import ShutdownRequest, SignalHandlers, SlurmEnvironment
-from .srun_launcher import SrunLauncher, StepLaunchSpec, StepLauncher, StepOutcome
+from .srun_launcher import StepLaunchSpec, StepLauncher, StepOutcome
 
 
 class ExecutionStatus(str, Enum):
@@ -170,8 +176,11 @@ def load_controller_config(path: Path) -> ControllerConfig:
         if not isinstance(launcher_raw, Mapping):
             raise ValueError("runtime.launcher must be a mapping for schema 2.0")
         launcher_kind = str(launcher_raw.get("kind", "")).strip().casefold()
-        if launcher_kind not in {"srun", "hydra"}:
-            raise ValueError("runtime.launcher.kind must be srun or hydra")
+        launcher_adapter = launcher_registry.require(launcher_kind)
+        if not launcher_adapter.supports_controller_siesta:
+            raise ValueError(
+                f"launcher adapter does not support controller SIESTA tasks: {launcher_kind}"
+            )
         command_raw = launcher_raw.get("command")
         arguments_raw = launcher_raw.get("arguments", [])
         launcher_bootstrap = _required_text(
@@ -184,6 +193,7 @@ def load_controller_config(path: Path) -> ControllerConfig:
         )
     else:
         launcher_kind = "srun"
+        launcher_adapter = launcher_registry.require(launcher_kind)
         command_raw = runtime.get("srun_command")
         arguments_raw = runtime.get("srun_arguments", [])
         launcher_bootstrap = "ssh"
@@ -341,14 +351,16 @@ def load_controller_config(path: Path) -> ControllerConfig:
             raise ValueError(f"task {task.task_id} requests more CPUs than campaign allocation")
         if task.nodes > nodes:
             raise ValueError(f"task {task.task_id} requests more nodes than campaign allocation")
-        if launcher_kind == "hydra" and task.task_kind == "siesta":
+        if launcher_adapter.requires_processes_per_node and task.task_kind == "siesta":
             if task.nodes <= 0:
-                raise ValueError(f"Hydra task {task.task_id} requires an explicit positive nodes value")
+                raise ValueError(
+                    f"{launcher_kind} task {task.task_id} requires an explicit positive nodes value"
+                )
             if processes_per_node is None:
-                raise ValueError("Hydra launcher requires processes_per_node")
+                raise ValueError(f"{launcher_kind} launcher requires processes_per_node")
             if task.mpi_processes != task.nodes * processes_per_node:
                 raise ValueError(
-                    f"Hydra placement mismatch for {task.task_id}: "
+                    f"{launcher_kind} placement mismatch for {task.task_id}: "
                     f"{task.mpi_processes} != {task.nodes}*{processes_per_node}"
                 )
     by_id = {task.task_id: task for task in tasks}
@@ -412,25 +424,23 @@ class AllocationController:
         self.root = root.resolve()
         self.config = config
         self.slurm = slurm
+        self.launcher_adapter = launcher_registry.require(config.launcher_kind)
         if launcher is not None:
             self.launcher = launcher
-        elif config.launcher_kind == "hydra":
-            self.launcher = HydraLauncher(
+        else:
+            self.launcher = self.launcher_adapter.create(
                 command=config.srun_command,
                 arguments=config.srun_arguments,
                 bootstrap=config.launcher_bootstrap,
-            )
-        else:
-            self.launcher = SrunLauncher(
-                srun_command=config.srun_command, srun_arguments=config.srun_arguments,
-                exclusive=config.exclusive,
             )
         self.shutdown = shutdown or ShutdownRequest()
         self.poll_interval_seconds = max(0.01, float(poll_interval_seconds))
         self.state_path = self.root / "state" / "campaign_state.json"
         self.events_path = self.root / "evidence" / "events.jsonl"
         self.summary_path = self.root / "results" / "campaign_summary.json"
-        self.output_writer = QraftOutputWriter(self.root / "qraft.out")
+        self.output_writer = QraftOutputWriter(
+            self.root / "qraft.out", campaign_root=self.root
+        )
         self._state_lock = threading.Lock()
         self._state: dict[str, Any] = {}
         self._allocated_hosts: tuple[str, ...] = ()
@@ -539,7 +549,7 @@ class AllocationController:
                 "Started": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
                 "Campaign": self.config.system_id,
                 "Campaign ID": self.config.campaign_id,
-                "Root": str(self.root),
+                "Campaign root": str(self.root),
                 "Host": socket.gethostname(),
                 "SLURM Job": self.slurm.job_id,
                 "Partition": os.environ.get("SLURM_JOB_PARTITION"),
@@ -558,6 +568,29 @@ class AllocationController:
                 "launcher": self.config.launcher_kind,
                 "executable": self.config.siesta_executable,
                 "max parallel steps": self.config.max_parallel_steps,
+            },
+            execution={
+                "Scheduler": "slurm",
+                "Launcher": self.config.launcher_kind,
+                "Executable": self.config.siesta_executable,
+                "Command": shlex.join((
+                    *self.config.srun_command,
+                    *self.config.srun_arguments,
+                    self.config.siesta_executable,
+                    *self.config.executable_arguments,
+                )),
+                "Partition": os.environ.get("SLURM_JOB_PARTITION"),
+                "Nodes": self.config.nodes,
+                "MPI ranks": self.slurm.ntasks,
+                "Ranks/node": self.slurm.ntasks // self.config.nodes,
+            },
+            identity={
+                "Scientific ID": self.config.campaign_id[:16],
+                "Execution ID": self.slurm.job_id,
+                "QRAFT version": QRAFT_VERSION,
+                "QRAFT commit": os.environ.get("QRAFT_COMMIT"),
+                "Engine": "SIESTA",
+                "Engine version": "runtime-resolved",
             },
             dag=tuple(
                 DagEntry(
@@ -639,6 +672,23 @@ class AllocationController:
                     "Reason": reason,
                 },
                 depends_on=task.depends_on,
+                event=("START" if status is ExecutionStatus.RUNNING else "RESULT"),
+                started=(
+                    time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                    if status is ExecutionStatus.RUNNING else None
+                ),
+                finished=(
+                    time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                    if status is not ExecutionStatus.RUNNING else None
+                ),
+                command=shlex.join((
+                    *self.config.srun_command,
+                    *self.config.srun_arguments,
+                    *(task.command or (
+                        self.config.siesta_executable,
+                        *self.config.executable_arguments,
+                    )),
+                )),
             ),),
             metrics={
                 "Technical validation": (
@@ -648,6 +698,12 @@ class AllocationController:
                 )
             },
             messages=messages,
+        )
+
+    def _campaign_output_model(self) -> OutputModel:
+        model = self._start_output_model()
+        return OutputModel(
+            header=model.header,
         )
 
     def _task_state(self, task_id: str) -> dict[str, Any]:
@@ -1155,20 +1211,43 @@ class AllocationController:
 
     def run(self, *, install_signal_handlers: bool = True) -> ExecutionStatus:
         run_started = time.monotonic()
+        session_id = uuid.uuid4().hex
+        session_started = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        session_command = shlex.join(tuple(sys.argv)) if sys.argv else "qraft allocation controller"
         self.root.mkdir(parents=True, exist_ok=True)
         try:
             self.slurm.validate_capacity(nodes=self.config.nodes, total_cpus=self.config.total_cpus)
-            if self.config.launcher_kind == "hydra":
+            if self.launcher_adapter.requires_hosts:
                 self._allocated_hosts = self.slurm.resolve_hostnames()
                 if len(self._allocated_hosts) != self.config.nodes:
                     raise ValueError(
-                        "configured campaign nodes must equal the resolved Hydra allocation"
+                        "configured campaign nodes must equal the resolved host allocation"
                     )
         except Exception as exc:
+            self._event(
+                "CONTROLLER_BLOCKED",
+                session_id=session_id,
+                reason=f"{type(exc).__name__}: {exc}",
+            )
             if not self.output_writer.exists:
                 self._render_output(
-                    "initialize", lambda: self.output_writer.initialize(self._start_output_model())
+                    "initialize", lambda: self.output_writer.initialize(self._campaign_output_model())
                 )
+            self._render_output(
+                "session_started",
+                lambda: self.output_writer.start_session(
+                    ExecutionSession(
+                        session_id=session_id,
+                        controller_epoch=1,
+                        mode="NEW",
+                        started=session_started,
+                        command=session_command,
+                        previous_state=None,
+                        working_root=str(self.root),
+                    ),
+                    self._start_output_model(),
+                ),
+            )
             self._render_output(
                 "controller_blocked",
                 lambda: self.output_writer.append(
@@ -1183,6 +1262,14 @@ class AllocationController:
                             "DAG action": "ALL NODES BLOCKED BEFORE LAUNCH",
                         },
                     ),)),
+                ),
+            )
+            self._render_output(
+                "session_finished",
+                lambda: self.output_writer.finish_session(
+                    result="BLOCKED",
+                    finished=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    elapsed_seconds=time.monotonic() - run_started,
                 ),
             )
             self._render_output(
@@ -1209,8 +1296,35 @@ class AllocationController:
             self._save_state()
         if not self.output_writer.exists:
             self._render_output(
-                "initialize", lambda: self.output_writer.initialize(self._start_output_model())
+                "initialize", lambda: self.output_writer.initialize(self._campaign_output_model())
             )
+        previous_state = self._state.get("status") if resumed else None
+        epoch = len(self._state.get("allocation_history", []))
+        if resumed and self._state.get("current_job_id") != self.slurm.job_id:
+            epoch += 1
+        epoch = max(1, epoch)
+        self._event(
+            "EXECUTION_SESSION_STARTED",
+            session_id=session_id,
+            controller_epoch=epoch,
+            mode="RECOVERY" if resumed else "NEW",
+            command=session_command,
+        )
+        self._render_output(
+            "session_started",
+            lambda: self.output_writer.start_session(
+                ExecutionSession(
+                    session_id=session_id,
+                    controller_epoch=epoch,
+                    mode="RECOVERY" if resumed else "NEW",
+                    started=session_started,
+                    command=session_command,
+                    previous_state=str(previous_state) if previous_state else None,
+                    working_root=str(self.root),
+                ),
+                self._start_output_model(),
+            ),
+        )
         if resumed:
             reused = [
                 f"{task_id}:{item.get('last_attempt')}"
@@ -1256,7 +1370,7 @@ class AllocationController:
                             continue
                         task_hosts: tuple[str, ...] = ()
                         if (
-                            self.config.launcher_kind == "hydra"
+                            self.launcher_adapter.requires_hosts
                             and task.task_kind == "siesta"
                         ):
                             available_hosts = tuple(
@@ -1333,6 +1447,19 @@ class AllocationController:
             status.value: sum(item["status"] == status.value for item in self._state["tasks"].values())
             for status in ExecutionStatus
         }
+        self._render_output(
+            "session_finished",
+            lambda: self.output_writer.finish_session(
+                result=final.value,
+                finished=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                elapsed_seconds=time.monotonic() - run_started,
+            ),
+        )
+        self._event(
+            "EXECUTION_SESSION_FINISHED",
+            session_id=session_id,
+            status=final.value,
+        )
         self._render_output(
             "summary",
             lambda: self.output_writer.finish({
