@@ -63,17 +63,59 @@ from .validation_render import render_validation_report
 from .workflow_preflight import WorkflowPreflightValidator
 from .workflow_authoring import WorkflowAuthoringService
 from .scientific_approvals import create_approved_profile, create_decision
+from .protocols.single_fdf import build_fdf_plan, execute_fdf_plan
 
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
+def _add_single_fdf_arguments(command: argparse.ArgumentParser, *, execute: bool) -> None:
+    command.add_argument("fdf", type=Path)
+    command.add_argument("--pseudo-manifest", type=Path)
+    command.add_argument("--profile", type=Path)
+    command.add_argument("--project-config", type=Path)
+    command.add_argument("--recipe", type=Path)
+    command.add_argument("--partition")
+    command.add_argument("--nodes", type=int)
+    command.add_argument("--np", dest="mpi_ranks", type=int)
+    command.add_argument("--cpus-per-rank", type=int)
+    command.add_argument("--memory-mb", type=int)
+    command.add_argument("--launcher", choices=("direct", "srun", "hydra"))
+    command.add_argument("--siesta", dest="executable")
+    command.add_argument("--siesta-argument", action="append", default=None)
+    command.add_argument("--walltime-seconds", type=int)
+    command.add_argument("--launcher-command", nargs="+")
+    command.add_argument("--launcher-argument", action="append", default=None)
+    command.add_argument(
+        "--env", action="append", default=[], metavar="NAME=VALUE",
+        help="execution environment entry; repeat for multiple values",
+    )
+    if execute:
+        command.add_argument("--runs-root", type=Path, default=Path(".qraft-runs"))
+        command.add_argument("--force-new-attempt", action="store_true")
+    command.add_argument("--json", action="store_true")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="qraft", description="SIESTA preparation, allocation-local execution, and evidence handling")
     parser.add_argument("--workspace", type=Path, default=Path(".qraft-work"))
     parser.add_argument("--examples-root", type=Path, default=_repo_root() / "examples")
-    sub = parser.add_subparsers(dest="domain", required=True)
+    sub = parser.add_subparsers(
+        dest="domain",
+        required=True,
+        metavar=(
+            "{plan,project,fdf,input,environment,pseudo,campaign,workflow,"
+            "scientific,run,results,examples,remote}"
+        ),
+    )
+
+    single_plan = sub.add_parser(
+        "plan", help="resolve an executable three-node plan from one FDF"
+    )
+    _add_single_fdf_arguments(single_plan, execute=False)
+    single_run = sub.add_parser("_fdf-run", prog="qraft run")
+    _add_single_fdf_arguments(single_run, execute=True)
 
     project = sub.add_parser("project")
     project_sub = project.add_subparsers(dest="action", required=True)
@@ -279,7 +321,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     prepared_run = sub.add_parser(
         "run",
-        help="prepare and inspect hash-bound, manually submitted run packages",
+        help="execute one FDF or manage hash-bound run packages",
     )
     prepared_run_sub = prepared_run.add_subparsers(
         dest="action",
@@ -420,7 +462,30 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    raw = list(sys.argv[1:] if argv is None else argv)
+    legacy_run_actions = {
+        "prepare", "candidates", "discover", "snapshot-import",
+        "inspect", "status", "resume",
+    }
+    domain_index = 0
+    while domain_index < len(raw):
+        token = raw[domain_index]
+        if token in {"--workspace", "--examples-root"}:
+            domain_index += 2
+            continue
+        if token.startswith(("--workspace=", "--examples-root=")):
+            domain_index += 1
+            continue
+        break
+    if (
+        domain_index < len(raw)
+        and raw[domain_index] == "run"
+        and domain_index + 1 < len(raw)
+        and raw[domain_index + 1] not in legacy_run_actions
+        and not raw[domain_index + 1].startswith("-")
+    ):
+        raw[domain_index] = "_fdf-run"
+    args = build_parser().parse_args(raw)
     try:
         return _dispatch(args)
     except (
@@ -436,6 +501,50 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _dispatch(args: argparse.Namespace) -> int:
+    if args.domain in {"plan", "_fdf-run"}:
+        environment: dict[str, str] = {}
+        for item in args.env:
+            if "=" not in item or not item.split("=", 1)[0].strip():
+                raise ValueError("--env must use NAME=VALUE")
+            key, value = item.split("=", 1)
+            environment[key.strip()] = value
+        overrides = {
+            "partition": args.partition,
+            "nodes": args.nodes,
+            "mpi_ranks": args.mpi_ranks,
+            "cpus_per_rank": args.cpus_per_rank,
+            "memory_mb": args.memory_mb,
+            "launcher": args.launcher,
+            "executable": args.executable,
+            "executable_arguments": args.siesta_argument,
+            "walltime_seconds": args.walltime_seconds,
+            "launcher_command": args.launcher_command,
+            "launcher_arguments": args.launcher_argument,
+            "environment": environment or None,
+        }
+        common = {
+            "pseudo_manifest": args.pseudo_manifest,
+            "profile": args.profile,
+            "project_config": args.project_config,
+            "recipe": args.recipe,
+            "overrides": overrides,
+        }
+        if args.domain == "plan":
+            _emit(build_fdf_plan(args.fdf, **common), args.json)
+            return 0
+        result = execute_fdf_plan(
+            args.fdf,
+            **common,
+            runs_root=args.runs_root,
+            force_new_attempt=args.force_new_attempt,
+        )
+        _emit(result, args.json)
+        return (
+            0
+            if result["status"] == "REUSED_VALIDATED_ATTEMPT"
+            or result["attempt"]["result"]["technical_validation"]["status"] == "PASS"
+            else 3
+        )
     if args.domain == "results":
         exporter = {"dos-pdos": DOSPDOSResultExporter, "bands": BandResultExporter, "optics": OpticalResultExporter}[args.action]()
         _emit(exporter.export(args.package, args.output, dry_run=args.dry_run), args.json)
