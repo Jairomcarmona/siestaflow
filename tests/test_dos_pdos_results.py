@@ -5,8 +5,8 @@ from types import SimpleNamespace
 
 import pytest
 
-import siestaflow.dos_pdos_results as results
-from siestaflow.dos_pdos_results import DOSPDOSResultExporter, _dos_pdos_task, parse_total_dos
+import qraft.dos_pdos_results as results
+from qraft.dos_pdos_results import DOSPDOSResultExporter, _dos_pdos_task, parse_total_dos
 
 
 def test_parse_total_dos_accepts_non_spin_data_and_fortran_exponents(tmp_path: Path) -> None:

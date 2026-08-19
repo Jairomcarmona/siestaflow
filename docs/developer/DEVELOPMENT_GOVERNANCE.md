@@ -1,10 +1,10 @@
-# Gobernanza de desarrollo de SIESTAFLOW
+# Gobernanza de desarrollo de QRAFT
 
 Estado: obligatoria para cambios nuevos
 Ámbito: una sola base de código, authoring local y runtime remoto derivado
 
 Esta política complementa el
-[`SIESTAFLOW_BACKBONE.md`](../design/SIESTAFLOW_BACKBONE.md). La autoridad final
+[`QRAFT_BACKBONE.md`](../design/QRAFT_BACKBONE.md). La autoridad final
 combina contratos, pruebas deterministas, evidencia HPC, inspección del diff y
 aceptación del investigador; ninguna herramienta sustituye esa autoridad.
 
@@ -199,7 +199,7 @@ una distribución para usuarios externos sí debe superar los gates de Fase 8.
 Un paquete formal de aceptación o release debe registrar:
 
 ```text
-SIESTAFLOW_VERSION
+QRAFT_VERSION
 SOURCE_COMMIT
 SOURCE_TREE_DIRTY
 WORKFLOW_LOCK_SHA256

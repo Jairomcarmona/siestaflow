@@ -7,10 +7,10 @@ from pathlib import Path
 
 import pytest
 
-from siestaflow.engines.siesta.pseudopotentials import PseudopotentialManifest, PseudopotentialStager
-from siestaflow.project_packages import ProjectPackageLoader
-from siestaflow.remote import RemotePackager, RemoteResultImporter, create_synthetic_result_bundle
-from siestaflow.siesta_campaigns import SiestaCampaignFactory, simulate_definition
+from qraft.engines.siesta.pseudopotentials import PseudopotentialManifest, PseudopotentialStager
+from qraft.project_packages import ProjectPackageLoader
+from qraft.remote import RemotePackager, RemoteResultImporter, create_synthetic_result_bundle
+from qraft.siesta_campaigns import SiestaCampaignFactory, simulate_definition
 
 
 def _write(path: Path, value: object | str) -> None:
@@ -114,7 +114,7 @@ def test_arbitrary_projects_reach_local_end_to_end(
 
 
 def test_core_contains_no_reference_project_constants():
-    source = Path(__file__).resolve().parents[2] / "src" / "siestaflow"
+    source = Path(__file__).resolve().parents[2] / "src" / "qraft"
     paths = [path for path in source.rglob("*") if path.suffix in {".py", ".json", ".yaml"}]
     text = "\n".join(path.read_text(encoding="utf-8") for path in paths)
     reference = Path(__file__).resolve().parents[2] / "examples" / "reference_projects" / "birnessite_mn_o" / "pseudopotentials" / "manifest.yaml"

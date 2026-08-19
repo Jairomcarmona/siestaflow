@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from siestaflow.errors import AlreadyExistsError
-from siestaflow.project_packages import ProjectPackageLoader
-from siestaflow.project_scaffold import (
+from qraft.errors import AlreadyExistsError
+from qraft.project_packages import ProjectPackageLoader
+from qraft.project_scaffold import (
     ProjectInitRequest,
     ProjectScaffolder,
 )

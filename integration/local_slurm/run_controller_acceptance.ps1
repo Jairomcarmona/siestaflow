@@ -7,7 +7,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
-$EvidenceRoot = Join-Path $RepoRoot ".siestaflow-local-slurm"
+$EvidenceRoot = Join-Path $RepoRoot ".qraft-local-slurm"
 $RunId = [DateTime]::UtcNow.ToString("yyyyMMddTHHmmssZ")
 $BuildRoot = Join-Path $EvidenceRoot "controller-$RunId"
 
@@ -40,7 +40,7 @@ finally {
 }
 
 $PackageWindows = Join-Path $BuildRoot `
-    "package\SIESTAFLOW_LOCAL_SLURM_CONTROLLER_ACCEPTANCE"
+    "package\QRAFT_LOCAL_SLURM_CONTROLLER_ACCEPTANCE"
 $PackageLinux = (
     & wsl.exe -d $Distribution --exec wslpath -a $PackageWindows
 ).Trim()

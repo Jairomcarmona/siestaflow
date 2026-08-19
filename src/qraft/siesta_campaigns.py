@@ -138,5 +138,5 @@ def simulate_definition(
 def render_campaign_slurm(definition: CampaignDefinition, profile: SlurmProfile | None = None) -> SlurmRenderResult:
     return SlurmRenderer().render(
         profile or SlurmProfile(), job_name=definition.manifest.campaign_id,
-        worker_command=f"siestaflow campaign worker {definition.manifest.campaign_id}",
+        worker_command=f"qraft campaign worker {definition.manifest.campaign_id}",
     )

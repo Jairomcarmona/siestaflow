@@ -5,8 +5,8 @@ Local campaign state is revisioned under the selected workspace. Re-running `cam
 Before resuming, run:
 
 ```powershell
-python -m siestaflow.cli --workspace .work campaign status cutoff_sweep --json
-python -m siestaflow.cli --workspace .work campaign simulate cutoff_sweep --dry-run --json
+python -m qraft.cli --workspace .work campaign status cutoff_sweep --json
+python -m qraft.cli --workspace .work campaign simulate cutoff_sweep --dry-run --json
 ```
 
 Do not edit `state.json`. A review/fail decision stops the worker. An existing import/package destination is never overwritten; select a clean destination and preserve the original evidence.
@@ -27,10 +27,10 @@ For a package produced by `run prepare`, inspect it locally or on the cluster
 without submitting:
 
 ```bash
-siestaflow run inspect RUN_PACKAGE --json
-siestaflow run status RUN_PACKAGE --json
-siestaflow run resume RUN_PACKAGE
-siestaflow run resume RUN_PACKAGE --previous-job-terminal
+qraft run inspect RUN_PACKAGE --json
+qraft run status RUN_PACKAGE --json
+qraft run resume RUN_PACKAGE
+qraft run resume RUN_PACKAGE --previous-job-terminal
 ```
 
 The last command emits one of `INITIAL_SUBMISSION_REQUIRED`,

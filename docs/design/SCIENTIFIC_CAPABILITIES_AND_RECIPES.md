@@ -33,14 +33,14 @@ antes de generar el lock y se repite mediante las reglas ordinarias del DAG.
 ## CLI inicial
 
 ```text
-siestaflow workflow recipes [--json]
-siestaflow workflow recipe <recipe-id> [--json]
-siestaflow workflow create <intent.json> --output <workflow.json> [--dry-run]
-siestaflow workflow compose <intent.json> --output <workflow.json> [--dry-run]
-siestaflow workflow validate <workflow.json>
-siestaflow workflow plan <workflow.json>
-siestaflow workflow compile <workflow.json> --output workflow.lock.json
-siestaflow run prepare workflow.lock.json ...
+qraft workflow recipes [--json]
+qraft workflow recipe <recipe-id> [--json]
+qraft workflow create <intent.json> --output <workflow.json> [--dry-run]
+qraft workflow compose <intent.json> --output <workflow.json> [--dry-run]
+qraft workflow validate <workflow.json>
+qraft workflow plan <workflow.json>
+qraft workflow compile <workflow.json> --output workflow.lock.json
+qraft run prepare workflow.lock.json ...
 ```
 
 `workflow create` no sobrescribe archivos y exige que intención, definición y
@@ -177,10 +177,10 @@ reporte de convergencia exacto
 ```
 
 ```text
-siestaflow scientific decide report.json --approval-id mesh-approval-01 \
+qraft scientific decide report.json --approval-id mesh-approval-01 \
   --decision APPROVE --actor researcher --decided-at 2026-08-02T00:00:00Z \
   --output mesh-approval.json
-siestaflow scientific profile report.json --approval mesh-approval.json \
+qraft scientific profile report.json --approval mesh-approval.json \
   --profile-id mesh-200-ry --output mesh-profile.json
 ```
 

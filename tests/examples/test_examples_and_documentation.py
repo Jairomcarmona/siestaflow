@@ -6,8 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from siestaflow.cli import build_parser
-from siestaflow.examples import ExampleRegistry, ExampleService, public_api_contract
+from qraft.cli import build_parser
+from qraft.examples import ExampleRegistry, ExampleService, public_api_contract
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -110,10 +110,10 @@ def test_cli_help_and_documented_examples_are_executable(tmp_path: Path):
         ["examples", "stage", "--help"], ["remote", "environment", "package", "--help"],
     )
     for command in commands:
-        result = subprocess.run([sys.executable, "-m", "siestaflow.cli", *command], cwd=REPO, env=env, capture_output=True, text=True, timeout=30)
+        result = subprocess.run([sys.executable, "-m", "qraft.cli", *command], cwd=REPO, env=env, capture_output=True, text=True, timeout=30)
         assert result.returncode == 0, result.stderr
     validate = subprocess.run(
-        [sys.executable, "-m", "siestaflow.cli", "examples", "validate", "generic/minimal_siesta_smoke", "--json"],
+        [sys.executable, "-m", "qraft.cli", "examples", "validate", "generic/minimal_siesta_smoke", "--json"],
         cwd=REPO, env=env, capture_output=True, text=True, timeout=30,
     )
     assert validate.returncode == 0 and '"valid": true' in validate.stdout

@@ -3,13 +3,13 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-from siestaflow.contract_adapters import (
+from qraft.contract_adapters import (
     artifact_reference_from_siesta,
     execution_evidence_from_step_outcome,
     step_launch_spec_from_execution_request,
     validation_report_from_siesta,
 )
-from siestaflow.contracts import (
+from qraft.contracts import (
     ArtifactRole,
     DecisionStatus,
     ExecutionRequest,
@@ -17,12 +17,12 @@ from siestaflow.contracts import (
     LauncherKind,
     ResourceRequest,
 )
-from siestaflow.engines.siesta.models import (
+from qraft.engines.siesta.models import (
     ArtifactDescriptor,
     InputValidationResult,
     ValidationFinding,
 )
-from siestaflow.execution.srun_launcher import StepOutcome
+from qraft.execution.srun_launcher import StepOutcome
 
 
 def test_existing_siesta_validation_maps_without_decision_loss() -> None:
@@ -99,7 +99,7 @@ def test_existing_artifact_and_launcher_models_have_boundary_adapters(
 
 
 def test_contract_kernel_has_no_engine_or_cluster_dependencies() -> None:
-    root = Path(__file__).resolve().parents[2] / "src" / "siestaflow" / "contracts"
+    root = Path(__file__).resolve().parents[2] / "src" / "qraft" / "contracts"
     imported: set[str] = set()
     for path in root.glob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -108,6 +108,6 @@ def test_contract_kernel_has_no_engine_or_cluster_dependencies() -> None:
                 imported.update(alias.name for alias in node.names)
             elif isinstance(node, ast.ImportFrom) and node.module:
                 imported.add(node.module)
-    assert not any(name.startswith("siestaflow.engines") for name in imported)
-    assert not any(name.startswith("siestaflow.execution") for name in imported)
+    assert not any(name.startswith("qraft.engines") for name in imported)
+    assert not any(name.startswith("qraft.execution") for name in imported)
     assert "subprocess" not in imported

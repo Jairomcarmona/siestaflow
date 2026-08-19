@@ -9,10 +9,10 @@ import json
 import shutil
 from pathlib import Path
 
-from siestaflow.controller_package import ControllerPackageBuilder
+from qraft.controller_package import ControllerPackageBuilder
 
 
-PACKAGE_ID = "SIESTAFLOW_LOCAL_SLURM_CONTROLLER_ACCEPTANCE"
+PACKAGE_ID = "QRAFT_LOCAL_SLURM_CONTROLLER_ACCEPTANCE"
 
 
 def _sha256(path: Path) -> str:

@@ -6,20 +6,20 @@ from types import SimpleNamespace
 
 import pytest
 
-from siestaflow.contracts import (
+from qraft.contracts import (
     ApprovalDecision,
     NumericalProfileReference,
     ScientificApproval,
     ScientificArtifactReference,
     ScientificAuthority,
 )
-from siestaflow.workflow_composition import (
+from qraft.workflow_composition import (
     ArtifactPortContract,
     RecipePolicy,
     WorkflowComposer,
     WorkflowFragment,
 )
-from siestaflow.workflows import WorkflowCompiler
+from qraft.workflows import WorkflowCompiler
 
 
 HASH = "a" * 64

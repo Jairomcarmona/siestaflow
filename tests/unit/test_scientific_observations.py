@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from siestaflow.scientific_convergence import MeshObservation
-from siestaflow.scientific_kgrid import KGridObservation
-from siestaflow.scientific_observations import produce_observation
+from qraft.scientific_convergence import MeshObservation
+from qraft.scientific_kgrid import KGridObservation
+from qraft.scientific_observations import produce_observation
 
 
 FDF = """SystemName Water molecule

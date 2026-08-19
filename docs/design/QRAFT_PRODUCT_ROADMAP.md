@@ -1,13 +1,13 @@
-# Roadmap de producto de SIESTAFLOW
+# Roadmap de producto de QRAFT
 
 Estado del roadmap: 2026-08-02
-Estado del software: SIESTAFLOW 0.2 alpha
+Estado del software: QRAFT 0.2 alpha
 Estado vinculante: `PHASE3_TECHNICAL_ACCEPTED / SCIENTIFIC_VALIDATION_OUT_OF_SCOPE`
 
 Este documento registra estado mutable, prioridades y dependencias. Los
 principios estables pertenecen a
-[`SIESTAFLOW_BACKBONE.md`](SIESTAFLOW_BACKBONE.md) y el detalle del corte 0.2 a
-[`SIESTAFLOW_0_2_RELEASE_STATUS.md`](SIESTAFLOW_0_2_RELEASE_STATUS.md).
+[`QRAFT_BACKBONE.md`](QRAFT_BACKBONE.md) y el detalle del corte 0.2 a
+[`QRAFT_0_2_RELEASE_STATUS.md`](QRAFT_0_2_RELEASE_STATUS.md).
 
 ## Prioridad y dependencia crítica
 
@@ -97,7 +97,7 @@ o por pasar únicamente pruebas locales.
 El objetivo inmediato es un workflow pequeño y verificable dentro de una
 asignación Slurm, no un servicio multiusuario. No son objetivos actuales:
 
-- sustituir SIESTAFLOW por AiiDA, Parsl o FireWorks;
+- sustituir QRAFT por AiiDA, Parsl o FireWorks;
 - seleccionar ciencia automáticamente;
 - ofrecer un daemon en login o un servicio externo obligatorio;
 - instalar el stack científico del cluster;

@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from siestaflow.contracts import (
+from qraft.contracts import (
     ContractCompatibilityError,
     ContractEnvelope,
     ContractIntegrityError,

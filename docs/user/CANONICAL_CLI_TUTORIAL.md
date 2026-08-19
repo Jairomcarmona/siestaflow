@@ -20,19 +20,19 @@ my-study/
   execution-profile.json
 ```
 
-Desde un checkout de SIESTAFLOW, use el módulo de Python para evitar depender
+Desde un checkout de QRAFT, use el módulo de Python para evitar depender
 de que exista un comando global instalado:
 
 ```powershell
-Set-Location C:\path\to\siestaflow
+Set-Location C:\path\to\qraft
 $env:PYTHONPATH = 'src'
-python -m siestaflow.cli workflow recipes --json
+python -m qraft.cli workflow recipes --json
 ```
 
 Seleccione una receta y consulte su contrato antes de construir una intención:
 
 ```powershell
-python -m siestaflow.cli workflow recipe RECIPE_ID --json
+python -m qraft.cli workflow recipe RECIPE_ID --json
 ```
 
 La receta declara qué parámetros y archivos son obligatorios. No copie nombres
@@ -41,11 +41,11 @@ de materiales o valores de otro estudio: declare los propios en `intent.json`.
 ## 2. Materializar y revisar el workflow
 
 ```powershell
-python -m siestaflow.cli workflow create intent.json --output workflow.json --json
-python -m siestaflow.cli workflow preflight workflow.json --json
-python -m siestaflow.cli workflow plan workflow.json --json
-python -m siestaflow.cli workflow graph workflow.json --format mermaid
-python -m siestaflow.cli workflow compile workflow.json --output workflow.lock.json --json
+python -m qraft.cli workflow create intent.json --output workflow.json --json
+python -m qraft.cli workflow preflight workflow.json --json
+python -m qraft.cli workflow plan workflow.json --json
+python -m qraft.cli workflow graph workflow.json --format mermaid
+python -m qraft.cli workflow compile workflow.json --output workflow.lock.json --json
 ```
 
 Deténgase si `preflight` no devuelve `PASS`. `workflow.lock.json` inmoviliza el
@@ -72,7 +72,7 @@ Transfiera el archivo a su equipo y conviértalo en snapshot local:
 
 ```powershell
 $raw = 'C:\path\to\phase-live\raw'
-python -m siestaflow.cli run snapshot-import `
+python -m qraft.cli run snapshot-import `
   --cluster-id CLUSTER_ID `
   --output cluster-snapshot.json `
   --sinfo "$raw\sinfo.txt" `
@@ -92,7 +92,7 @@ El perfil de ejecución contiene launcher, módulos, cuenta, QoS, memoria y
 política de apagado; no modifica el workflow científico.
 
 ```powershell
-python -m siestaflow.cli run candidates `
+python -m qraft.cli run candidates `
   --workflow workflow.lock.json `
   --profile execution-profile.json `
   --snapshot cluster-snapshot.json `
@@ -105,7 +105,7 @@ arquitectura comprobada, guarde su evidencia estructurada de compatibilidad y
 realice una resolución manual validada:
 
 ```powershell
-python -m siestaflow.cli run prepare workflow.lock.json `
+python -m qraft.cli run prepare workflow.lock.json `
   --source-root . `
   --profile execution-profile.json `
   --snapshot cluster-snapshot.json `
@@ -172,12 +172,12 @@ de intento en `work/TASK_ID/attempt-XXXX/result_manifest.json` y los logs
 `dm_read_succeeded: true`; la terminación normal sola no demuestra esa lectura.
 
 Después de transferir el paquete completado a un equipo con el checkout de
-SIESTAFLOW, exporte tablas sin interpretación científica:
+QRAFT, exporte tablas sin interpretación científica:
 
 ```powershell
-python -m siestaflow.cli results bands COMPLETED_PACKAGE --output exports/bands --json
-python -m siestaflow.cli results dos-pdos COMPLETED_PACKAGE --output exports/dos-pdos --json
-python -m siestaflow.cli results optics COMPLETED_PACKAGE --output exports/optics --json
+python -m qraft.cli results bands COMPLETED_PACKAGE --output exports/bands --json
+python -m qraft.cli results dos-pdos COMPLETED_PACKAGE --output exports/dos-pdos --json
+python -m qraft.cli results optics COMPLETED_PACKAGE --output exports/optics --json
 ```
 
 ## Límites del tutorial

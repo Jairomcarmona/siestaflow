@@ -33,15 +33,15 @@ _RESOURCE_FIELDS = {
     "cpus_per_process",
     "walltime_seconds",
 }
-_ADAPTIVE_GATE_SCRIPT = "src/siestaflow/execution/adaptive_gate.py"
+_ADAPTIVE_GATE_SCRIPT = "src/qraft/execution/adaptive_gate.py"
 _EVIDENCE_EVALUATORS = {
     "siestaflow.siesta.mesh-evidence-evaluator": {
-        "script": "src/siestaflow/scientific_convergence.py",
+        "script": "src/qraft/scientific_convergence.py",
         "script_name": "scientific_convergence.py",
         "artifact_type": "siestaflow.mesh-convergence-report",
     },
     "siestaflow.siesta.kgrid-evidence-evaluator": {
-        "script": "src/siestaflow/scientific_kgrid.py",
+        "script": "src/qraft/scientific_kgrid.py",
         "script_name": "scientific_kgrid.py",
         "artifact_type": "siestaflow.kgrid-convergence-report",
     },
@@ -233,7 +233,7 @@ class RunPreparer:
         )
         run_envelope = prepared.envelope()
 
-        with tempfile.TemporaryDirectory(prefix="siestaflow-run-") as temporary:
+        with tempfile.TemporaryDirectory(prefix="qraft-run-") as temporary:
             staging = Path(temporary)
             campaign_path = staging / "campaign.json"
             campaign_path.write_bytes(campaign_bytes)
@@ -658,7 +658,7 @@ class RunPreparer:
         required = {"fdf", "stdout", "force_stress", "pseudopotential_manifest"}
         if {item.name for item in task.inputs} != required or any(item.external_artifact_id is None for item in task.inputs):
             raise ValueError("observation producer currently consumes four external immutable artifacts")
-        script = self.repository_root / "src/siestaflow/scientific_observations.py"
+        script = self.repository_root / "src/qraft/scientific_observations.py"
         if not script.is_file():
             raise ValueError("scientific observation runtime script is missing")
         script_relative = (PurePosixPath("protected") / task.task_id / "scientific_observations.py").as_posix()

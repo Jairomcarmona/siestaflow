@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from siestaflow.hpc import (
+from qraft.hpc import (
     BudgetStatus,
     FailureClassifier,
     FakeSlurmClient,
@@ -11,7 +11,7 @@ from siestaflow.hpc import (
     SlurmResolution,
     TimeBudget,
 )
-from siestaflow.models import AllocationContext, FailureType, RuntimeEstimate, TaskAttempt, TaskSpec, utc_now
+from qraft.models import AllocationContext, FailureType, RuntimeEstimate, TaskAttempt, TaskSpec, utc_now
 
 
 @pytest.mark.parametrize(

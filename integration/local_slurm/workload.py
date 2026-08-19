@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 
 
-PAYLOAD = b"SIESTAFLOW_LOCAL_SLURM_PARENT_DM\n"
+PAYLOAD = b"QRAFT_LOCAL_SLURM_PARENT_DM\n"
 
 
 def _write_json(path: Path, data: dict[str, object]) -> None:

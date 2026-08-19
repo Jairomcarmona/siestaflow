@@ -24,9 +24,8 @@ El envelope completo se verifica antes de crear campaña o allocation. Para cada
 
 ## Imports
 
-La prueba de provenance compara `siestaflow.__file__` resuelto con `<checkout>/src/siestaflow/__init__.py`; detectaría un paquete global, editable ajeno u otro checkout. Esto responde a la contaminación observada durante M0.
+La prueba de provenance compara `qraft.__file__` resuelto con `<checkout>/src/qraft/__init__.py`; detectaría un paquete global, editable ajeno u otro checkout. Esto responde a la contaminación observada durante M0.
 
 ## Datos sensibles y comandos
 
 M1 no maneja credenciales, SSH ni tokens. `TaskSpec.command` se almacena como tuple, pero `LocalFakeLauncher` no lo ejecuta. No existe interpolación shell ni llamada a `subprocess`.
-

@@ -6,19 +6,19 @@ import tomllib
 
 import pytest
 
-from siestaflow.contracts import (
+from qraft.contracts import (
     VALIDATION_REPORT,
     CapabilityRegistry,
     DecisionStatus,
 )
-from siestaflow.engines.siesta.fdf_parser import FDFParser
-from siestaflow.engines.siesta.validation_catalog import (
+from qraft.engines.siesta.fdf_parser import FDFParser
+from qraft.engines.siesta.validation_catalog import (
     SiestaValidationCatalog,
 )
-from siestaflow.engines.siesta.validation_profile import (
+from qraft.engines.siesta.validation_profile import (
     SiestaValidationProfile,
 )
-from siestaflow.siesta_validation import (
+from qraft.siesta_validation import (
     SiestaContextualValidator,
     siesta_validation_plugin,
 )
@@ -76,7 +76,7 @@ def test_siesta_json_catalogs_are_declared_as_wheel_package_data() -> None:
     )
 
     assert configuration["tool"]["setuptools"]["package-data"][
-        "siestaflow.engines.siesta.data"
+        "qraft.engines.siesta.data"
     ] == ["*.json"]
 
 

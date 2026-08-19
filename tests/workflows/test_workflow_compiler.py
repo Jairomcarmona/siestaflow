@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from siestaflow.cli import main
-from siestaflow.contracts import (
+from qraft.cli import main
+from qraft.contracts import (
     CompiledWorkflow,
     ContractEnvelope,
     ContractIntegrityError,
@@ -15,7 +15,7 @@ from siestaflow.contracts import (
     WORKFLOW_LOCK,
     WorkflowEdgeKind,
 )
-from siestaflow.workflows import WorkflowCompiler, workflow_plan
+from qraft.workflows import WorkflowCompiler, workflow_plan
 
 
 def write_valid_workflow(root: Path) -> Path:

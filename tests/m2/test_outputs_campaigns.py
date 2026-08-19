@@ -3,12 +3,12 @@ from pathlib import Path
 
 import pytest
 
-from siestaflow.engines.siesta.adapter import SyntheticSiestaLauncher
-from siestaflow.engines.siesta.output_parser import SiestaOutputParser
-from siestaflow.project_packages import ProjectPackageLoader
-from siestaflow.project_packages import load_structured
-from siestaflow.scientific_convergence import MeshConvergenceRule, mesh_adaptive_dag
-from siestaflow.siesta_campaigns import SiestaCampaignFactory, simulate_definition
+from qraft.engines.siesta.adapter import SyntheticSiestaLauncher
+from qraft.engines.siesta.output_parser import SiestaOutputParser
+from qraft.project_packages import ProjectPackageLoader
+from qraft.project_packages import load_structured
+from qraft.scientific_convergence import MeshConvergenceRule, mesh_adaptive_dag
+from qraft.siesta_campaigns import SiestaCampaignFactory, simulate_definition
 
 
 def _definition(reference_package: Path, campaign: str):

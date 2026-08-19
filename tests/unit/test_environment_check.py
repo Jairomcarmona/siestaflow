@@ -3,11 +3,11 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from siestaflow.environment_check import (
+from qraft.environment_check import (
     EnvironmentChecker,
     EnvironmentCheckRequest,
 )
-from siestaflow.validation_render import render_validation_report
+from qraft.validation_render import render_validation_report
 
 
 def completed(

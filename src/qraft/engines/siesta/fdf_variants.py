@@ -107,7 +107,7 @@ class FDFVariantGenerator:
         }
         return FDFVariant(parameter, value, variant_text, digest, diff, changed, manifest, {
             "authorization_id": authorization.envelope.authorization_id,
-            "generator": "SIESTAFLOW_M2_CONTROLLED_VARIANT",
+            "generator": "QRAFT_M2_CONTROLLED_VARIANT",
         })
 
     def generate_series(self, base_text: str, authorization: VariantAuthorization) -> tuple[FDFVariant, ...]:

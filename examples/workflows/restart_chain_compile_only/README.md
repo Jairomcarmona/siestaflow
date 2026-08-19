@@ -7,8 +7,8 @@ The FDF files are intentionally incomplete and are **not authorized for
 scientific execution**.
 
 ```bash
-siestaflow workflow validate workflow.json
-siestaflow workflow plan workflow.json
-siestaflow workflow graph workflow.json --format mermaid
-siestaflow workflow compile workflow.json --output workflow.lock.json
+qraft workflow validate workflow.json
+qraft workflow plan workflow.json
+qraft workflow graph workflow.json --format mermaid
+qraft workflow compile workflow.json --output workflow.lock.json
 ```

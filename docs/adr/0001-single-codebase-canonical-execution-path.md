@@ -26,13 +26,13 @@ el riesgo y rompería la trazabilidad de commit a resultado.
 - Crear una edición ligera independiente para HPC. Se rechaza porque produce
   forks y correcciones no uniformes.
 - Sustituir el runtime por un framework genérico. Se rechaza porque cambia el
-  alcance fundacional y no elimina la necesidad de contratos SIESTAFLOW.
+  alcance fundacional y no elimina la necesidad de contratos QRAFT.
 - Adoptar workflow lock → run prepare como ruta canónica y conservar adaptadores
   explícitos para compatibilidad. Es la opción elegida.
 
 ## Decisión
 
-SIESTAFLOW mantiene una sola base de código y esta trayectoria de producción:
+QRAFT mantiene una sola base de código y esta trayectoria de producción:
 
 ```text
 Project → WorkflowDefinition → workflow.lock.json → run.lock.json
@@ -73,11 +73,11 @@ autoridad de producción. No se elimina ni reescribe evidencia histórica.
 
 ## Evidencia
 
-- `src/siestaflow/workflows/compiler.py`
-- `src/siestaflow/run_preparation.py`
-- `src/siestaflow/contracts/run.py`
-- `src/siestaflow/controller_package.py`
-- `src/siestaflow/execution/allocation_controller.py`
+- `src/qraft/workflows/compiler.py`
+- `src/qraft/run_preparation.py`
+- `src/qraft/contracts/run.py`
+- `src/qraft/controller_package.py`
+- `src/qraft/execution/allocation_controller.py`
 - `tests/workflows/`, `tests/runs/` y `tests/m4/`
 - `docs/validation/PHASE3_PREPARED_RUN_ACCEPTANCE.md`
 
@@ -86,6 +86,6 @@ generado por `run prepare` dentro de la evidencia remota versionada.
 
 ## Referencias
 
-- [`SIESTAFLOW_BACKBONE.md`](../design/SIESTAFLOW_BACKBONE.md)
-- [`SIESTAFLOW_PRODUCT_ROADMAP.md`](../design/SIESTAFLOW_PRODUCT_ROADMAP.md)
+- [`QRAFT_BACKBONE.md`](../design/QRAFT_BACKBONE.md)
+- [`QRAFT_PRODUCT_ROADMAP.md`](../design/QRAFT_PRODUCT_ROADMAP.md)
 - [`DEVELOPMENT_GOVERNANCE.md`](../developer/DEVELOPMENT_GOVERNANCE.md)

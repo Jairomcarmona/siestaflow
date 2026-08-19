@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from siestaflow.slurm_renderer import SlurmProfile, SlurmRenderer
-from siestaflow.remote_environment import EnvironmentProbePackager
+from qraft.slurm_renderer import SlurmProfile, SlurmRenderer
+from qraft.remote_environment import EnvironmentProbePackager
 
 
 def profile() -> SlurmProfile:
@@ -50,7 +50,7 @@ def test_render_uses_submit_dir_as_only_package_root_authority():
     assert '[[ -n "${SLURM_SUBMIT_DIR:-}" ]]' in script
     assert 'ROOT=$(cd "$SLURM_SUBMIT_DIR" && pwd -P)' in script
     assert '[[ -f "$ROOT/package_manifest.json" ]]' in script
-    root_section = script.split("# SIESTAFLOW_PACKAGE_ROOT_END", 1)[0]
+    root_section = script.split("# QRAFT_PACKAGE_ROOT_END", 1)[0]
     assert "BASH_SOURCE" not in root_section
     assert 'dirname "$0"' not in root_section
     assert "ROOT=$PWD" not in root_section and "ROOT=$(pwd" not in root_section

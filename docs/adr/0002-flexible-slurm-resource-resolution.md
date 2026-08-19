@@ -82,7 +82,7 @@ fallan cerrados si la confirmación o la coherencia con el submit no son válida
 
 ## Referencias
 
-- [Backbone](../design/SIESTAFLOW_BACKBONE.md)
+- [Backbone](../design/QRAFT_BACKBONE.md)
 - [Gobernanza](../developer/DEVELOPMENT_GOVERNANCE.md)
 - [Aceptación Fase 3](../validation/PHASE3_PREPARED_RUN_ACCEPTANCE.md)
 - [ADR-0001](0001-single-codebase-canonical-execution-path.md)

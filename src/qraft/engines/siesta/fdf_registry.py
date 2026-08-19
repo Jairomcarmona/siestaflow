@@ -16,7 +16,7 @@ class FDFRegistry:
 
     @classmethod
     def load_default(cls) -> "FDFRegistry":
-        resource = files("siestaflow.engines.siesta.data").joinpath("supported_fdf_registry_5.4.2.json")
+        resource = files("qraft.engines.siesta.data").joinpath("supported_fdf_registry_5.4.2.json")
         with resource.open("r", encoding="utf-8") as handle:
             return cls.from_data(json.load(handle))
 

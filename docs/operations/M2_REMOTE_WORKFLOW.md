@@ -3,8 +3,8 @@
 Create a campaign definition from any external package, then render an inert remote preview:
 
 ```powershell
-python -m siestaflow.cli --workspace .work campaign create --project projects/package --campaign-id smoke --json
-python -m siestaflow.cli --workspace .work remote package smoke --output .work\remote --dry-run --json
+python -m qraft.cli --workspace .work campaign create --project projects/package --campaign-id smoke --json
+python -m qraft.cli --workspace .work remote package smoke --output .work\remote --dry-run --json
 ```
 
 The package contains no pseudopotential binary and never invokes `sbatch`. It preserves manifest-declared external filename/hash requirements, null cluster fields, input hash, preflight, SLURM preview, inspection/collection scripts, and checksums. A human must configure and authorize every remote action.

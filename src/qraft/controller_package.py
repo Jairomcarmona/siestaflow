@@ -53,16 +53,16 @@ class ControllerPackageBuilder:
     """Vendor the tested runtime around an already materialized campaign."""
 
     RUNTIME_FILES = (
-        "src/siestaflow/models.py",
-        "src/siestaflow/project_packages.py",
-        "src/siestaflow/execution/allocation_controller.py",
-        "src/siestaflow/execution/campaign_progress.py",
-        "src/siestaflow/execution/direct_launcher.py",
-        "src/siestaflow/execution/hydra_launcher.py",
-        "src/siestaflow/execution/slurm_environment.py",
-        "src/siestaflow/execution/srun_launcher.py",
-        "src/siestaflow/engines/siesta/models.py",
-        "src/siestaflow/engines/siesta/output_parser.py",
+        "src/qraft/models.py",
+        "src/qraft/project_packages.py",
+        "src/qraft/execution/allocation_controller.py",
+        "src/qraft/execution/campaign_progress.py",
+        "src/qraft/execution/direct_launcher.py",
+        "src/qraft/execution/hydra_launcher.py",
+        "src/qraft/execution/slurm_environment.py",
+        "src/qraft/execution/srun_launcher.py",
+        "src/qraft/engines/siesta/models.py",
+        "src/qraft/engines/siesta/output_parser.py",
     )
 
     def __init__(self, repository_root: Path) -> None:
@@ -72,7 +72,7 @@ class ControllerPackageBuilder:
         contracts = tuple(
             path.relative_to(self.repository_root).as_posix()
             for path in sorted(
-                (self.repository_root / "src/siestaflow/contracts").glob("*.py")
+                (self.repository_root / "src/qraft/contracts").glob("*.py")
             )
         )
         if not contracts:
@@ -145,10 +145,10 @@ class ControllerPackageBuilder:
             )
         if dry_run:
             generated_targets = (
-                "runtime/siestaflow/__init__.py",
-                "runtime/siestaflow/execution/__init__.py",
-                "runtime/siestaflow/engines/__init__.py",
-                "runtime/siestaflow/engines/siesta/__init__.py",
+                "runtime/qraft/__init__.py",
+                "runtime/qraft/execution/__init__.py",
+                "runtime/qraft/engines/__init__.py",
+                "runtime/qraft/engines/siesta/__init__.py",
                 "scripts/run_worker.py",
                 "scripts/progress.py",
                 "submit.slurm",
@@ -184,10 +184,10 @@ class ControllerPackageBuilder:
             target = relative.removeprefix("src/")
             files[f"runtime/{target}"] = source.read_bytes()
         files.update({
-            "runtime/siestaflow/__init__.py": b'"""Vendored SIESTAFLOW runtime."""\n',
-            "runtime/siestaflow/execution/__init__.py": b"",
-            "runtime/siestaflow/engines/__init__.py": b"",
-            "runtime/siestaflow/engines/siesta/__init__.py": b"",
+            "runtime/qraft/__init__.py": b'"""Vendored QRAFT runtime."""\n',
+            "runtime/qraft/execution/__init__.py": b"",
+            "runtime/qraft/engines/__init__.py": b"",
+            "runtime/qraft/engines/siesta/__init__.py": b"",
             "scripts/run_worker.py": _worker().encode("utf-8"),
             "scripts/progress.py": _progress().encode("utf-8"),
             "submit.slurm": self._slurm(load_structured(campaign_path)).encode("utf-8"),
@@ -259,7 +259,7 @@ class ControllerPackageBuilder:
             if re.fullmatch(r"\s*module\s+load\s+siesta(?:/[^\s]+)?\s*", command):
                 rendered_modules.append(
                     f'if ! {command}; then\n'
-                    '  echo "SIESTAFLOW_SIESTA_MODULE_LOAD_WARNING: continuing to executable verification" >&2\n'
+                    '  echo "QRAFT_SIESTA_MODULE_LOAD_WARNING: continuing to executable verification" >&2\n'
                     'fi'
                 )
             else:
@@ -306,7 +306,7 @@ cd "$ROOT"
 {module_lines}
 {environment_text}
 if ! command -v {siesta_executable} >/dev/null 2>&1; then
-  echo "SIESTAFLOW_SIESTA_EXECUTABLE_UNAVAILABLE: {siesta_executable}" >&2
+  echo "QRAFT_SIESTA_EXECUTABLE_UNAVAILABLE: {siesta_executable}" >&2
   exit 127
 fi
 export PYTHONPATH="$ROOT/runtime"
@@ -339,7 +339,7 @@ def _worker() -> str:
     return """#!/usr/bin/env python3
 import json,sys
 from pathlib import Path
-from siestaflow.execution.allocation_controller import AllocationController,ExecutionStatus
+from qraft.execution.allocation_controller import AllocationController,ExecutionStatus
 campaign=Path(sys.argv[1]); root=Path(sys.argv[2])
 controller=AllocationController.from_file(campaign,root=root)
 status=controller.run()
@@ -351,7 +351,7 @@ raise SystemExit(0 if status is ExecutionStatus.COMPLETED else 2)
 def _progress() -> str:
     return """#!/usr/bin/env python3
 from pathlib import Path
-from siestaflow.execution.campaign_progress import read_campaign_progress,render_campaign_progress
+from qraft.execution.campaign_progress import read_campaign_progress,render_campaign_progress
 print(render_campaign_progress(read_campaign_progress(Path("."))))
 """
 
@@ -397,7 +397,7 @@ mutable={{"state","work","results","evidence"}}
 actual={{p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file() and p.relative_to(root).parts[0] not in mutable and not p.name.startswith(("OUT.","ERROR."))}}
 if actual != seen|{{"checksums.sha256"}}: fail("CHECKSUM_COVERAGE_MISMATCH",str(sorted(actual^(seen|{{"checksums.sha256"}}))))
 sys.path.insert(0,str(root/"runtime"))
-from siestaflow.execution.allocation_controller import load_controller_config
+from qraft.execution.allocation_controller import load_controller_config
 load_controller_config(root/"campaign.yaml")
 if (root/"run.lock.json").is_file():
  run=json.loads((root/"run.lock.json").read_text(encoding="utf-8"))
@@ -415,7 +415,7 @@ if (root/"run.lock.json").is_file():
 for path in ("submit.slurm","progress.sh"):
  result=subprocess.run(["bash","-n",path],cwd=root,capture_output=True,text=True)
  if result.returncode: fail("BASH_SYNTAX_FAILURE",result.stderr.strip())
-print("SIESTAFLOW_CONTROLLER_PACKAGE_VERIFIED")
+print("QRAFT_CONTROLLER_PACKAGE_VERIFIED")
 print("NO_LOGIN_PERSISTENT_PROCESS_REQUIRED")
 """
 
@@ -423,7 +423,7 @@ print("NO_LOGIN_PERSISTENT_PROCESS_REQUIRED")
 def _readme(package_id: str) -> str:
     return f"""# {package_id}
 
-Self-contained SIESTAFLOW 0.2 allocation-controller package. The Python
+Self-contained QRAFT 0.2 allocation-controller package. The Python
 controller lives only inside the SLURM allocation. Scientific tasks use the
 launcher declared in `campaign.yaml`; state, attempts and evidence survive
 resubmission.

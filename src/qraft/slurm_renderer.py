@@ -55,7 +55,7 @@ class SlurmRenderer:
         missing = tuple(field for field in required if getattr(profile, field) is None)
         executable = profile.verified_for_siesta and not missing
         status = SlurmRenderStatus.EXECUTABLE_AFTER_PROFILE_VERIFICATION if executable else SlurmRenderStatus.PREVIEW_WITH_UNVERIFIED_PROFILE
-        lines = ["#!/usr/bin/env bash", "# SIESTAFLOW M2 SLURM RENDER", f"# render_status: {status.value}", f"# profile: {profile.name}", f"#SBATCH --job-name={job_name}"]
+        lines = ["#!/usr/bin/env bash", "# QRAFT M2 SLURM RENDER", f"# render_status: {status.value}", f"# profile: {profile.name}", f"#SBATCH --job-name={job_name}"]
         directives = {
             "partition": profile.partition, "account": profile.account, "qos": profile.qos,
             "nodes": profile.nodes, "ntasks": profile.ntasks, "cpus-per-task": profile.cpus_per_task,
@@ -87,7 +87,7 @@ class SlurmRenderer:
                 "}",
                 'mkdir -p "$ROOT/evidence" "$ROOT/results" "$ROOT/work"',
                 'cd "$ROOT"',
-                "# SIESTAFLOW_PACKAGE_ROOT_END",
+                "# QRAFT_PACKAGE_ROOT_END",
                 "",
             ))
         lines.extend(profile.module_commands or (("# module_commands: none declared",) if executable else ("# REQUIRED_CONFIGURATION: module_commands=[]",)))

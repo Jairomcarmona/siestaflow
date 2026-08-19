@@ -16,5 +16,7 @@ state/
 work/
 results/
 evidence/
+.qraft-work/
+.qraft-local-slurm/
 .siestaflow-work/
 .siestaflow-local-slurm/

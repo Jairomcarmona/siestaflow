@@ -1,18 +1,18 @@
-# SIESTAFLOW — columna vertebral del proyecto
+# QRAFT — columna vertebral del proyecto
 
 Estado: documento rector estable
-Software de referencia: SIESTAFLOW 0.2 alpha
+Software de referencia: QRAFT 0.2 alpha
 
 El estado operativo vigente se mantiene en
-[`SIESTAFLOW_0_2_RELEASE_STATUS.md`](SIESTAFLOW_0_2_RELEASE_STATUS.md) y la
+[`QRAFT_0_2_RELEASE_STATUS.md`](QRAFT_0_2_RELEASE_STATUS.md) y la
 secuencia de entrega en
-[`SIESTAFLOW_PRODUCT_ROADMAP.md`](SIESTAFLOW_PRODUCT_ROADMAP.md). Este
+[`QRAFT_PRODUCT_ROADMAP.md`](QRAFT_PRODUCT_ROADMAP.md). Este
 documento define la misión, los límites y los invariantes que no deben
 depender de un corte temporal.
 
 ## 1. Misión y autoridad científica
 
-SIESTAFLOW transforma una intención científica declarada en un workflow DFT
+QRAFT transforma una intención científica declarada en un workflow DFT
 autocontenido, verificable y reproducible para entornos HPC. Representa
 dependencias científicas mediante un DAG tipado, transfiere artefactos con
 procedencia, ejecuta decisiones numéricas previamente autorizadas y conserva
@@ -24,7 +24,7 @@ técnica correcta no equivale a aceptación científica.
 
 ## 2. Límites
 
-SIESTAFLOW no debe:
+QRAFT no debe:
 
 - elegir silenciosamente parámetros o modelos científicos;
 - presentar heurísticas como leyes físicas;
@@ -286,7 +286,7 @@ Wheel/sdist, instalación editable y limpia, `pipx` cuando proceda, CI Linux,
 licencia, changelog, tutorial, esquemas públicos, compatibilidad, ejemplos y
 validación por usuarios externos.
 
-**Cierre:** investigadores externos instalan SIESTAFLOW y completan un flujo
+**Cierre:** investigadores externos instalan QRAFT y completan un flujo
 documentado sin asistencia directa del autor. Esta fase no bloquea la
 aceptación técnica remota de la Fase 3.
 

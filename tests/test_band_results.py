@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from siestaflow.band_results import parse_bands
+from qraft.band_results import parse_bands
 
 
 def test_parse_bands_accepts_wrapped_eigenvalues(tmp_path: Path) -> None:

@@ -5,7 +5,7 @@ from decimal import Decimal
 
 import pytest
 
-from siestaflow.scientific_convergence import (
+from qraft.scientific_convergence import (
     MeshConvergenceEvaluator,
     MeshConvergenceRule,
     MeshObservation,

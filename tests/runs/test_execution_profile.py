@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from siestaflow.execution_profile import SlurmExecutionProfile
+from qraft.execution_profile import SlurmExecutionProfile
 
 
 def _value() -> dict:

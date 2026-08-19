@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from zipfile import ZipFile
 
-from siestaflow.controller_package import ControllerPackageBuilder
+from qraft.controller_package import ControllerPackageBuilder
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -101,10 +101,10 @@ def test_controller_package_is_reproducible_and_cleanly_verifies(tmp_path: Path)
         text=True,
     )
     assert result.returncode == 0, result.stderr
-    assert "SIESTAFLOW_CONTROLLER_PACKAGE_VERIFIED" in result.stdout
+    assert "QRAFT_CONTROLLER_PACKAGE_VERIFIED" in result.stdout
     assert "mpiexec.hydra" in (root / "campaign.yaml").read_text()
     submit = (root / "submit.slurm").read_text()
-    assert "SIESTAFLOW_SIESTA_MODULE_LOAD_WARNING" in submit
+    assert "QRAFT_SIESTA_MODULE_LOAD_WARNING" in submit
     assert "siesta --version" not in submit
     assert "python3 scripts/run_worker.py" in submit
     assert submit.index("export OMP_NUM_THREADS=1") < submit.index("command -v siesta")
@@ -126,7 +126,7 @@ def test_controller_package_dry_run_and_cli_have_no_submission(tmp_path: Path):
         [
             sys.executable,
             "-m",
-            "siestaflow.cli",
+            "qraft.cli",
             "remote",
             "controller-package",
             str(campaign),

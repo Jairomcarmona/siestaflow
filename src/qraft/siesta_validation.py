@@ -81,7 +81,7 @@ def siesta_validation_plugin(
         plugin_version="0.1.0",
         core_contract_version=CORE_CONTRACT_VERSION,
         capabilities=(capability,),
-        provider="SIESTAFLOW",
+        provider="QRAFT",
         metadata={"bundled": True},
     )
     return descriptor, provider

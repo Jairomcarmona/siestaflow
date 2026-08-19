@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MARKER="# Managed by the SIESTAFlow local Slurm sandbox."
+MARKER="# Managed by the QRAFT local Slurm sandbox."
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 TEMPLATE="$ROOT/slurm.conf.in"
 CONFIG=/etc/slurm/slurm.conf

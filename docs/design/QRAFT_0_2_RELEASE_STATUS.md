@@ -1,4 +1,4 @@
-# SIESTAFLOW 0.2 — estado de consolidación
+# QRAFT 0.2 — estado de consolidación
 
 Fecha de corte documental: 2026-08-01
 
@@ -6,8 +6,8 @@ Estado: `PHASE3_TECHNICAL_ACCEPTED / SCIENTIFIC_VALIDATION_OUT_OF_SCOPE`
 
 Este estado es vinculante hasta que exista un expediente remoto canónico. La
 arquitectura estable está en
-[`SIESTAFLOW_BACKBONE.md`](SIESTAFLOW_BACKBONE.md), las dependencias en
-[`SIESTAFLOW_PRODUCT_ROADMAP.md`](SIESTAFLOW_PRODUCT_ROADMAP.md) y los gates en
+[`QRAFT_BACKBONE.md`](QRAFT_BACKBONE.md), las dependencias en
+[`QRAFT_PRODUCT_ROADMAP.md`](QRAFT_PRODUCT_ROADMAP.md) y los gates en
 [`DEVELOPMENT_GOVERNANCE.md`](../developer/DEVELOPMENT_GOVERNANCE.md).
 
 ## Alcance consolidado

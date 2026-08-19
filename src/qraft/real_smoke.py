@@ -124,19 +124,19 @@ class RealSiestaSmokePackager:
         # independent of the source checkout after clean extraction.
         source_root = Path(__file__).resolve().parent
         for package_path, source_path in {
-            "scripts/runtime_parser/siestaflow/models.py": source_root / "models.py",
-            "scripts/runtime_parser/siestaflow/engines/siesta/models.py": source_root / "engines/siesta/models.py",
-            "scripts/runtime_parser/siestaflow/engines/siesta/output_parser.py": source_root / "engines/siesta/output_parser.py",
+            "scripts/runtime_parser/qraft/models.py": source_root / "models.py",
+            "scripts/runtime_parser/qraft/engines/siesta/models.py": source_root / "engines/siesta/models.py",
+            "scripts/runtime_parser/qraft/engines/siesta/output_parser.py": source_root / "engines/siesta/output_parser.py",
         }.items():
             files[package_path] = source_path.read_bytes()
         for source_path in sorted((source_root / "contracts").glob("*.py")):
             files[
-                f"scripts/runtime_parser/siestaflow/contracts/{source_path.name}"
+                f"scripts/runtime_parser/qraft/contracts/{source_path.name}"
             ] = source_path.read_bytes()
         for package_path in (
-            "scripts/runtime_parser/siestaflow/__init__.py",
-            "scripts/runtime_parser/siestaflow/engines/__init__.py",
-            "scripts/runtime_parser/siestaflow/engines/siesta/__init__.py",
+            "scripts/runtime_parser/qraft/__init__.py",
+            "scripts/runtime_parser/qraft/engines/__init__.py",
+            "scripts/runtime_parser/qraft/engines/siesta/__init__.py",
         ):
             files[package_path] = b""
 
@@ -538,8 +538,8 @@ import argparse,hashlib,json,re,sys
 from pathlib import Path
 parser=argparse.ArgumentParser(); parser.add_argument('--package-root',type=Path,required=True); args=parser.parse_args()
 root=args.package_root.resolve(); sys.path.insert(0,str(root/'scripts/runtime_parser'))
-from siestaflow.engines.siesta.output_parser import SiestaOutputParser
-from siestaflow.engines.siesta.models import OutputClassification
+from qraft.engines.siesta.output_parser import SiestaOutputParser
+from qraft.engines.siesta.models import OutputClassification
 manifest=json.loads((root/'package_manifest.json').read_text())
 stdout=(root/'results/siesta.out').read_text(errors='replace'); stderr=(root/'results/siesta.err').read_text(errors='replace')
 record=SiestaOutputParser().parse((stdout+'\n'+stderr).splitlines(True))

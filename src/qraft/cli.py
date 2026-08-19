@@ -17,7 +17,7 @@ from .engines.siesta.pseudopotentials import PseudopotentialManifest, Pseudopote
 from .engines.siesta.validation_catalog import SiestaValidationCatalog
 from .engines.siesta.validation_profile import SiestaValidationProfile
 from .environment_check import EnvironmentChecker, EnvironmentCheckRequest
-from .errors import SiestaFlowError
+from .errors import QraftError
 from .examples import ExampleRegistry, ExampleService
 from .models import AuthorizationEnvelope, CampaignManifest, TaskSpec, primitive
 from .project_packages import ProjectPackageLoader, load_structured
@@ -70,8 +70,8 @@ def _repo_root() -> Path:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="siestaflow", description="SIESTA preparation, allocation-local execution, and evidence handling")
-    parser.add_argument("--workspace", type=Path, default=Path(".siestaflow-work"))
+    parser = argparse.ArgumentParser(prog="qraft", description="SIESTA preparation, allocation-local execution, and evidence handling")
+    parser.add_argument("--workspace", type=Path, default=Path(".qraft-work"))
     parser.add_argument("--examples-root", type=Path, default=_repo_root() / "examples")
     sub = parser.add_subparsers(dest="domain", required=True)
 
@@ -429,9 +429,9 @@ def main(argv: list[str] | None = None) -> int:
         PermissionError,
         RuntimeError,
         KeyError,
-        SiestaFlowError,
+        QraftError,
     ) as exc:
-        print(f"SIESTAFLOW_ERROR: {exc}", file=sys.stderr)
+        print(f"QRAFT_ERROR: {exc}", file=sys.stderr)
         return 2
 
 

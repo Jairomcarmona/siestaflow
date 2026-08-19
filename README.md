@@ -1,6 +1,6 @@
-# SIESTAFLOW
+# QRAFT — Quantum Reproducible Automation & Flow Toolkit
 
-SIESTAFLOW 0.2 is a declarative, evidence-oriented orchestrator for SIESTA
+QRAFT 0.2 is a declarative, evidence-oriented orchestrator for SIESTA
 campaigns in persistent SLURM allocations. It prepares self-contained packages
 locally; the user transfers and submits them manually. The controller itself
 lives only inside the allocation.
@@ -58,22 +58,22 @@ Install for development and run the generic example:
 
 ```powershell
 python -m pip install -e .
-python -m siestaflow.cli examples list --json
-python -m siestaflow.cli environment check --siesta siesta --launcher auto --json
-python -m siestaflow.cli examples validate generic/minimal_siesta_smoke --json
-python -m siestaflow.cli examples run generic/minimal_siesta_smoke --campaign-id mesh_series --json
-python -m siestaflow.cli campaign progress PATH_TO_PACKAGE --json
-python -m siestaflow.cli workflow validate WORKFLOW.json --json
-python -m siestaflow.cli input rules --engine-version 5.4.2
-python -m siestaflow.cli input validate INPUT.fdf --explain
-python -m siestaflow.cli workflow preflight WORKFLOW.json --json
-python -m siestaflow.cli workflow plan WORKFLOW.json
-python -m siestaflow.cli workflow compile WORKFLOW.json --output workflow.lock.json
-python -m siestaflow.cli run prepare workflow.lock.json --source-root WORKFLOW_ROOT --profile execution-profile.json --output packages --run-id RUN_ID --json
-python -m siestaflow.cli run inspect packages/RUN_ID --json
-python -m siestaflow.cli run status packages/RUN_ID --json
-python -m siestaflow.cli run resume packages/RUN_ID
-python -m siestaflow.cli remote controller-package campaign.json --output packages --json
+python -m qraft.cli examples list --json
+python -m qraft.cli environment check --siesta siesta --launcher auto --json
+python -m qraft.cli examples validate generic/minimal_siesta_smoke --json
+python -m qraft.cli examples run generic/minimal_siesta_smoke --campaign-id mesh_series --json
+python -m qraft.cli campaign progress PATH_TO_PACKAGE --json
+python -m qraft.cli workflow validate WORKFLOW.json --json
+python -m qraft.cli input rules --engine-version 5.4.2
+python -m qraft.cli input validate INPUT.fdf --explain
+python -m qraft.cli workflow preflight WORKFLOW.json --json
+python -m qraft.cli workflow plan WORKFLOW.json
+python -m qraft.cli workflow compile WORKFLOW.json --output workflow.lock.json
+python -m qraft.cli run prepare workflow.lock.json --source-root WORKFLOW_ROOT --profile execution-profile.json --output packages --run-id RUN_ID --json
+python -m qraft.cli run inspect packages/RUN_ID --json
+python -m qraft.cli run status packages/RUN_ID --json
+python -m qraft.cli run resume packages/RUN_ID
+python -m qraft.cli remote controller-package campaign.json --output packages --json
 python -m pytest -q
 ```
 
@@ -92,9 +92,9 @@ selects a functional, Hubbard U, magnetic state or convergence threshold.
 Contract compatibility and plugin rules are documented in
 [CORE_CONTRACTS_1_0.md](docs/design/CORE_CONTRACTS_1_0.md).
 The governing product direction, vocabulary, phases, and acceptance gates are
-defined in [SIESTAFLOW_BACKBONE.md](docs/design/SIESTAFLOW_BACKBONE.md).
+defined in [QRAFT_BACKBONE.md](docs/design/QRAFT_BACKBONE.md).
 Current priorities and route classifications are in
-[SIESTAFLOW_PRODUCT_ROADMAP.md](docs/design/SIESTAFLOW_PRODUCT_ROADMAP.md), and
+[QRAFT_PRODUCT_ROADMAP.md](docs/design/QRAFT_PRODUCT_ROADMAP.md), and
 Git, review, ADR, traceability and release rules are in
 [DEVELOPMENT_GOVERNANCE.md](docs/developer/DEVELOPMENT_GOVERNANCE.md).
 Architecture decisions are indexed under [docs/adr](docs/adr/README.md), and

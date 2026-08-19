@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from siestaflow.optical_results import parse_epsimg
+from qraft.optical_results import parse_epsimg
 
 
 def test_parse_epsimg_accepts_comments_and_fortran_exponents(tmp_path: Path) -> None:

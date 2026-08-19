@@ -39,7 +39,7 @@ class SiestaValidationCatalog:
 
     @classmethod
     def load_default(cls) -> "SiestaValidationCatalog":
-        resource = files("siestaflow.engines.siesta.data").joinpath(
+        resource = files("qraft.engines.siesta.data").joinpath(
             "validation_rules_5.4.2.json"
         )
         with resource.open("r", encoding="utf-8") as handle:

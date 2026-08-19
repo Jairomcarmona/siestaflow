@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run an externally described local smoke through SIESTAFLOW."""
+"""Run an externally described local smoke through QRAFT."""
 
 from __future__ import annotations
 
@@ -7,13 +7,13 @@ import argparse
 import json
 from pathlib import Path
 
-from siestaflow.local_execution import (
+from qraft.local_execution import (
     InputBinding,
     LocalExecutionProfile,
     LocalExecutor,
     LocalRunSpec,
 )
-from siestaflow.project_packages import load_structured
+from qraft.project_packages import load_structured
 
 
 def binding(root: Path, value: dict[str, str]) -> InputBinding:

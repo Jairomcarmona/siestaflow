@@ -119,7 +119,7 @@ class M4RemoteSmokePackager:
             }],
         }
         # Validate with a temporary JSON-compatible YAML before materialization.
-        with tempfile.TemporaryDirectory(prefix="siestaflow-m4-") as directory:
+        with tempfile.TemporaryDirectory(prefix="qraft-m4-") as directory:
             temporary = Path(directory) / "campaign.json"
             temporary.write_bytes(_json(campaign))
             load_controller_config(temporary)
@@ -131,26 +131,26 @@ class M4RemoteSmokePackager:
             "input/smoke.fdf": base / "remote_validation/M3B1_SURF_GR5X5_REAL_SIESTA_SMOKE/input/smoke.fdf",
             "pseudopotentials/C.psml": base / "examples/reference_projects/graphene_surf_gr5x5/pseudopotentials/C.psml",
             "geometry/SURF_Gr5x5_clean_v01.xyz": base / "examples/reference_projects/graphene_surf_gr5x5/systems/SURF_Gr5x5_clean_v01.xyz",
-            "runtime/siestaflow/models.py": base / "src/siestaflow/models.py",
-            "runtime/siestaflow/project_packages.py": base / "src/siestaflow/project_packages.py",
-            "runtime/siestaflow/execution/allocation_controller.py": base / "src/siestaflow/execution/allocation_controller.py",
-            "runtime/siestaflow/execution/direct_launcher.py": base / "src/siestaflow/execution/direct_launcher.py",
-            "runtime/siestaflow/execution/hydra_launcher.py": base / "src/siestaflow/execution/hydra_launcher.py",
-            "runtime/siestaflow/execution/slurm_environment.py": base / "src/siestaflow/execution/slurm_environment.py",
-            "runtime/siestaflow/execution/srun_launcher.py": base / "src/siestaflow/execution/srun_launcher.py",
-            "runtime/siestaflow/engines/siesta/models.py": base / "src/siestaflow/engines/siesta/models.py",
-            "runtime/siestaflow/engines/siesta/output_parser.py": base / "src/siestaflow/engines/siesta/output_parser.py",
+            "runtime/qraft/models.py": base / "src/qraft/models.py",
+            "runtime/qraft/project_packages.py": base / "src/qraft/project_packages.py",
+            "runtime/qraft/execution/allocation_controller.py": base / "src/qraft/execution/allocation_controller.py",
+            "runtime/qraft/execution/direct_launcher.py": base / "src/qraft/execution/direct_launcher.py",
+            "runtime/qraft/execution/hydra_launcher.py": base / "src/qraft/execution/hydra_launcher.py",
+            "runtime/qraft/execution/slurm_environment.py": base / "src/qraft/execution/slurm_environment.py",
+            "runtime/qraft/execution/srun_launcher.py": base / "src/qraft/execution/srun_launcher.py",
+            "runtime/qraft/engines/siesta/models.py": base / "src/qraft/engines/siesta/models.py",
+            "runtime/qraft/engines/siesta/output_parser.py": base / "src/qraft/engines/siesta/output_parser.py",
         }
-        for source in sorted((base / "src/siestaflow/contracts").glob("*.py")):
+        for source in sorted((base / "src/qraft/contracts").glob("*.py")):
             source_files[
-                f"runtime/siestaflow/contracts/{source.name}"
+                f"runtime/qraft/contracts/{source.name}"
             ] = source
         files = {name: path.read_bytes() for name, path in source_files.items()}
         files.update({
-            "runtime/siestaflow/__init__.py": b'"""Vendored SIESTAFLOW M4 runtime."""\n',
-            "runtime/siestaflow/execution/__init__.py": b'"""Allocation-local execution runtime."""\n',
-            "runtime/siestaflow/engines/__init__.py": b'"""Engine namespace."""\n',
-            "runtime/siestaflow/engines/siesta/__init__.py": b'"""Minimal SIESTA parser runtime."""\n',
+            "runtime/qraft/__init__.py": b'"""Vendored QRAFT M4 runtime."""\n',
+            "runtime/qraft/execution/__init__.py": b'"""Allocation-local execution runtime."""\n',
+            "runtime/qraft/engines/__init__.py": b'"""Engine namespace."""\n',
+            "runtime/qraft/engines/siesta/__init__.py": b'"""Minimal SIESTA parser runtime."""\n',
             "campaign.yaml": _json(campaign),
             "campaign.slurm": self._slurm(campaign).encode("utf-8"),
             "scripts/run_worker.py": _worker().encode("utf-8"),
@@ -237,7 +237,7 @@ def _worker() -> str:
     return '''#!/usr/bin/env python3
 import json,sys
 from pathlib import Path
-from siestaflow.execution.allocation_controller import AllocationController,ExecutionStatus
+from qraft.execution.allocation_controller import AllocationController,ExecutionStatus
 campaign=Path(sys.argv[1]); root=Path(sys.argv[2])
 controller=AllocationController.from_file(campaign,root=root)
 status=controller.run()
@@ -283,7 +283,7 @@ actual={p.relative_to(root).as_posix() for p in root.rglob('*') if p.is_file() a
 if actual != seen|{'checksums.sha256'}: fail('CHECKSUM_COVERAGE_MISMATCH',str(sorted(actual^(seen|{'checksums.sha256'}))))
 if any(p.is_symlink() for p in root.rglob('*')): fail('PACKAGE_SYMLINK_FORBIDDEN')
 sys.path.insert(0,str(root/'runtime'))
-from siestaflow.execution.allocation_controller import load_controller_config
+from qraft.execution.allocation_controller import load_controller_config
 load_controller_config(root/'campaign.yaml')
 script=(root/'campaign.slurm').read_text(encoding='utf-8')
 if re.search(r'^\s*srun\b.*run_worker',script,re.M): fail('CONTROLLER_MUST_NOT_USE_SRUN')
@@ -316,7 +316,7 @@ def _commands() -> str:
 ## Package locally
 
 ```bash
-python -m siestaflow.cli remote m4-package --profile config/remote_smokes/m4_surf_gr5x5_yoltla.yaml --output remote_validation --json
+python -m qraft.cli remote m4-package --profile config/remote_smokes/m4_surf_gr5x5_yoltla.yaml --output remote_validation --json
 ```
 
 ## Transfer manually

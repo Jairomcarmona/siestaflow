@@ -1613,7 +1613,7 @@ def builtin_authoring_registry() -> CapabilityRegistry:
                       ground_state_to_dos_pdos, ground_state_to_dos_pdos_recipe,
                       band_structure, band_structure_recipe, optical_spectrum, optical_spectrum_recipe,
                       electronic_analysis, electronic_analysis_recipe),
-        provider="SIESTAFLOW",
+        provider="QRAFT",
         metadata={"registration": "explicit", "global_import_side_effects": False},
     )
     registry = CapabilityRegistry()

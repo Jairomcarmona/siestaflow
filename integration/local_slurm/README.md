@@ -26,7 +26,7 @@ wsl -d Ubuntu -u root --exec bash integration/local_slurm/bootstrap_wsl.sh
 ```
 
 The bootstrap refuses to overwrite an existing `/etc/slurm/slurm.conf` unless
-that file carries the SIESTAFlow sandbox marker. Hardware values are detected
+that file carries the QRAFT sandbox marker. Hardware values are detected
 from `slurmd -C`; 90% of detected memory is advertised to preserve operating
 system headroom.
 
@@ -36,7 +36,7 @@ system headroom.
 wsl -d Ubuntu --exec bash integration/local_slurm/run_acceptance.sh
 ```
 
-Generated evidence lives below `.siestaflow-local-slurm/`, which is excluded
+Generated evidence lives below `.qraft-local-slurm/`, which is excluded
 from Git. The test consists of one allocation and two sequential `srun` steps.
 
 Ubuntu's lightweight local profile uses

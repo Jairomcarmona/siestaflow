@@ -6,7 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from siestaflow.project_packages import ProjectPackageLoader
+from qraft.project_packages import ProjectPackageLoader
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -17,7 +17,7 @@ def run_cli(*arguments: str):
     environment = os.environ.copy()
     environment["PYTHONPATH"] = str(REPO / "src")
     return subprocess.run(
-        [sys.executable, "-m", "siestaflow.cli", *arguments],
+        [sys.executable, "-m", "qraft.cli", *arguments],
         cwd=REPO,
         env=environment,
         capture_output=True,

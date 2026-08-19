@@ -10,10 +10,10 @@ from pathlib import Path
 
 import pytest
 
-from siestaflow.execution.allocation_controller import AllocationController, ExecutionStatus
-from siestaflow.execution.hydra_launcher import HydraLauncher
-from siestaflow.execution.slurm_environment import ShutdownRequest, SignalHandlers, SlurmEnvironment
-from siestaflow.execution.srun_launcher import SrunLauncher, StepLaunchSpec, StepOutcome
+from qraft.execution.allocation_controller import AllocationController, ExecutionStatus
+from qraft.execution.hydra_launcher import HydraLauncher
+from qraft.execution.slurm_environment import ShutdownRequest, SignalHandlers, SlurmEnvironment
+from qraft.execution.srun_launcher import SrunLauncher, StepLaunchSpec, StepOutcome
 
 
 def sha(path: Path) -> str:
@@ -429,7 +429,7 @@ def test_schema2_hydra_controller_assigns_exclusive_hosts(tmp_path: Path):
     env = environment(tmp_path, "hydra-job", total_cpus=40)
     env.update({
         "SLURM_NNODES": "2",
-        "SIESTAFLOW_HOSTS": "tt76,tt77",
+        "QRAFT_HOSTS": "tt76,tt77",
     })
     current = AllocationController.from_file(
         campaign, environment=env, launcher=launcher, poll_interval_seconds=0.01

@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "workflow_id": "restart-chain-example",
-  "project_id": "siestaflow-examples",
+  "project_id": "qraft-examples",
   "description": "Compilation-only parent to DM-restart DAG",
   "metadata": {
     "execution_authorized": false,

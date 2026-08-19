@@ -1,6 +1,6 @@
 # SIESTA input validation
 
-SIESTAFLOW provides an explainable, read-only validation layer for SIESTA
+QRAFT provides an explainable, read-only validation layer for SIESTA
 5.4.2 inputs. Its purpose is to catch costly inconsistencies before submission
 without pretending to replace numerical convergence studies or scientific
 judgment.
@@ -8,13 +8,13 @@ judgment.
 ## Commands
 
 ```powershell
-python -m siestaflow.cli input rules --engine-version 5.4.2
-python -m siestaflow.cli input validate system.fdf --explain
-python -m siestaflow.cli input validate system.fdf `
+python -m qraft.cli input rules --engine-version 5.4.2
+python -m qraft.cli input validate system.fdf --explain
+python -m qraft.cli input validate system.fdf `
   --profile validation-profile.json `
   --pseudo-manifest pseudopotentials.json `
   --require-pseudos --json
-python -m siestaflow.cli workflow preflight workflow.json `
+python -m qraft.cli workflow preflight workflow.json `
   --profile validation-profile.json --json
 ```
 

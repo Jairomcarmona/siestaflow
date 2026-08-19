@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from siestaflow.authorization import AuthorizationEngine
-from siestaflow.gates import GateEngine
-from siestaflow.models import DecisionStatus, FailureType, TaskResult, TaskSpec
+from qraft.authorization import AuthorizationEngine
+from qraft.gates import GateEngine
+from qraft.models import DecisionStatus, FailureType, TaskResult, TaskSpec
 
 
 def _envelope(*, expires_delta: timedelta = timedelta(hours=1)):

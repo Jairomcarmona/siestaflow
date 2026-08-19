@@ -18,7 +18,7 @@ El paquete entregable está en `remote_validation/M3_YOLTLA_ENVIRONMENT_PROBE`. 
 6. Ejecutar `inspect_probe_job.sh JOB_ID` durante y después. Un `squeue` vacío nunca equivale a éxito; se exige evidencia terminal `sacct` con `State` y `ExitCode`.
 7. Ejecutar el colector con `--pseudo-root` apuntando al directorio externo Mn/O. Sólo lee nombres, tamaño, legibilidad, formato y SHA-256; no copia ni modifica pseudos.
 8. Descargar manualmente `M3_YOLTLA_ENVIRONMENT_RESULTS_<timestamp>.tar.gz` y adjuntarlo a Codex.
-9. Importar localmente con `siestaflow remote environment import <bundle>`.
+9. Importar localmente con `qraft remote environment import <bundle>`.
 
 ## Seguridad y decisión
 

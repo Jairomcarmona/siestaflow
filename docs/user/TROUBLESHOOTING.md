@@ -38,7 +38,7 @@
 - Existing destination: choose a clean workspace; the tools refuse overwrite.
 - Remote import review: synthetic evidence, missing terminal accounting, and unknown warnings intentionally prevent acceptance.
 
-All errors are printed as `SIESTAFLOW_ERROR: ...`. Re-run with `--json` where available for machine-readable findings.
+All errors are printed as `QRAFT_ERROR: ...`. Re-run with `--json` where available for machine-readable findings.
 
 - Any V1 probe directory or ZIP is unusable. Rename/delete it and transfer V2 as a complete unit; never patch or mix individual files.
 - `EMBEDDED_PYTHON_SYNTAX_ERROR`: use the reported file/start/error line; do not bypass the validator.

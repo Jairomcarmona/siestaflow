@@ -1,6 +1,6 @@
 # Workflow definitions
 
-SIESTAFLOW workflow schema 1.0 describes a scientific DAG without executing
+QRAFT workflow schema 1.0 describes a scientific DAG without executing
 it. The Phase 1 compiler validates the definition, resolves artifact
 dependencies, orders tasks, hashes external inputs, and produces an immutable
 `workflow.lock.json`.
@@ -94,11 +94,11 @@ Output paths are relative to the future task working directory. Output
 ## Commands
 
 ```bash
-siestaflow workflow validate workflow.yaml
-siestaflow workflow plan workflow.yaml
-siestaflow workflow graph workflow.yaml
-siestaflow workflow graph workflow.yaml --format mermaid
-siestaflow workflow compile workflow.yaml --output workflow.lock.json
+qraft workflow validate workflow.yaml
+qraft workflow plan workflow.yaml
+qraft workflow graph workflow.yaml
+qraft workflow graph workflow.yaml --format mermaid
+qraft workflow compile workflow.yaml --output workflow.lock.json
 ```
 
 `validate`, `plan`, and `graph` never write files. `compile --dry-run` reports
@@ -141,7 +141,7 @@ execution-profile file rather than the workflow. A template is available at
 `examples/execution_profiles/slurm_hydra.example.json`.
 
 ```bash
-siestaflow run prepare workflow.lock.json \
+qraft run prepare workflow.lock.json \
   --source-root PATH_TO_WORKFLOW_ROOT \
   --profile execution-profile.json \
   --output packages \

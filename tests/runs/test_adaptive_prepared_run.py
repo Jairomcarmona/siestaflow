@@ -8,10 +8,10 @@ from pathlib import Path
 
 import pytest
 
-from siestaflow.execution.allocation_controller import AllocationController, ExecutionStatus, load_controller_config
-from siestaflow.run_inspection import RunInspector
-from siestaflow.run_preparation import RunPreparer, RunPreparationRequest
-from siestaflow.workflows import WorkflowCompiler, write_workflow_lock
+from qraft.execution.allocation_controller import AllocationController, ExecutionStatus, load_controller_config
+from qraft.run_inspection import RunInspector
+from qraft.run_preparation import RunPreparer, RunPreparationRequest
+from qraft.workflows import WorkflowCompiler, write_workflow_lock
 
 
 REPO = Path(__file__).resolve().parents[2]

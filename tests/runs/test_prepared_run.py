@@ -8,11 +8,11 @@ from pathlib import Path
 
 import pytest
 
-from siestaflow.cli import main
-from siestaflow.execution.allocation_controller import load_controller_config
-from siestaflow.run_inspection import RunInspector
-from siestaflow.run_preparation import RunPreparer, RunPreparationRequest
-from siestaflow.workflows import WorkflowCompiler, write_workflow_lock
+from qraft.cli import main
+from qraft.execution.allocation_controller import load_controller_config
+from qraft.run_inspection import RunInspector
+from qraft.run_preparation import RunPreparer, RunPreparationRequest
+from qraft.workflows import WorkflowCompiler, write_workflow_lock
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -241,7 +241,7 @@ def test_prepare_builds_hash_bound_package_with_exact_destinations(
         text=True,
     )
     assert verified.returncode == 0, verified.stderr
-    assert "SIESTAFLOW_CONTROLLER_PACKAGE_VERIFIED" in verified.stdout
+    assert "QRAFT_CONTROLLER_PACKAGE_VERIFIED" in verified.stdout
     plan = RunInspector().resume(package)
     assert plan.status == "INITIAL_SUBMISSION_REQUIRED"
     assert plan.command == "sbatch submit.slurm"

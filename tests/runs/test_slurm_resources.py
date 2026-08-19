@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from siestaflow.cli import main
-from siestaflow.slurm_resources import (
+from qraft.cli import main
+from qraft.slurm_resources import (
     build_snapshot,
     load_snapshot,
     parse_scontrol_nodes,
@@ -17,9 +17,9 @@ from siestaflow.slurm_resources import (
 )
 
 from test_prepared_run import _profile, _sources
-from siestaflow.execution_profile import SlurmExecutionProfile
-from siestaflow.run_inspection import RunInspector
-from siestaflow.workflows import WorkflowCompiler, load_run_lock, write_workflow_lock
+from qraft.execution_profile import SlurmExecutionProfile
+from qraft.run_inspection import RunInspector
+from qraft.workflows import WorkflowCompiler, load_run_lock, write_workflow_lock
 
 
 SJSTAT_FIXTURE = Path(__file__).parents[1] / "fixtures" / "slurm" / "yoltla_sjstat_c.txt"

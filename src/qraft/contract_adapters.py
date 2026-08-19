@@ -1,6 +1,6 @@
 """Compatibility adapters from current runtime models to core contracts.
 
-This module is intentionally outside :mod:`siestaflow.contracts`: dependency
+This module is intentionally outside :mod:`qraft.contracts`: dependency
 arrows point from integrations toward the engine-neutral contract kernel.
 """
 

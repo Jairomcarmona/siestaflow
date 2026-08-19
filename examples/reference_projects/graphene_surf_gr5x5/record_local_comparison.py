@@ -7,8 +7,8 @@ import argparse
 import json
 from pathlib import Path
 
-from siestaflow.local_execution import compare_run_summaries
-from siestaflow.project_packages import load_structured
+from qraft.local_execution import compare_run_summaries
+from qraft.project_packages import load_structured
 
 
 def main() -> int:

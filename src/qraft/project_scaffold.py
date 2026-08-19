@@ -464,7 +464,7 @@ def _generated_documents(
                     "AUTO_RESTART",
                 ],
                 "stop_on_review": True,
-                "issued_by": "SIESTAFLOW_PROJECT_INIT",
+                "issued_by": "QRAFT_PROJECT_INIT",
                 "valid_days": 30,
             }
         ),

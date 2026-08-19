@@ -576,7 +576,7 @@ class AllocationController:
             )
             destination.parent.mkdir(parents=True, exist_ok=True)
             evidence_relative = (
-                Path(".siestaflow")
+                Path(".qraft")
                 / "transfer_evidence"
                 / f"{index:04d}"
                 / PurePosixPath(transfer.destination).name

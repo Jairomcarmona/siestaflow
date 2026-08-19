@@ -1,6 +1,6 @@
 # Contributing
 
-SIESTAFLOW uses one Python codebase for editable development, user
+QRAFT uses one Python codebase for editable development, user
 distributions and generated HPC runtime packages. Read
 [`DEVELOPMENT_GOVERNANCE.md`](docs/developer/DEVELOPMENT_GOVERNANCE.md) before
 changing contracts, locks, runtime, MPI or scientific validation.
@@ -22,7 +22,7 @@ canonical JSON and JSON-compatible YAML do not.
 
 1. Start from a locally verified commit and create a short branch such as
    `docs/scope`, `fix/runtime` or `phase3/recovery`.
-2. Keep scientific inputs and project policy outside `src/siestaflow/`.
+2. Keep scientific inputs and project policy outside `src/qraft/`.
 3. Add focused tests for the behavior and compatibility affected.
 4. Update user and operational documentation with the same logical change.
 5. Inspect the complete diff and obtain independent review proportional to
@@ -59,7 +59,7 @@ inspects a clean wheel/sdist. Record missing external context as
   plan.
 
 Core-contract changes require contract tests and explicit compatibility.
-Modules in `src/siestaflow/contracts/` must not import engines, launchers,
+Modules in `src/qraft/contracts/` must not import engines, launchers,
 clusters, subprocesses, storage implementations or reference projects. Plugin
 registration is explicit during composition; import-time registry mutation is
 forbidden.

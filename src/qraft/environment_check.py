@@ -29,7 +29,7 @@ _RULES = (
     RuleDescriptor(
         "siestaflow.environment.python",
         ContractVersion(1, 0),
-        "Check the Python runtime required by SIESTAFLOW.",
+        "Check the Python runtime required by QRAFT.",
         EvidenceClass.RUNTIME_EVIDENCE,
         (FindingScope.EXECUTION,),
         ("local.environment",),
@@ -182,7 +182,7 @@ class EnvironmentChecker:
             hint=(
                 None
                 if supported
-                else "Activate Python 3.11 or newer before running SIESTAFLOW."
+                else "Activate Python 3.11 or newer before running QRAFT."
             ),
         )
 

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
-EVIDENCE_ROOT="$ROOT/.siestaflow-local-slurm"
+EVIDENCE_ROOT="$ROOT/.qraft-local-slurm"
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 RUN_DIR="$EVIDENCE_ROOT/$RUN_ID"
 mkdir -p "$RUN_DIR"
@@ -15,7 +15,7 @@ fi
 job_id="$(
     sbatch --parsable --wait \
         --chdir="$ROOT" \
-        --export=ALL,SIESTAFLOW_LOCAL_RUN_DIR="$RUN_DIR" \
+        --export=ALL,QRAFT_LOCAL_RUN_DIR="$RUN_DIR" \
         "$ROOT/integration/local_slurm/submit_acceptance.slurm"
 )"
 job_id="${job_id%%;*}"

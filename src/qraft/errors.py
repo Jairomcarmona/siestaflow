@@ -1,26 +1,26 @@
 """Typed errors used at kernel trust boundaries."""
 
 
-class SiestaFlowError(Exception):
+class QraftError(Exception):
     """Base class for expected kernel errors."""
 
 
-class PathSafetyError(SiestaFlowError):
+class PathSafetyError(QraftError):
     """An identifier or resolved path escaped its authorized root."""
 
 
-class AlreadyExistsError(SiestaFlowError):
+class AlreadyExistsError(QraftError):
     """A no-overwrite operation targeted an existing record."""
 
 
-class IntegrityError(SiestaFlowError):
+class IntegrityError(QraftError):
     """Persisted content is corrupt, inconsistent, or has a bad hash."""
 
 
-class AuthorizationError(SiestaFlowError):
+class AuthorizationError(QraftError):
     """An authorization envelope is invalid or cannot authorize a task."""
 
 
-class StateConflictError(SiestaFlowError):
+class StateConflictError(QraftError):
     """Materialized state does not agree with its append-only events."""
 

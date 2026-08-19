@@ -8,11 +8,11 @@ from pathlib import Path
 
 import pytest
 
-from siestaflow.cli import main
-from siestaflow.contracts import SCIENTIFIC_INTENT, WORKFLOW_DEFINITION, contract_catalog
-from siestaflow.execution.allocation_controller import AllocationController, ExecutionStatus
-from siestaflow.run_preparation import RunPreparationRequest, RunPreparer
-from siestaflow.workflow_authoring import (
+from qraft.cli import main
+from qraft.contracts import SCIENTIFIC_INTENT, WORKFLOW_DEFINITION, contract_catalog
+from qraft.execution.allocation_controller import AllocationController, ExecutionStatus
+from qraft.run_preparation import RunPreparationRequest, RunPreparer
+from qraft.workflow_authoring import (
     BAND_STRUCTURE_CAPABILITY,
     BAND_STRUCTURE_RECIPE,
     CONVERGE_THEN_RELAX_CAPABILITY,
@@ -35,9 +35,9 @@ from siestaflow.workflow_authoring import (
     STRUCTURAL_RELAXATION_RECIPE,
     WorkflowAuthoringService,
 )
-from siestaflow.scientific_convergence import evaluate_mesh_files
-from siestaflow.scientific_kgrid import evaluate_kgrid_files
-from siestaflow.workflows import WorkflowCompiler, write_workflow_lock
+from qraft.scientific_convergence import evaluate_mesh_files
+from qraft.scientific_kgrid import evaluate_kgrid_files
+from qraft.workflows import WorkflowCompiler, write_workflow_lock
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -511,7 +511,7 @@ def test_structural_relaxation_compiles_and_prepares_through_the_canonical_route
     assert prepared_task["kind"] == "siesta"
     assert prepared_task["required_artifacts"] == ["relax_local.XV"]
     assert set(prepared_task["input_destinations"].values()) >= {"relax.fdf", "C.psml"}
-    assert "runtime/siestaflow/execution/allocation_controller.py" in (package / "checksums.sha256").read_text(encoding="utf-8")
+    assert "runtime/qraft/execution/allocation_controller.py" in (package / "checksums.sha256").read_text(encoding="utf-8")
 
 
 def test_structural_relaxation_requires_explicit_cg_and_number_of_steps(tmp_path: Path) -> None:

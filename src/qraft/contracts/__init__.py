@@ -1,4 +1,4 @@
-"""Public, engine-neutral contracts for SIESTAFLOW extensions."""
+"""Public, engine-neutral contracts for QRAFT extensions."""
 
 from .artifacts import (
     ArtifactReference,

@@ -1,6 +1,6 @@
-# Managed by the SIESTAFlow local Slurm sandbox.
+# Managed by the QRAFT local Slurm sandbox.
 # This is a single-node integration profile, not a Yoltla configuration.
-ClusterName=siestaflow-local
+ClusterName=qraft-local
 SlurmctldHost=@HOSTNAME@
 
 SlurmUser=slurm

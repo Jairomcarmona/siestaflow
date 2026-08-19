@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from siestaflow.execution.adaptive_gate import (
+from qraft.execution.adaptive_gate import (
     consume_selection,
     main,
     select_metric,

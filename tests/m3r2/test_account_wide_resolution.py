@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from siestaflow.remote_environment import EnvironmentProbePackager
-from siestaflow.validation.scheduler_resolution import (
+from qraft.remote_environment import EnvironmentProbePackager
+from qraft.validation.scheduler_resolution import (
     AssociationScope,
     ResourceRequest,
     apply_human_selection,

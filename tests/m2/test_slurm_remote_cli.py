@@ -7,14 +7,14 @@ from pathlib import Path
 
 import pytest
 
-from siestaflow.remote import RemotePackager, RemoteResultImporter, create_synthetic_result_bundle
-from siestaflow.project_packages import ProjectPackageLoader
-from siestaflow.siesta_campaigns import SiestaCampaignFactory
-from siestaflow.slurm_renderer import SlurmProfile, SlurmRenderer
+from qraft.remote import RemotePackager, RemoteResultImporter, create_synthetic_result_bundle
+from qraft.project_packages import ProjectPackageLoader
+from qraft.siesta_campaigns import SiestaCampaignFactory
+from qraft.slurm_renderer import SlurmProfile, SlurmRenderer
 
 
 def test_slurm_preview_preserves_nulls_and_never_contains_submission_command():
-    result = SlurmRenderer().render(SlurmProfile(), job_name="test", worker_command="siestaflow worker")
+    result = SlurmRenderer().render(SlurmProfile(), job_name="test", worker_command="qraft worker")
     assert result.status.value == "PREVIEW_WITH_UNVERIFIED_PROFILE"
     assert "partition=null" in result.script
     assert "LAMMPS" not in result.script
@@ -79,7 +79,7 @@ def test_result_bundle_import_valid_tampered_and_incomplete(tmp_path: Path):
 def _run_cli(repo: Path, *args: str):
     env = os.environ.copy()
     env["PYTHONPATH"] = str(repo / "src")
-    return subprocess.run([sys.executable, "-m", "siestaflow.cli", *args], cwd=repo, env=env, capture_output=True, text=True, timeout=30)
+    return subprocess.run([sys.executable, "-m", "qraft.cli", *args], cwd=repo, env=env, capture_output=True, text=True, timeout=30)
 
 
 def test_cli_full_local_flow_and_dry_run(reference_package: Path, tmp_path: Path):

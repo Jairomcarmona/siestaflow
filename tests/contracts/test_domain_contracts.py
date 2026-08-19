@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from siestaflow.contracts import (
+from qraft.contracts import (
     ArtifactReference,
     ArtifactRole,
     DecisionStatus,

@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from siestaflow.authorization import AuthorizationEngine
-from siestaflow.engines.siesta.fdf_variants import FDFVariantGenerator, VariantAuthorization
-from siestaflow.engines.siesta.pseudopotentials import PseudopotentialEntry, PseudopotentialManifest, PseudopotentialVerifier
+from qraft.authorization import AuthorizationEngine
+from qraft.engines.siesta.fdf_variants import FDFVariantGenerator, VariantAuthorization
+from qraft.engines.siesta.pseudopotentials import PseudopotentialEntry, PseudopotentialManifest, PseudopotentialVerifier
 
 
 def _authorization(base: str, parameter: str, values: tuple[str, ...]):

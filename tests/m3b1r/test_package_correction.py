@@ -12,10 +12,10 @@ from pathlib import Path
 
 import pytest
 
-from siestaflow.real_smoke import RealSiestaSmokePackager, RealSmokeSpec
-from siestaflow.engines.siesta.models import OutputClassification
-from siestaflow.engines.siesta.output_parser import SiestaOutputParser
-from siestaflow.slurm_renderer import SlurmProfile
+from qraft.real_smoke import RealSiestaSmokePackager, RealSmokeSpec
+from qraft.engines.siesta.models import OutputClassification
+from qraft.engines.siesta.output_parser import SiestaOutputParser
+from qraft.slurm_renderer import SlurmProfile
 
 
 REPO = Path(__file__).resolve().parents[2]

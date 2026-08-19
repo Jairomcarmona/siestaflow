@@ -4,7 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from siestaflow.cli import main
+from qraft.cli import main
 
 from tests.validation_fixture import BASE_FDF
 

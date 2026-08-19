@@ -1,8 +1,8 @@
-# SIESTAFLOW Core Contracts 1.0
+# QRAFT Core Contracts 1.0
 
 Status: `IMPLEMENTED / INTERNAL ADOPTION IN PROGRESS`
 
-Software version and contract version are independent. SIESTAFLOW remains
+Software version and contract version are independent. QRAFT remains
 `0.2.0`; the first public extension boundary is `Core Contracts 1.0`.
 
 ## Purpose
@@ -18,10 +18,10 @@ orchestration services
       |
 engine, validator, launcher and postprocessing plugins
       |
-SIESTAFLOW CORE CONTRACTS 1.0
+QRAFT CORE CONTRACTS 1.0
 ```
 
-Dependency arrows point inward. Code under `siestaflow.contracts` must not
+Dependency arrows point inward. Code under `qraft.contracts` must not
 import an engine, launcher, cluster profile, reference project, subprocess, or
 storage implementation.
 
@@ -118,11 +118,11 @@ belong outside the kernel.
 
 ## Migration
 
-Current public imports from `siestaflow.models` remain valid. Their status
+Current public imports from `qraft.models` remain valid. Their status
 enums now originate in the contract kernel and are re-exported for
 compatibility.
 
-`siestaflow.contract_adapters` maps current:
+`qraft.contract_adapters` maps current:
 
 - SIESTA input-validation results to validation reports;
 - SIESTA artifact descriptors to artifact references;

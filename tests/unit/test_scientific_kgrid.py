@@ -5,7 +5,7 @@ from decimal import Decimal
 
 import pytest
 
-from siestaflow.scientific_kgrid import (
+from qraft.scientific_kgrid import (
     KGridConvergenceEvaluator,
     KGridConvergenceRule,
     KGridObservation,

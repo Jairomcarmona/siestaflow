@@ -6,7 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from siestaflow.execution.campaign_progress import (
+from qraft.execution.campaign_progress import (
     read_campaign_progress,
     render_campaign_progress,
 )
@@ -78,7 +78,7 @@ def test_progress_cli_supports_machine_and_human_output(tmp_path: Path):
         [
             sys.executable,
             "-m",
-            "siestaflow.cli",
+            "qraft.cli",
             "campaign",
             "progress",
             str(tmp_path),
@@ -95,7 +95,7 @@ def test_progress_cli_supports_machine_and_human_output(tmp_path: Path):
         [
             sys.executable,
             "-m",
-            "siestaflow.cli",
+            "qraft.cli",
             "campaign",
             "watch",
             str(tmp_path),

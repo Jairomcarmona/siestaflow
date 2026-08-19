@@ -10,7 +10,7 @@ SANDBOX = REPO / "integration" / "local_slurm"
 
 def test_slurm_template_is_explicitly_local_and_non_yoltla():
     content = (SANDBOX / "slurm.conf.in").read_text(encoding="utf-8")
-    assert "ClusterName=siestaflow-local" in content
+    assert "ClusterName=qraft-local" in content
     assert "PartitionName=local" in content
     assert "SlurmctldHost=@HOSTNAME@" in content
     assert "ncz[" not in content.casefold()
@@ -46,4 +46,4 @@ def test_workload_module_is_importable_and_payload_is_stable():
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    assert module.PAYLOAD == b"SIESTAFLOW_LOCAL_SLURM_PARENT_DM\n"
+    assert module.PAYLOAD == b"QRAFT_LOCAL_SLURM_PARENT_DM\n"

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from siestaflow.remote_environment import (
+from qraft.remote_environment import (
     EnvironmentProbePackager,
     EvidenceStatus,
     PROBE_ID,
@@ -20,7 +20,7 @@ from siestaflow.remote_environment import (
     create_environment_fixture_bundle,
     redact_environment,
 )
-from siestaflow.engines.siesta.pseudopotentials import PseudopotentialManifest
+from qraft.engines.siesta.pseudopotentials import PseudopotentialManifest
 
 
 REFERENCE_MANIFEST = Path(__file__).resolve().parents[2] / "examples" / "reference_projects" / "birnessite_mn_o" / "pseudopotentials" / "manifest.yaml"
@@ -165,7 +165,7 @@ def test_pending_profile_has_all_required_null_fields():
 def _run_cli(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env["PYTHONPATH"] = str(repo / "src")
-    return subprocess.run([sys.executable, "-m", "siestaflow.cli", *args], cwd=repo, env=env, capture_output=True, text=True, timeout=30)
+    return subprocess.run([sys.executable, "-m", "qraft.cli", *args], cwd=repo, env=env, capture_output=True, text=True, timeout=30)
 
 
 def test_cli_package_and_synthetic_import(tmp_path: Path):

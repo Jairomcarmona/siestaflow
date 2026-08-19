@@ -63,12 +63,12 @@ class SlurmEnvironment:
         node_list = str(env.get("SLURM_JOB_NODELIST", "")).strip() or None
         explicit_hosts = tuple(
             item.strip()
-            for item in str(env.get("SIESTAFLOW_HOSTS", "")).split(",")
+            for item in str(env.get("QRAFT_HOSTS", "")).split(",")
             if item.strip()
         )
         if explicit_hosts and (len(explicit_hosts) != nodes or len(set(explicit_hosts)) != nodes):
             raise ValueError(
-                "SIESTAFLOW_HOSTS must declare exactly one unique hostname per allocated node"
+                "QRAFT_HOSTS must declare exactly one unique hostname per allocated node"
             )
         return cls(
             job_id, submit_dir, end_time, total_cpus, nodes, ntasks,
@@ -96,7 +96,7 @@ class SlurmEnvironment:
             return self.declared_hostnames
         if not self.node_list_expression:
             raise ValueError(
-                "SLURM_JOB_NODELIST or explicit SIESTAFLOW_HOSTS is required "
+                "SLURM_JOB_NODELIST or explicit QRAFT_HOSTS is required "
                 "for a host-aware launcher"
             )
         result = subprocess.run(

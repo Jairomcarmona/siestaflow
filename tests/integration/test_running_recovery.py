@@ -1,5 +1,5 @@
-from siestaflow.models import CampaignState, EventRecord, TaskState, utc_now
-from siestaflow.storage import EventStore, StateStore
+from qraft.models import CampaignState, EventRecord, TaskState, utc_now
+from qraft.storage import EventStore, StateStore
 
 from .test_simulated_campaign import authorization, kernel
 
