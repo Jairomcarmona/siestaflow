@@ -63,6 +63,7 @@ def test_clean_extraction_passes_vendored_verifier(tmp_path: Path):
     assert completed.returncode == 0, completed.stderr
     assert "M4_PACKAGE_VERIFIED" in completed.stdout
     assert "NO_LOGIN_PERSISTENT_PROCESS_REQUIRED" in completed.stdout
+    (root / "qraft.out").write_text("derived campaign evidence\n", encoding="utf-8")
     repeated = subprocess.run([sys.executable, "verify_package.py"], cwd=root, capture_output=True, text=True)
     assert repeated.returncode == 0, repeated.stderr
 

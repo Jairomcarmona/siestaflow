@@ -63,6 +63,11 @@ class ControllerPackageBuilder:
         "src/qraft/execution/srun_launcher.py",
         "src/qraft/engines/siesta/models.py",
         "src/qraft/engines/siesta/output_parser.py",
+        "src/qraft/output/__init__.py",
+        "src/qraft/output/contributor.py",
+        "src/qraft/output/csv_exporter.py",
+        "src/qraft/output/model.py",
+        "src/qraft/output/text_writer.py",
     )
 
     def __init__(self, repository_root: Path) -> None:
@@ -184,7 +189,9 @@ class ControllerPackageBuilder:
             target = relative.removeprefix("src/")
             files[f"runtime/{target}"] = source.read_bytes()
         files.update({
-            "runtime/qraft/__init__.py": b'"""Vendored QRAFT runtime."""\n',
+            "runtime/qraft/__init__.py": (
+                self.repository_root / "src/qraft/__init__.py"
+            ).read_bytes(),
             "runtime/qraft/execution/__init__.py": b"",
             "runtime/qraft/engines/__init__.py": b"",
             "runtime/qraft/engines/siesta/__init__.py": b"",
@@ -394,7 +401,7 @@ for line in (root/"checksums.sha256").read_text(encoding="utf-8").splitlines():
  seen.add(name); target=root.joinpath(*PurePosixPath(name).parts)
  if not target.is_file() or hashlib.sha256(target.read_bytes()).hexdigest()!=expected: fail("CHECKSUM_MISMATCH",name)
 mutable={{"state","work","results","evidence"}}
-actual={{p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file() and p.relative_to(root).parts[0] not in mutable and not p.name.startswith(("OUT.","ERROR."))}}
+actual={{p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file() and p.name!="qraft.out" and p.relative_to(root).parts[0] not in mutable and not p.name.startswith(("OUT.","ERROR."))}}
 if actual != seen|{{"checksums.sha256"}}: fail("CHECKSUM_COVERAGE_MISMATCH",str(sorted(actual^(seen|{{"checksums.sha256"}}))))
 sys.path.insert(0,str(root/"runtime"))
 from qraft.execution.allocation_controller import load_controller_config

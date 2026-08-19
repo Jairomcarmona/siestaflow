@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import shutil
+import socket
 import threading
 import time
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
@@ -14,8 +15,10 @@ from enum import Enum
 from pathlib import Path, PurePosixPath
 from typing import Any, Mapping
 
+from .. import __version__ as QRAFT_VERSION
 from ..engines.siesta.output_parser import SiestaOutputParser
 from ..project_packages import load_structured
+from ..output import DagEntry, NodeEntry, OutputMessage, OutputModel, QraftOutputWriter
 from .direct_launcher import DirectLauncher
 from .hydra_launcher import HydraLauncher
 from .slurm_environment import ShutdownRequest, SignalHandlers, SlurmEnvironment
@@ -427,6 +430,7 @@ class AllocationController:
         self.state_path = self.root / "state" / "campaign_state.json"
         self.events_path = self.root / "evidence" / "events.jsonl"
         self.summary_path = self.root / "results" / "campaign_summary.json"
+        self.output_writer = QraftOutputWriter(self.root / "qraft.out")
         self._state_lock = threading.Lock()
         self._state: dict[str, Any] = {}
         self._allocated_hosts: tuple[str, ...] = ()
@@ -517,6 +521,135 @@ class AllocationController:
             handle.flush()
             os.fsync(handle.fileno())
 
+    def _render_output(self, operation: str, callback: Any) -> None:
+        try:
+            callback()
+        except Exception as exc:  # Derived human output cannot invalidate evidence.
+            self._event(
+                "OUTPUT_CORE_FAILURE",
+                operation=operation,
+                error=f"{type(exc).__name__}: {exc}",
+            )
+
+    def _start_output_model(self) -> OutputModel:
+        statuses = self._state.get("tasks", {}) if self._state else {}
+        return OutputModel(
+            header={
+                "Version": QRAFT_VERSION,
+                "Started": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+                "Campaign": self.config.system_id,
+                "Campaign ID": self.config.campaign_id,
+                "Root": str(self.root),
+                "Host": socket.gethostname(),
+                "SLURM Job": self.slurm.job_id,
+                "Partition": os.environ.get("SLURM_JOB_PARTITION"),
+                "Nodes": self.config.nodes,
+                "MPI ranks": self.slurm.ntasks,
+                "Launcher": self.config.launcher_kind,
+                "Engine": "SIESTA",
+                "Engine version": "runtime-resolved",
+            },
+            configuration={
+                "engine": "siesta",
+                "protocol": "allocation_controller",
+                "working root": str(self.root),
+                "nodes": self.config.nodes,
+                "mpi ranks": self.slurm.ntasks,
+                "launcher": self.config.launcher_kind,
+                "executable": self.config.siesta_executable,
+                "max parallel steps": self.config.max_parallel_steps,
+            },
+            dag=tuple(
+                DagEntry(
+                    task.task_id,
+                    task.task_kind,
+                    str(statuses.get(task.task_id, {}).get("status", "PENDING")),
+                    task.depends_on,
+                )
+                for task in self.config.tasks
+            ),
+            paths={
+                "QRAFT output": str(self.output_writer.path),
+                "State": str(self.state_path),
+                "Evidence": str(self.events_path),
+            },
+        )
+
+    def _task_output_model(
+        self, task_id: str, status: ExecutionStatus, reason: str
+    ) -> OutputModel:
+        task = next(item for item in self.config.tasks if item.task_id == task_id)
+        current = self._task_state(task_id)
+        attempt_id = current.get("last_attempt")
+        attempt = self._attempt_path(task_id, str(attempt_id)) if attempt_id else None
+        messages: tuple[OutputMessage, ...] = ()
+        if status in {
+            ExecutionStatus.FAILED,
+            ExecutionStatus.BLOCKED,
+            ExecutionStatus.INCOMPLETE,
+            ExecutionStatus.INTERRUPTED,
+            ExecutionStatus.CANCELLED,
+        }:
+            severity = (
+                "ERROR" if status is ExecutionStatus.FAILED
+                else "BLOCKED" if status is ExecutionStatus.BLOCKED
+                else "REVIEW_REQUIRED"
+            )
+            messages = (OutputMessage(
+                severity,
+                reason,
+                code=status.value,
+                node_id=task_id,
+                attempt_id=str(attempt_id) if attempt_id else None,
+                paths={
+                    "workdir": str(attempt) if attempt else str(self.root / "work" / task_id),
+                    "stdout": str(attempt / "stdout.txt") if attempt else "not-created",
+                    "stderr": str(attempt / "stderr.txt") if attempt else "not-created",
+                    "evidence": str(attempt / "result_manifest.json") if attempt else "not-created",
+                },
+                details={
+                    "Technical state": status.value,
+                    "DAG action": (
+                        "DEPENDENTS WILL BE BLOCKED"
+                        if status is ExecutionStatus.FAILED
+                        else "NODE WILL NOT RUN"
+                        if status in {ExecutionStatus.BLOCKED, ExecutionStatus.CANCELLED}
+                        else "ELIGIBLE FOR RECOVERY"
+                    ),
+                },
+            ),)
+        return OutputModel(
+            nodes=(NodeEntry(
+                node_id=task_id,
+                node_type=task.task_kind,
+                status=status.value,
+                attempt_id=str(attempt_id) if attempt_id else None,
+                workdir=str(attempt) if attempt else str(self.root / "work" / task_id),
+                input_path=str(
+                    attempt / task.input_destinations[task.input_path]
+                    if attempt else self.root / task.input_path
+                ),
+                stdout_path=str(attempt / "stdout.txt") if attempt else None,
+                stderr_path=str(attempt / "stderr.txt") if attempt else None,
+                evidence_path=str(attempt / "result_manifest.json") if attempt else None,
+                resources={
+                    "Nodes": task.nodes,
+                    "MPI ranks": task.mpi_processes,
+                    "CPUs/rank": task.cpus_per_process,
+                    "Reason": reason,
+                },
+                depends_on=task.depends_on,
+            ),),
+            metrics={
+                "Technical validation": (
+                    "PASS" if status is ExecutionStatus.COMPLETED
+                    else "FAIL" if status is ExecutionStatus.FAILED
+                    else status.value
+                )
+            },
+            messages=messages,
+        )
+
     def _task_state(self, task_id: str) -> dict[str, Any]:
         return self._state["tasks"][task_id]
 
@@ -526,6 +659,12 @@ class AllocationController:
         current.update({"status": status.value, "reason": reason, **fields})
         self._event("TASK_STATE", task_id=task_id, previous=previous, status=status.value, reason=reason)
         self._save_state()
+        self._render_output(
+            "task_state",
+            lambda: self.output_writer.append(
+                "NODE STATE", self._task_output_model(task_id, status, reason)
+            ),
+        )
 
     def _attempt_path(self, task_id: str, attempt_id: str) -> Path:
         return self.root / "work" / task_id / attempt_id
@@ -1015,19 +1154,81 @@ class AllocationController:
         self._atomic_json(self.summary_path, summary)
 
     def run(self, *, install_signal_handlers: bool = True) -> ExecutionStatus:
+        run_started = time.monotonic()
         self.root.mkdir(parents=True, exist_ok=True)
-        self.slurm.validate_capacity(nodes=self.config.nodes, total_cpus=self.config.total_cpus)
-        if self.config.launcher_kind == "hydra":
-            self._allocated_hosts = self.slurm.resolve_hostnames()
-            if len(self._allocated_hosts) != self.config.nodes:
-                raise ValueError(
-                    "configured campaign nodes must equal the resolved Hydra allocation"
+        try:
+            self.slurm.validate_capacity(nodes=self.config.nodes, total_cpus=self.config.total_cpus)
+            if self.config.launcher_kind == "hydra":
+                self._allocated_hosts = self.slurm.resolve_hostnames()
+                if len(self._allocated_hosts) != self.config.nodes:
+                    raise ValueError(
+                        "configured campaign nodes must equal the resolved Hydra allocation"
+                    )
+        except Exception as exc:
+            if not self.output_writer.exists:
+                self._render_output(
+                    "initialize", lambda: self.output_writer.initialize(self._start_output_model())
                 )
-        if self.state_path.is_file():
+            self._render_output(
+                "controller_blocked",
+                lambda: self.output_writer.append(
+                    "CONTROLLER BLOCKED",
+                    OutputModel(messages=(OutputMessage(
+                        "BLOCKED",
+                        f"{type(exc).__name__}: {exc}",
+                        code="ALLOCATION_VALIDATION",
+                        paths={"root": str(self.root), "evidence": str(self.events_path)},
+                        details={
+                            "Technical state": "NOT_STARTED",
+                            "DAG action": "ALL NODES BLOCKED BEFORE LAUNCH",
+                        },
+                    ),)),
+                ),
+            )
+            self._render_output(
+                "summary",
+                lambda: self.output_writer.finish({
+                    "Campaign status": "BLOCKED",
+                    "Nodes total": len(self.config.tasks),
+                    "Validated": 0,
+                    "Failed": 0,
+                    "Blocked": len(self.config.tasks),
+                    "Pending": 0,
+                    "Elapsed time seconds": max(0.0, time.monotonic() - run_started),
+                    "Root": str(self.root),
+                    "QRAFT output": str(self.output_writer.path),
+                    "Evidence": str(self.events_path),
+                }),
+            )
+            raise
+        resumed = self.state_path.is_file()
+        if resumed:
             self._state = self._load_state()
         else:
             self._state = self._initial_state()
             self._save_state()
+        if not self.output_writer.exists:
+            self._render_output(
+                "initialize", lambda: self.output_writer.initialize(self._start_output_model())
+            )
+        if resumed:
+            reused = [
+                f"{task_id}:{item.get('last_attempt')}"
+                for task_id, item in self._state["tasks"].items()
+                if item.get("status") == ExecutionStatus.COMPLETED.value
+                and item.get("last_attempt")
+            ]
+            self._render_output(
+                "recovery",
+                lambda: self.output_writer.append_recovery({
+                    "Controller epoch": len(self._state.get("allocation_history", [])) + 1,
+                    "Previous state": self._state.get("status"),
+                    "Previous job": self._state.get("current_job_id"),
+                    "Current job": self.slurm.job_id,
+                    "Validated attempts reused": ", ".join(reused) if reused else "none",
+                    "Action": "CAMPAIGN RESUMED",
+                }),
+            )
         self._recover()
         self._state["status"] = ExecutionStatus.RUNNING.value
         self._save_state()
@@ -1128,6 +1329,29 @@ class AllocationController:
         self._save_state()
         self._event("CONTROLLER_FINISHED", status=final.value)
         self._write_summary()
+        counts = {
+            status.value: sum(item["status"] == status.value for item in self._state["tasks"].values())
+            for status in ExecutionStatus
+        }
+        self._render_output(
+            "summary",
+            lambda: self.output_writer.finish({
+                "Campaign status": final.value,
+                "Nodes total": len(statuses),
+                "Validated": counts[ExecutionStatus.COMPLETED.value],
+                "Failed": counts[ExecutionStatus.FAILED.value],
+                "Blocked": counts[ExecutionStatus.BLOCKED.value],
+                "Pending": counts[ExecutionStatus.PENDING.value],
+                "Incomplete": counts[ExecutionStatus.INCOMPLETE.value],
+                "Interrupted": counts[ExecutionStatus.INTERRUPTED.value],
+                "Cancelled": counts[ExecutionStatus.CANCELLED.value],
+                "Elapsed time seconds": max(0.0, time.monotonic() - run_started),
+                "Root": str(self.root),
+                "QRAFT output": str(self.output_writer.path),
+                "Evidence": str(self.events_path.parent),
+                "Resume": f"qraft run resume {self.root}",
+            }),
+        )
         return final
 
 

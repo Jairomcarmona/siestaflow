@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import shutil
+import socket
 import subprocess
 import time
 import uuid
@@ -19,6 +20,7 @@ try:
 except ImportError:  # pragma: no cover - QRAFT requires Python >= 3.11.
     tomllib = None  # type: ignore[assignment]
 
+from .. import __version__ as QRAFT_VERSION
 from ..core import (
     Attempt,
     DAGNode,
@@ -35,6 +37,7 @@ from ..execution.hydra_launcher import HydraLauncher
 from ..execution.slurm_environment import SlurmEnvironment
 from ..execution.srun_launcher import SrunLauncher, StepLaunchSpec, StepOutcome
 from ..models import DecisionStatus
+from ..output import DagEntry, NodeEntry, OutputMessage, OutputModel, QraftOutputWriter
 
 
 DEFAULT_EXECUTION: dict[str, Any] = {
@@ -420,6 +423,69 @@ def _event(path: Path, event: str, **data: object) -> None:
         handle.write(json.dumps(payload, sort_keys=True, ensure_ascii=False) + "\n")
 
 
+def _output_warning(events: Path, operation: str, exc: Exception) -> None:
+    _event(
+        events,
+        "OUTPUT_CORE_FAILURE",
+        operation=operation,
+        error=f"{type(exc).__name__}: {exc}",
+    )
+
+
+def _render_output(events: Path, operation: str, callback: Any) -> None:
+    try:
+        callback()
+    except Exception as exc:  # Human output is derived and cannot invalidate science.
+        _output_warning(events, operation, exc)
+
+
+def _single_fdf_start_model(
+    plan: Mapping[str, Any], fdf: Path, runs_root: Path
+) -> OutputModel:
+    execution = plan["execution_spec"]
+    identity = plan["scientific_identity"]
+    return OutputModel(
+        header={
+            "Version": QRAFT_VERSION,
+            "Started": _utc_now(),
+            "Campaign": f"single_fdf:{fdf.stem}",
+            "Campaign ID": identity["fingerprint"][:16],
+            "Root": str(runs_root.resolve()),
+            "Host": socket.gethostname(),
+            "SLURM Job": os.environ.get("SLURM_JOB_ID"),
+            "Partition": execution["partition"],
+            "Nodes": execution["nodes"],
+            "MPI ranks": execution["mpi_ranks"],
+            "Launcher": execution["launcher"],
+            "Engine": "SIESTA",
+            "Engine version": "runtime-resolved",
+        },
+        configuration={
+            "engine": "siesta",
+            "input FDF": str(fdf.resolve()),
+            "protocol": "single_fdf",
+            "working root": str(runs_root.resolve()),
+            "partition": execution["partition"],
+            "nodes": execution["nodes"],
+            "mpi ranks": execution["mpi_ranks"],
+            "cpus/rank": execution["cpus_per_rank"],
+            "launcher": execution["launcher"],
+            "executable": execution["executable"],
+            "walltime seconds": execution["walltime_seconds"],
+        },
+        dag=tuple(
+            DagEntry(
+                item["node_id"],
+                item["kind"],
+                "READY" if not item["depends_on"] else "WAITING",
+                tuple(item["depends_on"]),
+            )
+            for item in plan["dag"]
+        ),
+        paths={"QRAFT output": str(runs_root.resolve() / "qraft.out")},
+    )
+
+
 def _validated_input(fdf: Path) -> tuple[bool, list[dict[str, str]]]:
     document = FDFParser().parse_path(fdf)
     result = SiestaInputValidator().validate(document)
@@ -575,14 +641,82 @@ def execute_fdf_plan(
     runs_root: Path = Path(".qraft-runs"),
     force_new_attempt: bool = False,
 ) -> dict[str, Any]:
-    plan = build_fdf_plan(
-        fdf,
-        pseudo_manifest=pseudo_manifest,
-        profile=profile,
-        project_config=project_config,
-        recipe=recipe,
-        overrides=overrides,
-    )
+    resolved_runs = runs_root.resolve()
+    events = resolved_runs / "events.jsonl"
+    output_writer = QraftOutputWriter(resolved_runs / "qraft.out")
+    try:
+        plan = build_fdf_plan(
+            fdf,
+            pseudo_manifest=pseudo_manifest,
+            profile=profile,
+            project_config=project_config,
+            recipe=recipe,
+            overrides=overrides,
+        )
+    except Exception as exc:
+        _event(
+            events,
+            "PLAN_BUILD_FAILED",
+            input_fdf=str(fdf.resolve()),
+            error=f"{type(exc).__name__}: {exc}",
+        )
+        if not output_writer.exists:
+            _render_output(
+                events,
+                "initialize",
+                lambda: output_writer.initialize(OutputModel(
+                    header={
+                        "Version": QRAFT_VERSION,
+                        "Started": _utc_now(),
+                        "Campaign": f"single_fdf:{fdf.stem}",
+                        "Root": str(resolved_runs),
+                        "Host": socket.gethostname(),
+                        "Engine": "SIESTA",
+                        "Engine version": "not-resolved",
+                    },
+                    configuration={
+                        "engine": "siesta",
+                        "input FDF": str(fdf.resolve()),
+                        "protocol": "single_fdf",
+                        "working root": str(resolved_runs),
+                    },
+                    paths={"QRAFT output": str(output_writer.path), "Evidence": str(events)},
+                )),
+            )
+        _render_output(
+            events,
+            "planning_failure",
+            lambda: output_writer.append(
+                "PLANNING FAILURE",
+                OutputModel(messages=(OutputMessage(
+                    "BLOCKED",
+                    f"{type(exc).__name__}: {exc}",
+                    code="PLAN_BUILD_FAILED",
+                    node_id="plan",
+                    paths={"input": str(fdf.resolve()), "evidence": str(events)},
+                    details={
+                        "Technical state": "NOT_STARTED",
+                        "DAG action": "EXECUTION BLOCKED BEFORE ATTEMPT",
+                    },
+                ),)),
+            ),
+        )
+        _render_output(
+            events,
+            "summary",
+            lambda: output_writer.finish({
+                "Campaign status": "BLOCKED",
+                "Nodes total": 0,
+                "Validated": 0,
+                "Failed": 0,
+                "Blocked": 1,
+                "Pending": 0,
+                "Root": str(resolved_runs),
+                "QRAFT output": str(output_writer.path),
+                "Evidence": str(events),
+            }),
+        )
+        raise
     scientific_fingerprint = plan["scientific_identity"]["fingerprint"]
     execution = ExecutionSpec(
         **{
@@ -592,15 +726,52 @@ def execute_fdf_plan(
             not in {"fingerprint", "ranks_per_node", "allocated_cpus"}
         }
     )
-    run_root = runs_root.resolve() / scientific_fingerprint
+    run_root = resolved_runs / scientific_fingerprint
+    if not output_writer.exists:
+        _render_output(
+            events,
+            "initialize",
+            lambda: output_writer.initialize(
+                _single_fdf_start_model(plan, fdf, resolved_runs)
+            ),
+        )
     reusable = None if force_new_attempt else _find_reusable_attempt(run_root, scientific_fingerprint)
     if reusable is not None:
-        return {"status": "REUSED_VALIDATED_ATTEMPT", "attempt": reusable, "plan": plan}
+        _render_output(
+            events,
+            "recovery",
+            lambda: output_writer.append_recovery({
+                "Node": "run_siesta",
+                "Attempt": reusable["attempt_id"],
+                "Action": "REUSED_VALIDATED_ATTEMPT",
+                "Result": "no SIESTA relaunch required",
+                "Evidence": str(run_root / reusable["attempt_id"] / "attempt.json"),
+            }),
+        )
+        _render_output(
+            events,
+            "summary",
+            lambda: output_writer.finish({
+                "Campaign status": "COMPLETED",
+                "Nodes total": 1,
+                "Validated": 1,
+                "Failed": 0,
+                "Root": str(run_root),
+                "QRAFT output": str(output_writer.path),
+                "Evidence": str(events),
+                "Resume": "validated attempt already reused",
+            }),
+        )
+        return {
+            "status": "REUSED_VALIDATED_ATTEMPT",
+            "attempt": reusable,
+            "plan": plan,
+            "qraft_output": str(output_writer.path),
+        }
 
     attempt_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ-") + uuid.uuid4().hex[:8]
     attempt_dir = run_root / attempt_id
     attempt_dir.mkdir(parents=True, exist_ok=False)
-    events = runs_root.resolve() / "events.jsonl"
     _event(
         events,
         "ATTEMPT_STARTED",
@@ -608,6 +779,30 @@ def execute_fdf_plan(
         attempt_id=attempt_id,
         scientific_identity_sha256=scientific_fingerprint,
         execution_spec_sha256=execution.fingerprint,
+    )
+    _render_output(
+        events,
+        "node_started",
+        lambda: output_writer.append(
+            "NODE START",
+            OutputModel(nodes=(NodeEntry(
+                node_id="run_siesta",
+                node_type="run_siesta",
+                attempt_id=attempt_id,
+                status="RUNNING",
+                workdir=str(attempt_dir),
+                input_path=str(fdf.resolve()),
+                stdout_path=str(attempt_dir / "stdout.txt"),
+                stderr_path=str(attempt_dir / "stderr.txt"),
+                evidence_path=str(attempt_dir / "attempt.json"),
+                resources={
+                    "Nodes": execution.nodes,
+                    "MPI ranks": execution.mpi_ranks,
+                    "CPUs/rank": execution.cpus_per_rank,
+                },
+                depends_on=("validate_input",),
+            ),)),
+        ),
     )
     _exclusive_json(attempt_dir / "plan.json", plan)
     started_at = _utc_now()
@@ -619,6 +814,7 @@ def execute_fdf_plan(
     stdout = attempt_dir / "stdout.txt"
     stderr = attempt_dir / "stderr.txt"
     outcome: StepOutcome | None = None
+    staged_fdf: Path | None = None
     launch_error: str | None = None
     try:
         staged_fdf = _stage_inputs(fdf, pseudo_manifest, attempt_dir)
@@ -709,4 +905,77 @@ def execute_fdf_plan(
         technical_status=technical.status,
         execution_state=attempt.result.execution_state,
     )
-    return {"status": "ATTEMPT_FINISHED", "attempt": attempt.to_dict(), "plan": plan}
+    messages = tuple(
+        OutputMessage(
+            "ERROR" if technical.status == "FAIL" else "REVIEW_REQUIRED",
+            reason,
+            code=reason.split(":", 1)[0],
+            node_id="run_siesta",
+            attempt_id=attempt_id,
+            paths={"stdout": str(stdout), "stderr": str(stderr), "evidence": str(attempt_manifest)},
+            details={
+                "Technical state": technical.status,
+                "DAG action": (
+                    "NODE VALIDATED"
+                    if technical.status == "PASS"
+                    else "CAMPAIGN FAILED; NODE NOT REUSABLE"
+                ),
+            },
+        )
+        for reason in technical.reasons
+    )
+    _render_output(
+        events,
+        "node_finished",
+        lambda: output_writer.append(
+            "NODE RESULT",
+            OutputModel(
+                nodes=(NodeEntry(
+                    node_id="run_siesta",
+                    node_type="run_siesta",
+                    attempt_id=attempt_id,
+                    status=technical.status,
+                    workdir=str(attempt_dir),
+                    input_path=str(staged_fdf or fdf.resolve()),
+                    stdout_path=str(stdout),
+                    stderr_path=str(stderr),
+                    evidence_path=str(attempt_manifest),
+                    resources={"MPI ranks": execution.mpi_ranks},
+                    depends_on=("validate_input",),
+                ),),
+                metrics={
+                    "exit_code": exit_code,
+                    "technical status": technical.status,
+                    "classification": technical.classification,
+                    "SCF started": technical.parser_summary.get("scf_started"),
+                    "SCF converged": technical.parser_summary.get("scf_converged"),
+                    "normal termination": technical.parser_summary.get("normal_termination"),
+                },
+                paths={"stdout": str(stdout), "stderr": str(stderr), "attempt manifest": str(attempt_manifest)},
+                messages=messages,
+                decisions={"scientific decision": attempt.result.scientific_decision.value},
+            ),
+        ),
+    )
+    _render_output(
+        events,
+        "summary",
+        lambda: output_writer.finish({
+            "Campaign status": "COMPLETED" if technical.status == "PASS" else "FAILED",
+            "Nodes total": 1,
+            "Validated": int(technical.status == "PASS"),
+            "Failed": int(technical.status != "PASS"),
+            "Blocked": 0,
+            "Pending": 0,
+            "Root": str(run_root),
+            "QRAFT output": str(output_writer.path),
+            "Evidence": str(events),
+            "Resume": f"qraft run {fdf.resolve()}",
+        }),
+    )
+    return {
+        "status": "ATTEMPT_FINISHED",
+        "attempt": attempt.to_dict(),
+        "plan": plan,
+        "qraft_output": str(output_writer.path),
+    }

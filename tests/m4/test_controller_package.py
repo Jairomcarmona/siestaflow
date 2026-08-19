@@ -102,6 +102,14 @@ def test_controller_package_is_reproducible_and_cleanly_verifies(tmp_path: Path)
     )
     assert result.returncode == 0, result.stderr
     assert "QRAFT_CONTROLLER_PACKAGE_VERIFIED" in result.stdout
+    (root / "qraft.out").write_text("derived campaign evidence\n", encoding="utf-8")
+    repeated = subprocess.run(
+        [sys.executable, "verify_package.py"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+    )
+    assert repeated.returncode == 0, repeated.stderr
     assert "mpiexec.hydra" in (root / "campaign.yaml").read_text()
     submit = (root / "submit.slurm").read_text()
     assert "QRAFT_SIESTA_MODULE_LOAD_WARNING" in submit

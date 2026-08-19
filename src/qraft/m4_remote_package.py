@@ -140,6 +140,11 @@ class M4RemoteSmokePackager:
             "runtime/qraft/execution/srun_launcher.py": base / "src/qraft/execution/srun_launcher.py",
             "runtime/qraft/engines/siesta/models.py": base / "src/qraft/engines/siesta/models.py",
             "runtime/qraft/engines/siesta/output_parser.py": base / "src/qraft/engines/siesta/output_parser.py",
+            "runtime/qraft/output/__init__.py": base / "src/qraft/output/__init__.py",
+            "runtime/qraft/output/contributor.py": base / "src/qraft/output/contributor.py",
+            "runtime/qraft/output/csv_exporter.py": base / "src/qraft/output/csv_exporter.py",
+            "runtime/qraft/output/model.py": base / "src/qraft/output/model.py",
+            "runtime/qraft/output/text_writer.py": base / "src/qraft/output/text_writer.py",
         }
         for source in sorted((base / "src/qraft/contracts").glob("*.py")):
             source_files[
@@ -147,7 +152,7 @@ class M4RemoteSmokePackager:
             ] = source
         files = {name: path.read_bytes() for name, path in source_files.items()}
         files.update({
-            "runtime/qraft/__init__.py": b'"""Vendored QRAFT M4 runtime."""\n',
+            "runtime/qraft/__init__.py": (base / "src/qraft/__init__.py").read_bytes(),
             "runtime/qraft/execution/__init__.py": b'"""Allocation-local execution runtime."""\n',
             "runtime/qraft/engines/__init__.py": b'"""Engine namespace."""\n',
             "runtime/qraft/engines/siesta/__init__.py": b'"""Minimal SIESTA parser runtime."""\n',
@@ -279,7 +284,7 @@ for line in (root/'checksums.sha256').read_text(encoding='utf-8').splitlines():
  seen.add(name); target=root.joinpath(*PurePosixPath(name).parts)
  if not target.is_file() or hashlib.sha256(target.read_bytes()).hexdigest()!=expected: fail('CHECKSUM_MISMATCH',name)
 mutable={'state','work','results','evidence'}
-actual={p.relative_to(root).as_posix() for p in root.rglob('*') if p.is_file() and p.relative_to(root).parts[0] not in mutable and not p.name.startswith('slurm-')}
+actual={p.relative_to(root).as_posix() for p in root.rglob('*') if p.is_file() and p.name!='qraft.out' and p.relative_to(root).parts[0] not in mutable and not p.name.startswith('slurm-')}
 if actual != seen|{'checksums.sha256'}: fail('CHECKSUM_COVERAGE_MISMATCH',str(sorted(actual^(seen|{'checksums.sha256'}))))
 if any(p.is_symlink() for p in root.rglob('*')): fail('PACKAGE_SYMLINK_FORBIDDEN')
 sys.path.insert(0,str(root/'runtime'))
