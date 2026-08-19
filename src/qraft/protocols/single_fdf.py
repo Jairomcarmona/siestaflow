@@ -46,19 +46,25 @@ from ..output import (
 
 
 DEFAULT_EXECUTION: dict[str, Any] = {
-    "partition": "default",
+    # ``local`` is a non-scheduler label used only for an explicitly selected
+    # direct launcher.  No SLURM partition is inferred by QRAFT.
+    "partition": "local",
     "nodes": 1,
     "mpi_ranks": 1,
     "cpus_per_rank": 1,
     "memory_mb": None,
-    "launcher": "srun",
-    "executable": "siesta",
     "walltime_seconds": 3600,
     "environment": {},
     "executable_arguments": [],
     "launcher_command": [],
     "launcher_arguments": [],
 }
+
+# Placement and executable selection are properties of a deployment, not of a
+# scientific FDF.  They must therefore enter via profile, project/recipe
+# configuration or an explicit CLI/REPL override.
+_REQUIRED_EXECUTION_FIELDS = ("partition", "launcher", "executable")
+_EXECUTION_FIELDS = frozenset((*DEFAULT_EXECUTION, *_REQUIRED_EXECUTION_FIELDS))
 
 SINGLE_FDF_DAG = (
     DAGNode("validate_input", "validate_input"),
@@ -129,7 +135,7 @@ def resolve_execution_spec(
 ) -> tuple[ExecutionSpec, dict[str, str]]:
     """Resolve defaults < profile < project < recipe < CLI overrides."""
 
-    allowed = set(DEFAULT_EXECUTION)
+    allowed = _EXECUTION_FIELDS
     resolved = dict(DEFAULT_EXECUTION)
     provenance = {key: "defaults" for key in resolved}
     layers = (
@@ -145,6 +151,18 @@ def resolve_execution_spec(
         for key, value in layer.items():
             resolved[key] = value
             provenance[key] = source
+    missing = [name for name in _REQUIRED_EXECUTION_FIELDS if not str(resolved.get(name, "")).strip()]
+    if missing:
+        if "launcher" in missing and int(resolved["mpi_ranks"]) > 1:
+            raise ValueError(
+                "MPI execution requested but no launcher is configured; "
+                "provide --launcher or an execution profile"
+            )
+        raise ValueError(
+            "execution configuration is incomplete; provide "
+            + ", ".join(missing)
+            + " through a profile, configuration file, or CLI override"
+        )
     for name in ("nodes", "mpi_ranks", "cpus_per_rank", "walltime_seconds"):
         value = resolved[name]
         if isinstance(value, bool):

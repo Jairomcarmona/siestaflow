@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 
 from .environment_inspection import EnvironmentInspector, EnvironmentReport, ProbeStatus
+from .engines.registry import engine_registry
 from .errors import PreflightError
 from .execution.adapters import launcher_registry
 from .execution_profiles import ExecutionProfile, ProfileStore
@@ -260,17 +261,29 @@ class QraftApplication:
             key: value for key, value in dict(command_overrides or {}).items()
             if value is not None
         })
-        spec, _ = resolve_execution_spec(
-            profile=profile.execution_layer() if profile else None,
-            project_config=self.configuration.project_config,
-            recipe=self.configuration.recipe,
-            overrides=overrides,
-        )
-        if profile:
-            profile.validate_spec(spec)
-        scheduler = (
-            profile.scheduler if profile else launcher_registry.require(spec.launcher).scheduler
-        )
+        configuration_error: str | None = None
+        try:
+            spec, _ = resolve_execution_spec(
+                profile=profile.execution_layer() if profile else None,
+                project_config=self.configuration.project_config,
+                recipe=self.configuration.recipe,
+                overrides=overrides,
+            )
+            if profile:
+                profile.validate_spec(spec)
+            executable = spec.executable
+            launcher = spec.launcher
+            scheduler = (
+                profile.scheduler if profile else launcher_registry.require(launcher).scheduler
+            )
+        except ValueError as exc:
+            # ``qraft env`` remains useful before a profile exists.  It probes
+            # the engine registry but marks the deployment configuration as
+            # incomplete; it never manufactures an ExecutionSpec.
+            configuration_error = str(exc)
+            executable = str(overrides.get("executable") or engine_registry.require(protocol.engine).default_executable)
+            launcher = str(overrides.get("launcher") or "direct")
+            scheduler = launcher_registry.require(launcher).scheduler
         config_paths = [*self.profile_store.search_roots]
         config_paths.extend(
             path for path in (self.configuration.project_config, self.configuration.recipe)
@@ -278,19 +291,23 @@ class QraftApplication:
         )
         return self.environment_inspector.inspect(
             engine_name=protocol.engine,
-            engine_executable=spec.executable,
-            launcher_name=spec.launcher,
-            launcher_command=spec.launcher_command,
+            engine_executable=executable,
+            launcher_name=launcher,
+            launcher_command=(
+                spec.launcher_command if configuration_error is None else ()
+            ),
             scheduler_name=scheduler,
             workspace=self.configuration.runs_root.resolve().parent,
             profile_name=(
                 profile.name if profile else
-                str(self.configuration.profile) if self.configuration.profile else None
+                str(self.configuration.profile) if self.configuration.profile else
+                ("execution configuration" if configuration_error else None)
             ),
-            profile_valid=profile_error is None,
+            profile_valid=profile_error is None and configuration_error is None,
             profile_detail=(
-                profile_error or str(profile.source)
+                profile_error or configuration_error or str(profile.source)
                 if profile and profile.source else profile_error
+                or configuration_error
             ),
             config_paths=config_paths,
         )

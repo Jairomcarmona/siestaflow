@@ -67,10 +67,16 @@ def test_identity_changes_only_for_scientific_inputs(tmp_path: Path) -> None:
 def test_execution_overrides_do_not_change_identity_or_dag(tmp_path: Path) -> None:
     fdf = inputs(tmp_path)
     first = build_fdf_plan(
-        fdf, overrides={"mpi_ranks": 4, "partition": "p4", "nodes": 1}
+        fdf, overrides={
+            "mpi_ranks": 4, "partition": "p4", "nodes": 1,
+            "launcher": "openmpi", "executable": "siesta",
+        }
     )
     second = build_fdf_plan(
-        fdf, overrides={"mpi_ranks": 8, "partition": "p8", "nodes": 2}
+        fdf, overrides={
+            "mpi_ranks": 8, "partition": "p8", "nodes": 2,
+            "launcher": "openmpi", "executable": "siesta",
+        }
     )
     assert first["scientific_identity"] == second["scientific_identity"]
     assert first["dag"] == second["dag"]
@@ -81,7 +87,10 @@ def test_configuration_precedence_and_invalid_resources(tmp_path: Path) -> None:
     profile = tmp_path / "profile.json"
     project = tmp_path / "project.json"
     recipe = tmp_path / "recipe.json"
-    profile.write_text(json.dumps({"execution": {"partition": "profile", "mpi_ranks": 2}}))
+    profile.write_text(json.dumps({"execution": {
+        "partition": "profile", "mpi_ranks": 2,
+        "launcher": "openmpi", "executable": "siesta",
+    }}))
     project.write_text(json.dumps({"execution": {"partition": "project", "mpi_ranks": 4}}))
     recipe.write_text(json.dumps({"execution": {"partition": "recipe", "mpi_ranks": 8}}))
     spec, provenance = resolve_execution_spec(
@@ -95,9 +104,9 @@ def test_configuration_precedence_and_invalid_resources(tmp_path: Path) -> None:
     assert provenance["partition"] == provenance["mpi_ranks"] == "cli"
 
     with pytest.raises(ValueError, match="positive integer"):
-        resolve_execution_spec(overrides={"mpi_ranks": 0})
+        resolve_execution_spec(overrides={"mpi_ranks": 0, "partition": "local", "launcher": "direct", "executable": "siesta"})
     with pytest.raises(ValueError, match="divisible"):
-        resolve_execution_spec(overrides={"mpi_ranks": 3, "nodes": 2})
+        resolve_execution_spec(overrides={"mpi_ranks": 3, "nodes": 2, "partition": "local", "launcher": "openmpi", "executable": "siesta"})
 
 
 def _outputs(root: Path, stdout_text: str, stderr_text: str = "") -> tuple[Path, Path]:
@@ -192,7 +201,8 @@ def test_practical_cli_plan_and_run(tmp_path: Path, capsys: pytest.CaptureFixtur
     fdf = inputs(tmp_path)
     assert main([
         "--workspace", "run", "plan", str(fdf), "--np", "4",
-        "--partition", "tt2d-4p", "--json",
+        "--partition", "tt2d-4p", "--launcher", "openmpi",
+        "--siesta", "siesta", "--json",
     ]) == 0
     plan = json.loads(capsys.readouterr().out)
     assert plan["execution_spec"]["mpi_ranks"] == 4
@@ -231,13 +241,13 @@ def test_active_slurm_capacity_and_partition_fail_closed(
     monkeypatch.setenv("SLURM_CPUS_PER_TASK", "1")
     monkeypatch.setenv("SLURM_NNODES", "1")
     execution, _ = resolve_execution_spec(
-        overrides={"partition": "p4", "mpi_ranks": 8, "launcher": "srun"}
+        overrides={"partition": "p4", "mpi_ranks": 8, "launcher": "srun", "executable": "siesta"}
     )
     with pytest.raises(ValueError, match="exceed allocation"):
         single_fdf._launch(execution, spec)
 
     partition_mismatch, _ = resolve_execution_spec(
-        overrides={"partition": "other", "mpi_ranks": 4, "launcher": "srun"}
+        overrides={"partition": "other", "mpi_ranks": 4, "launcher": "srun", "executable": "siesta"}
     )
     with pytest.raises(ValueError, match="partition does not match"):
         single_fdf._launch(partition_mismatch, spec)

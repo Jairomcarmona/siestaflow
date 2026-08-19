@@ -60,13 +60,17 @@ professional human-readable campaign view and CSV files are derived views.
 - installed mode as the normal deployment path;
 - standalone controller bundles as a deployment fallback.
 
-Historical and experimental workflow commands remain available but are not all
-part of the stable CLI surface. See [the quickstart](docs/user/quickstart.md),
-[CLI contract](docs/user/cli.md), [profiles](docs/user/profiles.md), and
-[release checklist](docs/developer/RELEASE_CHECKLIST.md).
+The installed public CLI is `env`, `config`, `profile`, `validate`, `plan`,
+`run`, `status`, `resume`, and the interactive `qraft>` shell. Historical and
+experimental commands are retained for checked-out project workflows but are
+not part of the installed product surface.
 
-The broader historical command surface remains documented in the
-[user manual](docs/user/USER_MANUAL.md) and
-[CLI reference](docs/user/CLI_REFERENCE.md). Cluster-specific operational
-history, including Yoltla, is documentation rather than core policy and remains
-in the [Yoltla runbook](docs/operations/YOLTLA_RUNBOOK.md).
+Distribution documentation is available from the repository rather than from
+paths assumed to exist beside an installed wheel: [quick start](https://github.com/Jairomcarmona/siestaflow/blob/main/docs/user/QUICK_START.md),
+[profiles](https://github.com/Jairomcarmona/siestaflow/blob/main/docs/user/profiles.md),
+[`docs/user/CLI_REFERENCE.md`](https://github.com/Jairomcarmona/siestaflow/blob/main/docs/user/CLI_REFERENCE.md),
+and the [release checklist](https://github.com/Jairomcarmona/siestaflow/blob/main/docs/developer/RELEASE_CHECKLIST.md).
+
+Historical material remains available by stable repository URL, including
+[`docs/user/USER_MANUAL.md`](https://github.com/Jairomcarmona/siestaflow/blob/main/docs/user/USER_MANUAL.md)
+and the [`docs/operations/YOLTLA_RUNBOOK.md`](https://github.com/Jairomcarmona/siestaflow/blob/main/docs/operations/YOLTLA_RUNBOOK.md).

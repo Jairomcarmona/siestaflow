@@ -53,6 +53,7 @@ class ControllerPackageBuilder:
     """Vendor the tested runtime around an already materialized campaign."""
 
     RUNTIME_FILES = (
+        "src/qraft/version.py",
         "src/qraft/models.py",
         "src/qraft/project_packages.py",
         "src/qraft/execution/allocation_controller.py",

@@ -128,6 +128,7 @@ class M4RemoteSmokePackager:
     def _files(self, profile: Mapping[str, Any], campaign: Mapping[str, Any]) -> dict[str, bytes]:
         base = self.repository_root
         source_files = {
+            "runtime/qraft/version.py": base / "src/qraft/version.py",
             "input/smoke.fdf": base / "remote_validation/M3B1_SURF_GR5X5_REAL_SIESTA_SMOKE/input/smoke.fdf",
             "pseudopotentials/C.psml": base / "examples/reference_projects/graphene_surf_gr5x5/pseudopotentials/C.psml",
             "geometry/SURF_Gr5x5_clean_v01.xyz": base / "examples/reference_projects/graphene_surf_gr5x5/systems/SURF_Gr5x5_clean_v01.xyz",

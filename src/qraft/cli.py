@@ -18,7 +18,6 @@ from .engines.siesta.models import FDFBlock, FDFInclude, FDFScalar, FDFUnknown
 from .engines.siesta.pseudopotentials import PseudopotentialManifest, PseudopotentialVerifier
 from .engines.siesta.validation_catalog import SiestaValidationCatalog
 from .engines.siesta.validation_profile import SiestaValidationProfile
-from .environment_check import EnvironmentChecker, EnvironmentCheckRequest
 from .errors import QraftError
 from .examples import ExampleRegistry, ExampleService
 from .models import AuthorizationEnvelope, CampaignManifest, TaskSpec, primitive
@@ -73,10 +72,6 @@ from .environment_inspection import render_environment
 from .execution.adapters import launcher_registry
 
 
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[2]
-
-
 def _add_single_fdf_arguments(command: argparse.ArgumentParser, *, execute: bool) -> None:
     command.add_argument("fdf", type=Path)
     command.add_argument("--pseudo-manifest", type=Path)
@@ -108,14 +103,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="qraft", description="SIESTA preparation, allocation-local execution, and evidence handling")
     parser.add_argument("--version", action="version", version=f"QRAFT {__version__}")
     parser.add_argument("--workspace", type=Path, default=Path(".qraft-work"))
-    parser.add_argument("--examples-root", type=Path, default=_repo_root() / "examples")
+    parser.add_argument("--examples-root", type=Path, default=Path("examples"), help=argparse.SUPPRESS)
     sub = parser.add_subparsers(
         dest="domain",
         required=True,
-        metavar=(
-            "{env,config,profile,validate,plan,run,status,resume,project,fdf,"
-            "input,environment,pseudo,campaign,workflow,scientific,results,examples,remote}"
-        ),
+        metavar="{env,config,profile,validate,plan,run,status,resume}",
     )
 
     def add_resolution_options(command: argparse.ArgumentParser) -> None:
@@ -167,7 +159,7 @@ def build_parser() -> argparse.ArgumentParser:
     single_run = sub.add_parser("_fdf-run", prog="qraft run")
     _add_single_fdf_arguments(single_run, execute=True)
 
-    project = sub.add_parser("project")
+    project = sub.add_parser("project", help=None)
     project_sub = project.add_subparsers(dest="action", required=True)
     project_init = project_sub.add_parser(
         "init",
@@ -191,13 +183,13 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("path", type=Path)
         command.add_argument("--json", action="store_true")
 
-    fdf = sub.add_parser("fdf")
+    fdf = sub.add_parser("fdf", help=None)
     fdf_sub = fdf.add_subparsers(dest="action", required=True)
     fdf_inspect = fdf_sub.add_parser("inspect")
     fdf_inspect.add_argument("path", type=Path)
     fdf_inspect.add_argument("--json", action="store_true")
 
-    inp = sub.add_parser("input")
+    inp = sub.add_parser("input", help=None)
     inp_sub = inp.add_subparsers(dest="action", required=True)
     inp_validate = inp_sub.add_parser("validate")
     inp_validate.add_argument("path", type=Path)
@@ -228,7 +220,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     environment = sub.add_parser(
         "environment",
-        help="inspect local SIESTA, launcher, Slurm and workspace capabilities",
+        help=None,
     )
     environment_sub = environment.add_subparsers(dest="action", required=True)
     environment_check = environment_sub.add_parser("check")
@@ -246,14 +238,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     environment_check.add_argument("--json", action="store_true")
 
-    pseudo = sub.add_parser("pseudo")
+    pseudo = sub.add_parser("pseudo", help=None)
     pseudo_sub = pseudo.add_subparsers(dest="action", required=True)
     pseudo_verify = pseudo_sub.add_parser("verify")
     pseudo_verify.add_argument("manifest", type=Path)
     pseudo_verify.add_argument("--species", nargs="*")
     pseudo_verify.add_argument("--json", action="store_true")
 
-    campaign = sub.add_parser("campaign")
+    campaign = sub.add_parser("campaign", help=None)
     campaign_sub = campaign.add_subparsers(dest="action", required=True)
     create = campaign_sub.add_parser("create")
     create.add_argument("--project", type=Path, required=True)
@@ -281,9 +273,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     watch.add_argument("--json", action="store_true")
 
-    workflow = sub.add_parser(
-        "workflow", help="validate and compile scientific workflow DAGs"
-    )
+    workflow = sub.add_parser("workflow", help=None)
     workflow_sub = workflow.add_subparsers(dest="action", required=True)
     workflow_recipes = workflow_sub.add_parser(
         "recipes", help="list registered workflow recipes"
@@ -346,9 +336,7 @@ def build_parser() -> argparse.ArgumentParser:
     workflow_compile.add_argument("--dry-run", action="store_true")
     workflow_compile.add_argument("--json", action="store_true")
 
-    scientific = sub.add_parser(
-        "scientific", help="persist explicit human scientific decisions and approved profiles"
-    )
+    scientific = sub.add_parser("scientific", help=None)
     scientific_sub = scientific.add_subparsers(dest="action", required=True)
     scientific_decide = scientific_sub.add_parser(
         "decide", help="record APPROVE or REJECT for reviewed convergence evidence"
@@ -435,9 +423,7 @@ def build_parser() -> argparse.ArgumentParser:
             )
         command.add_argument("--json", action="store_true")
 
-    results = sub.add_parser(
-        "results", help="export hash-bound numerical results from completed prepared runs"
-    )
+    results = sub.add_parser("results", help=None)
     results_sub = results.add_subparsers(dest="action", required=True)
     dos_pdos = results_sub.add_parser(
         "dos-pdos", help="export total DOS table and PDOS provenance without interpretation"
@@ -457,7 +443,7 @@ def build_parser() -> argparse.ArgumentParser:
     optics.add_argument("package", type=Path); optics.add_argument("--output", type=Path, required=True)
     optics.add_argument("--dry-run", action="store_true"); optics.add_argument("--json", action="store_true")
 
-    examples = sub.add_parser("examples")
+    examples = sub.add_parser("examples", help=None)
     example_sub = examples.add_subparsers(dest="action", required=True)
     example_sub.add_parser("list").add_argument("--json", action="store_true")
     for action in ("inspect", "validate"):
@@ -480,7 +466,7 @@ def build_parser() -> argparse.ArgumentParser:
     example_import.add_argument("--output", type=Path, required=True); example_import.add_argument("--dry-run", action="store_true")
     example_import.add_argument("--json", action="store_true")
 
-    remote = sub.add_parser("remote")
+    remote = sub.add_parser("remote", help=None)
     remote_sub = remote.add_subparsers(dest="action", required=True)
     package = remote_sub.add_parser("package")
     package.add_argument("campaign"); package.add_argument("--output", type=Path)
@@ -512,6 +498,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="optional explicit destination for an accepted external cluster profile",
     )
     env_import.add_argument("--dry-run", action="store_true"); env_import.add_argument("--json", action="store_true")
+    # Keep compatibility parsers addressable without advertising them as part
+    # of the installed product contract.  argparse stores help-only pseudo
+    # actions separately from the parsers used for actual dispatch.
+    legacy_domains = {
+        "project", "fdf", "input", "environment", "pseudo", "campaign",
+        "workflow", "scientific", "results", "examples", "remote",
+    }
+    sub._choices_actions[:] = [
+        action for action in sub._choices_actions if action.dest not in legacy_domains
+    ]
     return parser
 
 
@@ -712,28 +708,30 @@ def _dispatch(args: argparse.Namespace) -> int:
             ), args.json)
         return 0
     if args.domain == "environment":
-        report = EnvironmentChecker().check(
-            EnvironmentCheckRequest(
-                siesta_executable=args.siesta,
-                launcher=args.launcher,
-                require_slurm=args.require_slurm,
-                working_directory=args.working_directory,
-            )
-        )
+        # Legacy spelling.  It intentionally delegates to the same installed
+        # environment inspector as ``qraft env`` rather than preserving a
+        # second public inspection contract.
+        launcher = None if args.launcher == "auto" else args.launcher
+        report = QraftApplication(ApplicationConfiguration(
+            runs_root=args.working_directory / ".qraft-runs",
+            overrides={
+                "executable": args.siesta,
+                **({"launcher": launcher} if launcher else {}),
+            },
+        )).environment()
+        payload = report.to_dict()
         if args.json:
-            _emit(report, True)
+            # Preserve the historical envelope while deriving every probe from
+            # the public inspector.  Existing automation can therefore migrate
+            # without QRAFT maintaining a second inspection implementation.
+            _emit({
+                "status": "PASS" if payload["result"] == "READY" else "BLOCKED",
+                "metadata": {"read_only": True, "job_submitted": False, "legacy": True},
+                "environment": payload,
+            }, True)
         else:
-            print(
-                render_validation_report(
-                    report,
-                    title="ENVIRONMENT CHECK",
-                )
-            )
-        return (
-            2
-            if report.status.value in {"FAIL", "BLOCKED"}
-            else 0
-        )
+            print(render_environment(report))
+        return 0 if payload["result"] == "READY" else 2
     if args.domain == "workflow":
         if args.action in {"recipes", "recipe", "create", "compose"}:
             service = WorkflowAuthoringService()
@@ -939,7 +937,7 @@ def _dispatch(args: argparse.Namespace) -> int:
                               "selection_status": "MANUAL_COMPATIBILITY_SELECTION_CONFIRMED", "selection_reason": "explicit human selection validated against snapshot and execution compatibility evidence", "human_confirmed": True,
                               "resolution_timestamp": utc_now(), "compatibility_evidence_sha256": sha256_file(args.compatibility_evidence), "task_placement_policy": "FULL_ALLOCATION_REMAP",
                               "pending_fields": []}
-            result = RunPreparer(_repo_root()).prepare(
+            result = RunPreparer(Path.cwd()).prepare(
                 RunPreparationRequest(
                     workflow_lock=args.workflow_lock,
                     source_root=args.source_root,
@@ -1161,11 +1159,11 @@ def _dispatch(args: argparse.Namespace) -> int:
         plan = RemotePackager().package(definition, campaign_dir / "input.fdf", output, pseudopotentials=pseudo, dry_run=args.dry_run)
         _emit(primitive(plan), args.json); return 0
     if args.domain == "remote" and args.action == "m4-package":
-        result = M4RemoteSmokePackager(_repo_root()).build(args.profile, args.output)
+        result = M4RemoteSmokePackager(Path.cwd()).build(args.profile, args.output)
         _emit(primitive(result), args.json)
         return 0
     if args.domain == "remote" and args.action == "controller-package":
-        result = ControllerPackageBuilder(_repo_root()).build(
+        result = ControllerPackageBuilder(Path.cwd()).build(
             args.campaign, args.output, dry_run=args.dry_run
         )
         _emit(primitive(result), args.json)
@@ -1176,7 +1174,7 @@ def _dispatch(args: argparse.Namespace) -> int:
         _emit(primitive(report), args.json); return 2 if report.status.value.endswith("INVALID") else 0
     if args.domain == "remote" and args.action == "environment":
         if args.environment_action == "package":
-            output = args.output or (_repo_root() / "remote_validation")
+            output = args.output or (args.workspace / "remote_validation")
             manifest = PseudopotentialManifest.load(args.pseudo_manifest) if args.pseudo_manifest else None
             requirements = {item.filename: item.sha256 for item in manifest.entries if item.sha256} if manifest else {}
             status_data = load_structured(args.status_labels).get("status_labels", {}) if args.status_labels else None
