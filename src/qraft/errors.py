@@ -24,3 +24,11 @@ class AuthorizationError(QraftError):
 class StateConflictError(QraftError):
     """Materialized state does not agree with its append-only events."""
 
+
+class PreflightError(QraftError):
+    """The installed environment cannot execute the resolved plan safely."""
+
+    def __init__(self, message: str, report: object | None = None) -> None:
+        super().__init__(message)
+        self.report = report
+

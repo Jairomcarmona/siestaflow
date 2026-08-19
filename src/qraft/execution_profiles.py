@@ -270,3 +270,20 @@ class ProfileStore:
 
     def load(self, reference: str | Path) -> ExecutionProfile:
         return ExecutionProfile.load(self.resolve(reference))
+
+    def list(self) -> tuple[dict[str, str], ...]:
+        """List discoverable profiles in effective project-before-user order."""
+        found: list[dict[str, str]] = []
+        seen: set[str] = set()
+        for scope, root in zip(("project", "user"), self.search_roots):
+            if not root.is_dir():
+                continue
+            for path in sorted(root.iterdir()):
+                if path.suffix.casefold() not in {".json", ".toml"}:
+                    continue
+                name = path.stem
+                if name in seen:
+                    continue
+                seen.add(name)
+                found.append({"name": name, "scope": scope, "path": str(path.resolve())})
+        return tuple(found)

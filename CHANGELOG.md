@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased — productization v1
+
+- Formalized wheel/sdist packaging and declared the previously implicit PyYAML
+  runtime dependency.
+- Added the public installed CLI surface: `--version`, `env`, `config`,
+  `profile`, `validate`, `status`, and `resume` alongside plan/run and REPL.
+- Added adapter-driven environment inspection and automatic lightweight
+  preflight before execution without requiring SIESTA, MPI, or SLURM at install
+  time.
+- Delimited the public Python API, documented installed and standalone modes,
+  and added user/release/compatibility guidance.
+- Marked hash-bound PSML inputs as non-text Git content so checkout line-ending
+  conversion cannot invalidate their audited byte identity.
+
 ## Unreleased — governance and roadmap
 
 - Added the Phase 4.1 canonical local adaptive-DAG slice: bounded materialized

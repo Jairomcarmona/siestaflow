@@ -5,14 +5,37 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "qraft"
 version = "0.2.0"
-description = "Declarative, evidence-oriented SIESTA campaign orchestrator"
+description = "Declarative, evidence-oriented orchestrator for scientific HPC campaigns"
+readme = "README.md"
 requires-python = ">=3.11"
+dependencies = [
+    "PyYAML>=6.0",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Science/Research",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Scientific/Engineering",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+release = ["build>=1.2"]
+dev = ["pytest>=8", "build>=1.2"]
+
+[project.urls]
+Repository = "https://github.com/Jairomcarmona/siestaflow"
+Documentation = "https://github.com/Jairomcarmona/siestaflow/tree/main/docs"
 
 [project.scripts]
 qraft = "qraft.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
+include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["src"]

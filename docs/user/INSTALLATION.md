@@ -1,12 +1,40 @@
 # Installation
 
-Requirements: Python 3.11+, a writable local workspace, and PowerShell or a POSIX shell for the shown commands. No SIESTA, MPI, SSH, or scheduler installation is needed for local tests.
+## Normal installed mode
 
-```powershell
-cd PATH_TO_QRAFT
-python -m pip install -e .
-python -m qraft.cli --help
-python -m pytest -q
+QRAFT requires Python 3.11+. SIESTA, MPI and a scheduler are external
+capabilities; their absence does not prevent package installation.
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install qraft-0.2.0-py3-none-any.whl
+qraft --version
+qraft --help
+qraft env
 ```
 
-Expected: installation succeeds, help exits `0`, and tests report no failures. Without installation, prefix commands with `$env:PYTHONPATH="src"` in PowerShell.
+The wheel is the official user path. A checkout and `PYTHONPATH` are not
+required. Cluster users install the wheel once in a venv or Python module; each
+campaign then carries scientific inputs/configuration and evidence, not a copy
+of `src/qraft`.
+
+## Development mode
+
+```bash
+git clone https://github.com/Jairomcarmona/siestaflow.git
+cd siestaflow
+python -m venv .venv
+source .venv/bin/activate
+pip install -e '.[dev]'
+```
+
+## Standalone fallback
+
+Historical controller packages remain supported for clusters where installing
+a wheel is impossible. They are a deployment fallback, not the normal user
+workflow. Never mix a standalone runtime copy with an installed runtime in the
+same campaign invocation.
+
+License and maintainer metadata are intentionally not guessed; see
+`docs/developer/TECH_DEBT.md` before a public registry release.

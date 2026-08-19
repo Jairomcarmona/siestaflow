@@ -9,7 +9,11 @@ from pathlib import Path
 from typing import Any, TextIO
 
 from . import __version__
-from .application import QraftApplication, render_plan
+from .application import (
+    QraftApplication, render_config, render_plan, render_preflight,
+)
+from .environment_inspection import render_environment
+from .errors import QraftError
 
 
 _BANNER = """============================================================
@@ -39,6 +43,10 @@ class QraftShell(cmd.Cmd):
 
     def _intro(self) -> str:
         state = self.application.show()
+        profile_hint = (
+            "Run 'env' to inspect this machine; select a profile only when needed."
+            if not state["profile"] else "Run 'env' and 'config' before execution."
+        )
         return "\n".join((
             _BANNER,
             f"Version : {__version__}",
@@ -46,6 +54,7 @@ class QraftShell(cmd.Cmd):
             f"Profile : {state['profile'] or 'none'}",
             f"Root    : {Path(state['runs_root']).resolve()}",
             "",
+            profile_hint,
             "Type 'help' for commands.",
         ))
 
@@ -55,7 +64,7 @@ class QraftShell(cmd.Cmd):
             self._history.append(clean)
         try:
             return bool(super().onecmd(line))
-        except (OSError, ValueError, RuntimeError, KeyError) as exc:
+        except (OSError, ValueError, RuntimeError, KeyError, QraftError) as exc:
             self.stdout.write(f"QRAFT_ERROR: {exc}\n")
             return False
 
@@ -123,11 +132,32 @@ class QraftShell(cmd.Cmd):
         self._setting("walltime", arg)
 
     def do_profile(self, arg: str) -> None:
-        """profile [NAME|PATH]: show or select an external execution profile."""
+        """profile [NAME|PATH|list|show|validate]: manage external execution profiles."""
         if not arg.strip():
             self.stdout.write(f"{self.application.show()['profile'] or 'none'}\n")
             return
-        self.application.set_value("profile", shlex.split(arg)[0])
+        tokens = shlex.split(arg)
+        action = tokens[0].casefold()
+        if action == "list":
+            self.stdout.write(json.dumps({"profiles": self.application.profiles()}, indent=2) + "\n")
+        elif action in {"show", "validate"}:
+            reference = tokens[1] if len(tokens) > 1 else None
+            self.stdout.write(json.dumps(self.application.profile(reference), indent=2) + "\n")
+        else:
+            self.application.set_value("profile", tokens[0])
+
+    def do_env(self, arg: str) -> None:
+        """env: inspect installed engine, scheduler, launcher and filesystem capabilities."""
+        self.stdout.write(render_environment(self.application.environment()) + "\n")
+
+    def do_config(self, arg: str) -> None:
+        """config: show the effective configuration and value provenance."""
+        self.stdout.write(render_config(self.application.config()) + "\n")
+
+    def do_validate(self, arg: str) -> None:
+        """validate [FDF] [KEY VALUE ...]: run the shared non-executing preflight."""
+        report = self.application.validate(command_overrides=self._inline(arg))
+        self.stdout.write(render_preflight(report) + "\n")
 
     def do_campaign(self, arg: str) -> None:
         """campaign [NAME]: show or label the active campaign."""
@@ -173,7 +203,10 @@ class QraftShell(cmd.Cmd):
         """run [FDF] [KEY VALUE ...]: execute through the shared QRAFT backend."""
         overrides = self._inline(arg)
         invocation = "qraft> run" + (f" {arg.strip()}" if arg.strip() else "")
-        result = self.application.run(command_overrides=overrides, invocation=invocation)
+        result = self.application.run(
+            command_overrides=overrides, invocation=invocation,
+            preflight_callback=lambda value: self.stdout.write(render_preflight(value) + "\n"),
+        )
         technical = (
             result.get("attempt", {}).get("result", {})
             .get("technical_validation", {}).get("status", result.get("status"))
@@ -187,7 +220,10 @@ class QraftShell(cmd.Cmd):
 
     def do_resume(self, arg: str) -> None:
         """resume: recover/reuse the active calculation through normal run semantics."""
-        result = self.application.run(invocation="qraft> resume")
+        result = self.application.run(
+            invocation="qraft> resume",
+            preflight_callback=lambda value: self.stdout.write(render_preflight(value) + "\n"),
+        )
         self.stdout.write(f"Status : {result['status']}\n")
 
     def do_dag(self, arg: str) -> None:

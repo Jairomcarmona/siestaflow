@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from . import __version__
 from .engines.siesta.fdf_parser import FDFParser
 from .engines.siesta.input_validator import SiestaInputValidator
 from .engines.siesta.models import FDFBlock, FDFInclude, FDFScalar, FDFUnknown
@@ -64,7 +65,11 @@ from .validation_render import render_validation_report
 from .workflow_preflight import WorkflowPreflightValidator
 from .workflow_authoring import WorkflowAuthoringService
 from .scientific_approvals import create_approved_profile, create_decision
-from .application import ApplicationConfiguration, QraftApplication, render_plan
+from .application import (
+    ApplicationConfiguration, QraftApplication, render_config, render_plan,
+    render_preflight,
+)
+from .environment_inspection import render_environment
 from .execution.adapters import launcher_registry
 
 
@@ -101,16 +106,59 @@ def _add_single_fdf_arguments(command: argparse.ArgumentParser, *, execute: bool
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="qraft", description="SIESTA preparation, allocation-local execution, and evidence handling")
+    parser.add_argument("--version", action="version", version=f"QRAFT {__version__}")
     parser.add_argument("--workspace", type=Path, default=Path(".qraft-work"))
     parser.add_argument("--examples-root", type=Path, default=_repo_root() / "examples")
     sub = parser.add_subparsers(
         dest="domain",
         required=True,
         metavar=(
-            "{plan,project,fdf,input,environment,pseudo,campaign,workflow,"
-            "scientific,run,results,examples,remote}"
+            "{env,config,profile,validate,plan,run,status,resume,project,fdf,"
+            "input,environment,pseudo,campaign,workflow,scientific,results,examples,remote}"
         ),
     )
+
+    def add_resolution_options(command: argparse.ArgumentParser) -> None:
+        command.add_argument("--profile")
+        command.add_argument("--project-config", type=Path)
+        command.add_argument("--recipe", type=Path)
+        command.add_argument("--partition")
+        command.add_argument("--nodes", type=int)
+        command.add_argument("--np", dest="mpi_ranks", type=int)
+        command.add_argument("--cpus-per-rank", type=int)
+        command.add_argument("--launcher", choices=launcher_registry.names())
+        command.add_argument("--siesta", dest="executable")
+        command.add_argument("--walltime-seconds", type=int)
+        command.add_argument("--json", action="store_true")
+
+    env = sub.add_parser("env", help="inspect installed execution capabilities")
+    add_resolution_options(env)
+    config = sub.add_parser("config", help="show effective execution configuration")
+    add_resolution_options(config)
+    validate = sub.add_parser("validate", help="validate one FDF and its execution preflight")
+    _add_single_fdf_arguments(validate, execute=False)
+    profiles = sub.add_parser("profile", help="list, show or validate execution profiles")
+    profile_sub = profiles.add_subparsers(dest="action", required=True)
+    profile_sub.add_parser("list").add_argument("--json", action="store_true")
+    for action in ("show", "validate"):
+        profile_command = profile_sub.add_parser(action)
+        profile_command.add_argument("reference", nargs="?")
+        profile_command.add_argument("--json", action="store_true")
+    status = sub.add_parser("status", help="inspect single-FDF campaign state")
+    status.add_argument("--runs-root", type=Path, default=Path(".qraft-runs"))
+    status.add_argument("--json", action="store_true")
+    resume = sub.add_parser("resume", help="resume the saved single-FDF session")
+    resume.add_argument("fdf", nargs="?", type=Path)
+    resume.add_argument("--profile")
+    resume.add_argument("--runs-root", type=Path, default=Path(".qraft-runs"))
+    resume.add_argument("--partition")
+    resume.add_argument("--nodes", type=int)
+    resume.add_argument("--np", dest="mpi_ranks", type=int)
+    resume.add_argument("--cpus-per-rank", type=int)
+    resume.add_argument("--launcher", choices=launcher_registry.names())
+    resume.add_argument("--siesta", dest="executable")
+    resume.add_argument("--walltime-seconds", type=int)
+    resume.add_argument("--json", action="store_true")
 
     single_plan = sub.add_parser(
         "plan", help="resolve an executable three-node plan from one FDF"
@@ -487,14 +535,14 @@ def main(argv: list[str] | None = None) -> int:
             domain_index += 1
             continue
         break
-    if (
-        domain_index < len(raw)
-        and raw[domain_index] == "run"
-        and domain_index + 1 < len(raw)
-        and raw[domain_index + 1] not in legacy_run_actions
-        and not raw[domain_index + 1].startswith("-")
-    ):
-        raw[domain_index] = "_fdf-run"
+    if domain_index < len(raw) and raw[domain_index] == "run":
+        following = raw[domain_index + 1] if domain_index + 1 < len(raw) else None
+        if (
+            following is None
+            or following in {"-h", "--help"}
+            or (following not in legacy_run_actions and not following.startswith("-"))
+        ):
+            raw[domain_index] = "_fdf-run"
     invocation = shlex.join(("qraft", *raw))
     args = build_parser().parse_args(raw)
     args._invocation = invocation
@@ -513,6 +561,90 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _dispatch(args: argparse.Namespace) -> int:
+    if args.domain in {"env", "config"}:
+        overrides = {
+            "partition": args.partition,
+            "nodes": args.nodes,
+            "mpi_ranks": args.mpi_ranks,
+            "cpus_per_rank": args.cpus_per_rank,
+            "launcher": args.launcher,
+            "executable": args.executable,
+            "walltime_seconds": args.walltime_seconds,
+        }
+        application = QraftApplication(ApplicationConfiguration(
+            profile=args.profile,
+            project_config=args.project_config,
+            recipe=args.recipe,
+        ))
+        if args.domain == "env":
+            report = application.environment(command_overrides=overrides)
+            _emit(report.to_dict(), True) if args.json else print(render_environment(report))
+        else:
+            config = application.config(command_overrides=overrides)
+            _emit(config, True) if args.json else print(render_config(config))
+        return 0
+    if args.domain == "profile":
+        application = QraftApplication()
+        if args.action == "list":
+            result: Any = {"profiles": application.profiles()}
+        else:
+            result = application.profile(args.reference)
+        _emit(result, args.json)
+        return 0
+    if args.domain == "status":
+        result = QraftApplication(ApplicationConfiguration(
+            runs_root=args.runs_root,
+        )).status()
+        _emit(result, args.json)
+        return 0
+    if args.domain == "resume":
+        overrides = {
+            "partition": args.partition,
+            "nodes": args.nodes,
+            "mpi_ranks": args.mpi_ranks,
+            "cpus_per_rank": args.cpus_per_rank,
+            "launcher": args.launcher,
+            "executable": args.executable,
+            "walltime_seconds": args.walltime_seconds,
+        }
+        application = (
+            QraftApplication(ApplicationConfiguration(
+                fdf=args.fdf, profile=args.profile, runs_root=args.runs_root,
+            ))
+            if args.fdf else QraftApplication.from_session(args.runs_root)
+        )
+        result = application.run(
+            command_overrides=overrides, invocation=getattr(args, "_invocation", None),
+            preflight_callback=(None if args.json else lambda value: print(render_preflight(value))),
+        )
+        _emit(result, args.json)
+        return (
+            0 if result["status"] == "REUSED_VALIDATED_ATTEMPT"
+            or result["attempt"]["result"]["technical_validation"]["status"] == "PASS"
+            else 3
+        )
+    if args.domain == "validate":
+        overrides = {
+            "partition": args.partition,
+            "nodes": args.nodes,
+            "mpi_ranks": args.mpi_ranks,
+            "cpus_per_rank": args.cpus_per_rank,
+            "memory_mb": args.memory_mb,
+            "launcher": args.launcher,
+            "executable": args.executable,
+            "executable_arguments": args.siesta_argument,
+            "walltime_seconds": args.walltime_seconds,
+            "launcher_command": args.launcher_command,
+            "launcher_arguments": args.launcher_argument,
+        }
+        application = QraftApplication(ApplicationConfiguration(
+            fdf=args.fdf, profile=args.profile,
+            pseudo_manifest=args.pseudo_manifest,
+            project_config=args.project_config, recipe=args.recipe,
+        ))
+        report = application.validate(command_overrides=overrides)
+        _emit(report, True) if args.json else print(render_preflight(report))
+        return 0 if report["status"] == "PASS" else 2
     if args.domain in {"plan", "_fdf-run"}:
         environment: dict[str, str] = {}
         for item in args.env:
@@ -553,6 +685,9 @@ def _dispatch(args: argparse.Namespace) -> int:
             command_overrides=overrides,
             force_new_attempt=args.force_new_attempt,
             invocation=getattr(args, "_invocation", None),
+            preflight_callback=(
+                None if args.json else lambda value: print(render_preflight(value))
+            ),
         )
         _emit(result, args.json)
         return (

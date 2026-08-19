@@ -20,6 +20,8 @@ class LauncherAdapter(Protocol):
     requires_processes_per_node: bool
     max_mpi_ranks: int | None
     supports_controller_siesta: bool
+    version_arguments: tuple[str, ...]
+    probe_required: bool
 
     def create(
         self, *, command: Sequence[str] = (), arguments: Sequence[str] = (),
@@ -46,6 +48,8 @@ class RegisteredLauncher:
     requires_processes_per_node: bool = False
     max_mpi_ranks: int | None = None
     supports_controller_siesta: bool = True
+    version_arguments: tuple[str, ...] = ("--version",)
+    probe_required: bool = True
     preview_builder: Callable[
         [tuple[str, ...], tuple[str, ...], str, tuple[str, ...], int, int],
         tuple[str, ...],
@@ -107,6 +111,10 @@ class LauncherRegistry:
 
 class SchedulerAdapter(Protocol):
     name: str
+    command: tuple[str, ...]
+    version_arguments: tuple[str, ...]
+    environment_markers: tuple[str, ...]
+    probe_required: bool
 
     def describe(self) -> str: ...
 
@@ -115,6 +123,10 @@ class SchedulerAdapter(Protocol):
 class RegisteredScheduler:
     name: str
     description: str
+    command: tuple[str, ...] = ()
+    version_arguments: tuple[str, ...] = ("--version",)
+    environment_markers: tuple[str, ...] = ()
+    probe_required: bool = True
 
     def describe(self) -> str:
         return self.description
@@ -181,7 +193,8 @@ def _preview_mpi_np(
 
 launcher_registry = LauncherRegistry()
 launcher_registry.register(RegisteredLauncher(
-    "direct", (), _direct, max_mpi_ranks=1, supports_controller_siesta=False
+    "direct", (), _direct, max_mpi_ranks=1, supports_controller_siesta=False,
+    version_arguments=(), probe_required=False,
 ))
 launcher_registry.register(RegisteredLauncher(
     "srun", ("srun",), _srun, scheduler="slurm", preview_builder=_preview_srun
@@ -196,5 +209,10 @@ launcher_registry.register(RegisteredLauncher(
 ))
 
 scheduler_registry = SchedulerRegistry()
-scheduler_registry.register(RegisteredScheduler("local", "local process environment"))
-scheduler_registry.register(RegisteredScheduler("slurm", "SLURM allocation and batch scheduler"))
+scheduler_registry.register(RegisteredScheduler(
+    "local", "local process environment", probe_required=False,
+))
+scheduler_registry.register(RegisteredScheduler(
+    "slurm", "SLURM allocation and batch scheduler", command=("sbatch",),
+    environment_markers=("SLURM_JOB_ID", "SLURM_JOB_NODELIST"),
+))
