@@ -1,0 +1,45 @@
+{
+  "algorithm": "qraft.convergence.v1",
+  "campaign_fingerprint": "625ff46cb7b3c98079e2ad0a340f80ba012ee1867f2b5de2b75977a474a8ed27",
+  "campaign_id": "mgo-wsl-mesh-smoke",
+  "criterion": {
+    "consecutive": 1,
+    "delta": 0.1,
+    "metric": "energy_per_atom",
+    "unit": "eV"
+  },
+  "execution_state": "COMPLETED",
+  "points": [
+    {
+      "attempt_id": "20260820T015741.871140Z-7d44cce9",
+      "delta": null,
+      "energy_ev": -457.1475,
+      "energy_per_atom_ev": -228.57375,
+      "fdf": "/home/jmc/tmp/qraft-wsl-n4-acceptance-3264c7b/.qraft-runs/rendered/point_001/input.fdf",
+      "index": 1,
+      "reused": true,
+      "stderr": "/home/jmc/tmp/qraft-wsl-n4-acceptance-3264c7b/.qraft-runs/points/point_001/3c9d71a9d5f60ee8667ddc9d9785bfbfa7855c45ce5880e9820cb8d084aa3da9/20260820T015741.871140Z-7d44cce9/stderr.txt",
+      "stdout": "/home/jmc/tmp/qraft-wsl-n4-acceptance-3264c7b/.qraft-runs/points/point_001/3c9d71a9d5f60ee8667ddc9d9785bfbfa7855c45ce5880e9820cb8d084aa3da9/20260820T015741.871140Z-7d44cce9/stdout.txt",
+      "technical_status": "PASS",
+      "value": 80
+    },
+    {
+      "attempt_id": "20260820T015742.917312Z-885a0f86",
+      "delta": 0.0,
+      "energy_ev": -457.1475,
+      "energy_per_atom_ev": -228.57375,
+      "fdf": "/home/jmc/tmp/qraft-wsl-n4-acceptance-3264c7b/.qraft-runs/rendered/point_002/input.fdf",
+      "index": 2,
+      "reused": true,
+      "stderr": "/home/jmc/tmp/qraft-wsl-n4-acceptance-3264c7b/.qraft-runs/points/point_002/c1c9ce567a130a5eb6f806c2916db89dad5a54abc5b72e135a7feeac7e34b747/20260820T015742.917312Z-885a0f86/stderr.txt",
+      "stdout": "/home/jmc/tmp/qraft-wsl-n4-acceptance-3264c7b/.qraft-runs/points/point_002/c1c9ce567a130a5eb6f806c2916db89dad5a54abc5b72e135a7feeac7e34b747/20260820T015742.917312Z-885a0f86/stdout.txt",
+      "technical_status": "PASS",
+      "value": 100
+    }
+  ],
+  "render_manifest": "/home/jmc/tmp/qraft-wsl-n4-acceptance-3264c7b/.qraft-runs/rendered/render-manifest.json",
+  "schema_version": "1.0",
+  "scientific_decision": "CONVERGED",
+  "selected_point": 100,
+  "technical_validation": "PASS"
+}

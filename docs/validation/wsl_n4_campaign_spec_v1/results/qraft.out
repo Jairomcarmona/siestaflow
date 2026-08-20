@@ -1,0 +1,204 @@
+================================================================
+                           Q R A F T
+       Quantum Reproducible Automation & Flow Toolkit
+================================================================
+qraft-output-schema : 1.1
+Version  : 0.2.0
+Campaign : mgo-wsl-mesh-smoke
+Protocol : convergence
+Started  : 2026-08-20T01:57:41.860878+00:00
+================================================================
+
+================================================================
+QRAFT EXECUTION SESSION
+================================================================
+Session ID       : 30044af46f964eef83ab221728b78897
+Controller epoch : 1
+Mode             : NEW
+Started          : 2026-08-20T01:57:41.863198+00:00
+Command          : qraft _fdf-run campaign.yaml --partition local --nodes 1 --np 4 --cpus-per-rank 1 --launcher openmpi --launcher-command /usr/bin/mpirun --siesta /home/jmc/.local/siesta-5.4.2-openmpi/bin/siesta --runs-root .qraft-runs --json
+Previous state   : -
+Working root     : .
+================================================================
+
+[RESOLVED CONFIGURATION]
+campaign          : /home/jmc/tmp/qraft-wsl-n4-acceptance-3264c7b/campaign.yaml
+parameter scanned : mesh_cutoff
+values            : [80, 100]
+metric            : energy_per_atom
+criterion         : 0.1
+consecutive       : 1
+
+[EXECUTION]
+partition : local
+nodes     : 1
+MPI ranks : 4
+launcher  : openmpi
+
+[DAG]
+
+N001 validate_campaign                    READY
+N002 render_variants                      WAITING <- validate_campaign
+N003 point_001                            WAITING <- render_variants
+N004 point_002                            WAITING <- render_variants
+N005 extract_metrics                      WAITING <- point_001,point_002
+N006 evaluate_convergence                 WAITING <- extract_metrics
+N007 scientific_decision                  WAITING <- evaluate_convergence
+
+[CONVERGENCE]
+
+
+[NODE STATE — point_001]
+
+Node type    : convergence_point
+Attempt      : 20260820T015741.871140Z-7d44cce9
+Status       : PASS
+Input        : rendered/point_001/input.fdf
+stdout       : points/point_001/3c9d71a9d5f60ee8667ddc9d9785bfbfa7855c45ce5880e9820cb8d084aa3da9/20260820T015741.871140Z-7d44cce9/stdout.txt
+stderr       : points/point_001/3c9d71a9d5f60ee8667ddc9d9785bfbfa7855c45ce5880e9820cb8d084aa3da9/20260820T015741.871140Z-7d44cce9/stderr.txt
+Dependencies : -
+
+[NODE STATE — point_002]
+
+Node type    : convergence_point
+Attempt      : 20260820T015742.917312Z-885a0f86
+Status       : PASS
+Input        : rendered/point_002/input.fdf
+stdout       : points/point_002/c1c9ce567a130a5eb6f806c2916db89dad5a54abc5b72e135a7feeac7e34b747/20260820T015742.917312Z-885a0f86/stdout.txt
+stderr       : points/point_002/c1c9ce567a130a5eb6f806c2916db89dad5a54abc5b72e135a7feeac7e34b747/20260820T015742.917312Z-885a0f86/stderr.txt
+Dependencies : -
+
+[PATHS]
+render manifest : rendered/render-manifest.json
+campaign result : campaign-result.json
+
+[TABLE convergence] [eV]
+
+value | energy_eV | energy_per_atom_eV | delta | technical_status | attempt_id | reused
+------+-----------+--------------------+-------+------------------+------------+-------
+80 | -457.1475 | -228.57375 | - | PASS | 20260820T015741.871140Z-7d44cce9 | no
+100 | -457.1475 | -228.57375 | 0 | PASS | 20260820T015742.917312Z-885a0f86 | no
+
+[DECISIONS]
+criterion           : 0.1
+metric              : energy_per_atom
+consecutive         : 1
+scientific decision : CONVERGED
+selected point      : 100
+
+[CSV ARTIFACTS]
+table:convergence : /home/jmc/tmp/qraft-wsl-n4-acceptance-3264c7b/.qraft-runs/results/convergence.csv
+
+================================================================
+SESSION RESULT : COMPLETED
+Finished       : 2026-08-20T01:57:43.914787+00:00
+Elapsed        : 2.061 s
+================================================================
+
+================================================================
+QRAFT CAMPAIGN SUMMARY
+================================================================
+Campaign status      : COMPLETED
+Technical validation : PASS
+Scientific decision  : CONVERGED
+Selected             : 100
+QRAFT output         : qraft.out
+Evidence             : campaign-result.json
+================================================================
+
+================================================================
+QRAFT EXECUTION SESSION
+================================================================
+Session ID       : ad0bae34fc024120b0c7bd06b75b4250
+Controller epoch : 2
+Mode             : RESUME
+Started          : 2026-08-20T01:59:59.260649+00:00
+Command          : qraft _fdf-run campaign.yaml --partition local --nodes 1 --np 4 --cpus-per-rank 1 --launcher openmpi --launcher-command /usr/bin/mpirun --siesta /home/jmc/.local/siesta-5.4.2-openmpi/bin/siesta --runs-root .qraft-runs --json
+Previous state   : -
+Working root     : .
+================================================================
+
+[RESOLVED CONFIGURATION]
+campaign          : /home/jmc/tmp/qraft-wsl-n4-acceptance-3264c7b/campaign.yaml
+parameter scanned : mesh_cutoff
+values            : [80, 100]
+metric            : energy_per_atom
+criterion         : 0.1
+consecutive       : 1
+
+[EXECUTION]
+partition : local
+nodes     : 1
+MPI ranks : 4
+launcher  : openmpi
+
+[DAG]
+
+N001 validate_campaign                    READY
+N002 render_variants                      WAITING <- validate_campaign
+N003 point_001                            WAITING <- render_variants
+N004 point_002                            WAITING <- render_variants
+N005 extract_metrics                      WAITING <- point_001,point_002
+N006 evaluate_convergence                 WAITING <- extract_metrics
+N007 scientific_decision                  WAITING <- evaluate_convergence
+
+[CONVERGENCE]
+
+
+[NODE STATE — point_001]
+
+Node type    : convergence_point
+Attempt      : 20260820T015741.871140Z-7d44cce9
+Status       : PASS
+Input        : rendered/point_001/input.fdf
+stdout       : points/point_001/3c9d71a9d5f60ee8667ddc9d9785bfbfa7855c45ce5880e9820cb8d084aa3da9/20260820T015741.871140Z-7d44cce9/stdout.txt
+stderr       : points/point_001/3c9d71a9d5f60ee8667ddc9d9785bfbfa7855c45ce5880e9820cb8d084aa3da9/20260820T015741.871140Z-7d44cce9/stderr.txt
+Dependencies : -
+
+[NODE STATE — point_002]
+
+Node type    : convergence_point
+Attempt      : 20260820T015742.917312Z-885a0f86
+Status       : PASS
+Input        : rendered/point_002/input.fdf
+stdout       : points/point_002/c1c9ce567a130a5eb6f806c2916db89dad5a54abc5b72e135a7feeac7e34b747/20260820T015742.917312Z-885a0f86/stdout.txt
+stderr       : points/point_002/c1c9ce567a130a5eb6f806c2916db89dad5a54abc5b72e135a7feeac7e34b747/20260820T015742.917312Z-885a0f86/stderr.txt
+Dependencies : -
+
+[PATHS]
+render manifest : rendered/render-manifest.json
+campaign result : campaign-result.json
+
+[TABLE convergence] [eV]
+
+value | energy_eV | energy_per_atom_eV | delta | technical_status | attempt_id | reused
+------+-----------+--------------------+-------+------------------+------------+-------
+80 | -457.1475 | -228.57375 | - | PASS | 20260820T015741.871140Z-7d44cce9 | yes
+100 | -457.1475 | -228.57375 | 0 | PASS | 20260820T015742.917312Z-885a0f86 | yes
+
+[DECISIONS]
+criterion           : 0.1
+metric              : energy_per_atom
+consecutive         : 1
+scientific decision : CONVERGED
+selected point      : 100
+
+[CSV ARTIFACTS]
+table:convergence : /home/jmc/tmp/qraft-wsl-n4-acceptance-3264c7b/.qraft-runs/results/convergence-002.csv
+
+================================================================
+SESSION RESULT : COMPLETED
+Finished       : 2026-08-20T01:59:59.290551+00:00
+Elapsed        : 0.040 s
+================================================================
+
+================================================================
+QRAFT CAMPAIGN SUMMARY
+================================================================
+Campaign status      : COMPLETED
+Technical validation : PASS
+Scientific decision  : CONVERGED
+Selected             : 100
+QRAFT output         : qraft.out
+Evidence             : campaign-result.json
+================================================================

@@ -1,0 +1,13 @@
+{
+  "status": "PASS",
+  "decision": "REUSED_VALIDATED_ATTEMPT",
+  "attempt_ids_reused": [
+    "20260820T015741.871140Z-7d44cce9",
+    "20260820T015742.917312Z-885a0f86"
+  ],
+  "attempt_json_count_after_recovery": 2,
+  "new_attempts_created": false,
+  "siesta_relaunched": false,
+  "same_execution_spec": true,
+  "evidence_source": "second qraft.out session and convergence.csv rows marked reused=yes"
+}

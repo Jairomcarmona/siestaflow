@@ -45,6 +45,9 @@ The following productization findings were resolved in the boundary closure:
 
 - Historical standalone packaging duplicates selected runtime files. It remains
   a tested deployment fallback but increases release maintenance.
+- Optional verbose/details presentation over persisted evidence is not yet
+  implemented. This is a UX improvement, not an evidence or reproducibility
+  gap.
 - Vendored standalone controller runtimes have no installed distribution
   metadata, so their derived package version is `0+unknown`. Inject release
   provenance at bundle-build time before treating that display as release

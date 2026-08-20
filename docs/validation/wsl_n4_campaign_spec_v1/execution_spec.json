@@ -1,0 +1,24 @@
+{
+  "scheduler": "slurm",
+  "scheduler_scope": "local",
+  "slurm_job_id": 264,
+  "execution_spec": {
+    "schema_version": "1.0",
+    "partition": "local",
+    "nodes": 1,
+    "mpi_ranks": 4,
+    "ranks_per_node": 4,
+    "cpus_per_rank": 1,
+    "allocated_cpus": 4,
+    "launcher": "openmpi",
+    "launcher_command": ["/usr/bin/mpirun"],
+    "launcher_arguments": [],
+    "executable": "/home/jmc/.local/siesta-5.4.2-openmpi/bin/siesta",
+    "executable_arguments": [],
+    "memory_mb": null,
+    "walltime_seconds": 3600,
+    "environment": {},
+    "fingerprint": "dbbb3ce88e19964f82d1a96158485fc70439dbfdd573f5e277f364c0e7013707"
+  },
+  "source": "persisted point_001 plan.json"
+}
