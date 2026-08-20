@@ -29,6 +29,10 @@ The following productization findings were resolved in the boundary closure:
 - `single_fdf.py` owns planning, staging, launch, validation, persistence and
   output assembly. Its behavior is tested, but responsibilities should be
   separated before adding more engines/protocols.
+- `campaign_spec.py` and `protocols/convergence.py` are each approximately
+  400 lines after CampaignSpec v1. Their current size is acceptable, but new
+  protocols must reuse their typed contracts and extract cohesive services
+  rather than extending either module into a protocol catch-all.
 - `allocation_controller.py` remains large and combines orchestration with
   evidence/output concerns. Refactor only behind existing behavioral tests.
 - Native persistent REPL history is not implemented; v1 history is per session.
