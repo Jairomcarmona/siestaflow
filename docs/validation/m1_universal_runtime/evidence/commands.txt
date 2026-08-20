@@ -1,0 +1,29 @@
+# Baseline safety gate
+git status --short
+git branch --show-current
+git rev-parse HEAD
+git log -1 --oneline
+
+# Trustworthy focused baseline
+wsl.exe -e bash -lc "cd /mnt/c/Users/Jairo/Downloads/SIESTAFLOW_CONTEXT/qraft-campaign-spec-v1-worktree && PYTHONPATH=src python3 -m pytest -q tests/contracts tests/workflows tests/m4/test_allocation_controller.py tests/runtime_v1/test_single_fdf_vertical.py tests/campaigns/test_campaign_spec_v1.py"
+# result: 67 passed in 7.29s (Windows sandbox attempts were discarded as environmental)
+
+$env:PYTHONPATH = (Resolve-Path 'src').Path; & '..\qraft-productization-build-venv\Scripts\python.exe' -m pytest -q
+# result: 524 passed, 1 skipped in 83.60s
+
+# Final focused M1 acceptance
+$env:PYTHONPATH = (Resolve-Path 'src').Path; & '..\qraft-productization-build-venv\Scripts\python.exe' -m pytest -q tests/contracts tests/workflows tests/execution/test_capability_runtime.py tests/m4/test_allocation_controller.py tests/runtime_v1/test_single_fdf_vertical.py tests/campaigns/test_campaign_spec_v1.py
+# result: engine-neutral package import PASS; 80 passed in 13.15s
+
+# Final full suite
+$env:PYTHONPATH = (Resolve-Path 'src').Path; & '..\qraft-productization-build-venv\Scripts\python.exe' -m pytest -q
+# result: 537 passed, 1 skipped in 76.61s
+
+# Final package smoke
+$out = 'C:\Users\Jairo\Downloads\SIESTAFLOW_CONTEXT\.codex-build\m1-universal-runtime-verified'; & '..\qraft-productization-build-venv\Scripts\python.exe' -m build --no-isolation --outdir $out
+# result: sdist and wheel built; wheel engine-neutral import/inventory PASS
+
+# Documentary and adversarial checks
+git diff --check
+git diff --name-only
+rg -n 'engines\.siesta|SiestaOutputParser|engine\s*==|task_kind\s*==' src/qraft/execution/capability_runtime.py src/qraft/execution/allocation_controller.py

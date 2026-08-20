@@ -135,6 +135,7 @@ class M4RemoteSmokePackager:
             "runtime/qraft/models.py": base / "src/qraft/models.py",
             "runtime/qraft/project_packages.py": base / "src/qraft/project_packages.py",
             "runtime/qraft/execution/allocation_controller.py": base / "src/qraft/execution/allocation_controller.py",
+            "runtime/qraft/execution/allocation_controller_compat.py": base / "src/qraft/execution/allocation_controller_compat.py",
             "runtime/qraft/execution/adapters.py": base / "src/qraft/execution/adapters.py",
             "runtime/qraft/execution/direct_launcher.py": base / "src/qraft/execution/direct_launcher.py",
             "runtime/qraft/execution/hydra_launcher.py": base / "src/qraft/execution/hydra_launcher.py",

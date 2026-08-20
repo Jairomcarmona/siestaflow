@@ -166,9 +166,9 @@ non-goals, acceptance gates, evidence, status y closing commit.
 | Scope | Seam real, resolución `capability_id`, controller genérico sin semántica SIESTA, ownership único de Attempt, validation lifecycle y recovery. |
 | Non-goals | Protocolo nuevo, relax, DOS, LR-U, screening. |
 | Acceptance gates | Capability sintética nueva ejecuta sin modificar DAG/core scheduling; Generic Runtime no importa `SiestaOutputParser`. |
-| Required evidence | Capability sintética, contract/dependency/lifecycle/recovery tests y `docs/validation/m1_generic_dag_runtime_capability_boundary/`. |
-| Status | `NOT_STARTED` |
-| Closing commit | No aplicable hasta cierre. |
+| Required evidence | Capability sintética, contract/dependency/lifecycle/recovery tests y `docs/validation/m1_universal_runtime/`. |
+| Status | `CLOSED` |
+| Closing commit | Este commit: `feat: establish universal capability runtime`. |
 
 ### M2 — F02 Convergence Through Canonical DAG
 
@@ -303,7 +303,8 @@ infraestructura de ejecución.
 | Milestone | Estado |
 |---|---|
 | M0 | `CLOSED` |
-| M1–M10 | `NOT_STARTED` |
+| M1 | `CLOSED` |
+| M2–M10 | `NOT_STARTED` |
 | DFT+U / LR-U | `DEFERRED` |
 
 Un agente futuro debe construir sólo el siguiente milestone abierto, en la capa

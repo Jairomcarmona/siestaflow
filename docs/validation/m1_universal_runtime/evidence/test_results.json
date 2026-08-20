@@ -1,0 +1,42 @@
+{
+  "timestamp": "2026-08-19T23:34:21.4812690-06:00",
+  "source_commit": "aaa68abb427642c4e99172bd56d13ada3eb98579",
+  "final_commit": "SELF: feat: establish universal capability runtime",
+  "branch": "feat/qraft-m1-universal-runtime",
+  "python": "3.13.14",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "commands": {
+    "FOCUSED": "$env:PYTHONPATH = (Resolve-Path 'src').Path; & '..\\qraft-productization-build-venv\\Scripts\\python.exe' -m pytest -q tests/contracts tests/workflows tests/execution/test_capability_runtime.py tests/m4/test_allocation_controller.py tests/runtime_v1/test_single_fdf_vertical.py tests/campaigns/test_campaign_spec_v1.py",
+    "FULL": "$env:PYTHONPATH = (Resolve-Path 'src').Path; & '..\\qraft-productization-build-venv\\Scripts\\python.exe' -m pytest -q",
+    "BUILD": "$out = 'C:\\Users\\Jairo\\Downloads\\SIESTAFLOW_CONTEXT\\.codex-build\\m1-universal-runtime-verified'; & '..\\qraft-productization-build-venv\\Scripts\\python.exe' -m build --no-isolation --outdir $out"
+  },
+  "baseline": {
+    "focused": {"exit_code": 0, "passed": 67, "failed": 0},
+    "full": {"exit_code": 0, "passed": 524, "failed": 0, "skipped": 1}
+  },
+  "final": {
+    "focused": {"exit_code": 0, "passed": 80, "failed": 0},
+    "full": {"exit_code": 0, "passed": 537, "failed": 0, "skipped": 1},
+    "build": {"exit_code": 0, "result": "PASS"}
+  },
+  "tests": [
+    {"id": "T01", "result": "PASS", "evidence_type": "SYNTHETIC_FIXTURE", "test_nodes": ["tests/execution/test_capability_runtime.py::test_registry_executes_synthetic_compiled_node_with_one_attempt"]},
+    {"id": "T02", "result": "PASS", "evidence_type": "SYNTHETIC_FIXTURE", "test_nodes": ["tests/execution/test_capability_runtime.py::test_unknown_capability_blocks_before_attempt_or_launch"]},
+    {"id": "T03", "result": "PASS", "evidence_type": "SYNTHETIC_FIXTURE", "test_nodes": ["tests/execution/test_capability_runtime.py::test_contract_incompatibility_blocks_before_attempt_or_launch"]},
+    {"id": "T04", "result": "PASS", "evidence_type": "SYNTHETIC_FIXTURE", "test_nodes": ["tests/execution/test_capability_runtime.py::test_registry_executes_synthetic_compiled_node_with_one_attempt"]},
+    {"id": "T05", "result": "PASS", "evidence_type": "SYNTHETIC_FIXTURE", "test_nodes": ["tests/execution/test_capability_runtime.py::test_capability_classification_controls_opaque_failure_and_sibling_continues"]},
+    {"id": "T06", "result": "PASS", "evidence_type": "SYNTHETIC_FIXTURE", "test_nodes": ["tests/execution/test_capability_runtime.py::test_capability_classification_controls_opaque_failure_and_sibling_continues"]},
+    {"id": "T07", "result": "PASS", "evidence_type": "SYNTHETIC_FIXTURE", "test_nodes": ["tests/execution/test_capability_runtime.py::test_capability_classification_controls_opaque_failure_and_sibling_continues"]},
+    {"id": "T08", "result": "PASS", "evidence_type": "SYNTHETIC_FIXTURE", "test_nodes": ["tests/execution/test_capability_runtime.py::test_missing_required_artifact_fails_and_blocks_consumer"]},
+    {"id": "T09", "result": "PASS", "evidence_type": "SYNTHETIC_FIXTURE", "test_nodes": ["tests/execution/test_capability_runtime.py::test_tampered_parent_artifact_prevents_consumer_launch"]},
+    {"id": "T10", "result": "PASS", "evidence_type": "SYNTHETIC_FIXTURE", "test_nodes": ["tests/execution/test_capability_runtime.py::test_interrupted_attempt_retries_without_overwriting"]},
+    {"id": "T11", "result": "PASS", "evidence_type": "SYNTHETIC_FIXTURE", "test_nodes": ["tests/execution/test_capability_runtime.py::test_valid_attempt_is_reused_without_relaunch"]},
+    {"id": "T12", "result": "PASS", "evidence_type": "SYNTHETIC_FIXTURE", "test_nodes": ["tests/execution/test_capability_runtime.py::test_tampered_attempt_artifact_is_not_reused", "tests/execution/test_capability_runtime.py::test_tampered_parser_evidence_is_not_reused"]},
+    {"id": "T13", "result": "PASS", "evidence_type": "CONTRACT_TEST", "test_nodes": ["tests/execution/test_capability_runtime.py::test_execution_resources_do_not_contaminate_scientific_identity"]},
+    {"id": "T14", "result": "PASS", "evidence_type": "SYNTHETIC_SIESTA_FIXTURE", "test_nodes": ["tests/execution/test_capability_runtime.py::test_siesta_adapter_executes_through_registered_generic_path"]},
+    {"id": "T15", "result": "PASS", "evidence_type": "REGRESSION", "test_nodes": ["tests/runtime_v1/test_single_fdf_vertical.py"]},
+    {"id": "T16", "result": "PASS", "evidence_type": "REGRESSION", "test_nodes": ["tests/campaigns/test_campaign_spec_v1.py"]},
+    {"id": "T17", "result": "PASS", "evidence_type": "REGRESSION", "test_nodes": ["tests/m4/test_allocation_controller.py"]},
+    {"id": "T18", "result": "PASS", "evidence_type": "FULL_SUITE", "test_nodes": ["tests/"]}
+  ]
+}

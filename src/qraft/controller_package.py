@@ -57,6 +57,7 @@ class ControllerPackageBuilder:
         "src/qraft/models.py",
         "src/qraft/project_packages.py",
         "src/qraft/execution/allocation_controller.py",
+        "src/qraft/execution/allocation_controller_compat.py",
         "src/qraft/execution/campaign_progress.py",
         "src/qraft/execution/adapters.py",
         "src/qraft/execution/direct_launcher.py",

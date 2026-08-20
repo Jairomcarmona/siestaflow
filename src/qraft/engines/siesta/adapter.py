@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import hashlib
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Iterable
 
 from ...filesystem import FileSystem
+from ...core import TechnicalValidation
 from ...hpc import ProcessLauncher
 from ...models import AllocationContext, FailureType, TaskAttempt, TaskResult, TaskSpec
 from ..base import EngineAdapter
@@ -28,7 +30,11 @@ class SiestaEngineAdapter(EngineAdapter):
         return self.fdf.parse_path(path)
 
     def validate_input(self, inspected: Any, **kwargs: Any):
-        return self.validator.validate(inspected, **kwargs)
+        options = dict(kwargs.get("validation_options", {}))
+        for name in ("pseudo_result", "require_pseudos"):
+            if name in kwargs:
+                options[name] = kwargs[name]
+        return self.validator.validate(inspected, **options)
 
     def prepare_task(self, inspected: Any, workspace: Path, **kwargs: Any) -> PreparedInput:
         fs: FileSystem = kwargs["filesystem"]
@@ -38,16 +44,36 @@ class SiestaEngineAdapter(EngineAdapter):
         return PreparedInput(Path(inspected.source), destination, inspected.original_sha256, validation)
 
     def build_command(self, input_path: Path, **kwargs: Any) -> tuple[str, ...]:
-        return SiestaCommandBuilder().build(input_path, kwargs.get("profile", EngineProfile()))
+        profile = kwargs.get("profile")
+        if profile is None:
+            execution_spec = kwargs.get("execution_spec")
+            profile = EngineProfile(
+                executable=(
+                    str(execution_spec.executable)
+                    if execution_spec is not None
+                    else None
+                )
+            )
+        return SiestaCommandBuilder().build(input_path, profile)
 
     def parse_output(self, lines: Iterable[str], **kwargs: Any):
-        return self.outputs.parse(lines, synthetic=bool(kwargs.get("synthetic", False)))
+        settings = kwargs.get("settings", {})
+        return self.outputs.parse(
+            lines,
+            synthetic=bool(settings.get("synthetic", kwargs.get("synthetic", False))),
+        )
 
     def discover_artifacts(self, workspace: Path, **kwargs: Any):
         return discover_siesta_artifacts(workspace, task_id=kwargs["task_id"], attempt_id=kwargs["attempt_id"])
 
     def classify_result(self, parsed: Any, **kwargs: Any):
-        return self.outputs.gate(parsed)
+        gate = self.outputs.gate(parsed)
+        return TechnicalValidation(
+            status=gate.status.value,
+            classification=parsed.classification.value,
+            reasons=(gate.reason, *gate.evidence),
+            parser_summary=asdict(parsed),
+        )
 
 
 class SyntheticSiestaLauncher(ProcessLauncher):

@@ -26,18 +26,23 @@ The following productization findings were resolved in the boundary closure:
 
 - Public registry release metadata lacks a confirmed license, author and
   maintainer declaration. Do not invent them; resolve before PyPI publication.
-- `single_fdf.py` owns planning, staging, launch, validation, persistence and
-  output assembly. Its behavior is tested, but responsibilities should be
-  separated before adding more engines/protocols.
+- `single_fdf.py` remains a tested legacy runtime path beside the M1 compiled-
+  workflow capability runtime. M2 must migrate convergence first; consolidate
+  legacy attempt views incrementally without breaking persisted evidence.
 - `campaign_spec.py` and `protocols/convergence.py` are each approximately
   400 lines after CampaignSpec v1. Their current size is acceptable, but new
   protocols must reuse their typed contracts and extract cohesive services
   rather than extending either module into a protocol catch-all.
-- `allocation_controller.py` remains large and combines orchestration with
-  evidence/output concerns. Refactor only behind existing behavioral tests.
-- Runtime/controller remains partially SIESTA-aware until M1. The M1 generic
-  runtime and capability boundary own the remediation; do not add protocol-
-  specific execution paths meanwhile.
+- The schema 1/2 allocation controller remains SIESTA-shaped at its persisted
+  compatibility boundary. M1 isolates that implementation in
+  `allocation_controller_compat.py`; new `CompiledWorkflow` execution is
+  engine-neutral and resolves implementations through `CapabilityRegistry`.
+  Do not add new scientific semantics to the compatibility path.
+- Persisted Attempt representations are not yet repository-wide unified. The
+  M1 compiled-workflow path has one authoritative immutable Attempt lifecycle;
+  legacy evidence retains deterministic compatibility views until migrated.
+- Convergence runtime migration → M2. `ConvergenceProtocol` deliberately keeps
+  its existing sequential `execute_fdf_plan()` loop during M1.
 - Native persistent REPL history is not implemented; v1 history is per session.
 - Legacy packaging commands still need a checked-out source tree containing
   their historical assets. They remain hidden from installed CLI help until
