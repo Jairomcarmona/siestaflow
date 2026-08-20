@@ -1,42 +1,63 @@
 {
-  "timestamp": "2026-08-19T23:34:21.4812690-06:00",
-  "source_commit": "aaa68abb427642c4e99172bd56d13ada3eb98579",
-  "final_commit": "SELF: feat: establish universal capability runtime",
-  "branch": "feat/qraft-m1-universal-runtime",
-  "python": "3.13.14",
-  "platform": "Windows-11-10.0.26200-SP0",
-  "commands": {
-    "FOCUSED": "$env:PYTHONPATH = (Resolve-Path 'src').Path; & '..\\qraft-productization-build-venv\\Scripts\\python.exe' -m pytest -q tests/contracts tests/workflows tests/execution/test_capability_runtime.py tests/m4/test_allocation_controller.py tests/runtime_v1/test_single_fdf_vertical.py tests/campaigns/test_campaign_spec_v1.py",
-    "FULL": "$env:PYTHONPATH = (Resolve-Path 'src').Path; & '..\\qraft-productization-build-venv\\Scripts\\python.exe' -m pytest -q",
-    "BUILD": "$out = 'C:\\Users\\Jairo\\Downloads\\SIESTAFLOW_CONTEXT\\.codex-build\\m1-universal-runtime-verified'; & '..\\qraft-productization-build-venv\\Scripts\\python.exe' -m build --no-isolation --outdir $out"
+  "schema_version": "m1-runtime-convergence-closure-1.0",
+  "timestamp": "2026-08-20T00:29:30.5408513-06:00",
+  "checkpoint_evidence": {
+    "commit": "4964e9c44fffb671224279665ccfd651766c13a3",
+    "branch": "feat/qraft-m1-universal-runtime",
+    "manifest": "checkpoint_4964e9c_hashes.sha256",
+    "focused": {"passed": 80, "failed": 0},
+    "full": {"passed": 537, "failed": 0, "skipped": 1}
   },
-  "baseline": {
-    "focused": {"exit_code": 0, "passed": 67, "failed": 0},
-    "full": {"exit_code": 0, "passed": 524, "failed": 0, "skipped": 1}
+  "closure": {
+    "branch": "fix/qraft-m1-runtime-convergence-closure",
+    "commit": "SELF: fix: close M1 runtime convergence gap",
+    "python": "3.13.14",
+    "platform": "Windows-11",
+    "focused": {"exit_code": 0, "passed": 101, "failed": 0, "seconds": 31.10},
+    "full": {"exit_code": 0, "passed": 549, "failed": 0, "skipped": 1, "seconds": 90.56},
+    "build": {
+      "exit_code": 0,
+      "sdist": "PASS",
+      "wheel": "PASS",
+      "wheel_inventory_import": "PASS",
+      "self_contained_package_import": "PASS"
+    }
   },
-  "final": {
-    "focused": {"exit_code": 0, "passed": 80, "failed": 0},
-    "full": {"exit_code": 0, "passed": 537, "failed": 0, "skipped": 1},
-    "build": {"exit_code": 0, "result": "PASS"}
-  },
-  "tests": [
-    {"id": "T01", "result": "PASS", "evidence_type": "SYNTHETIC_FIXTURE", "test_nodes": ["tests/execution/test_capability_runtime.py::test_registry_executes_synthetic_compiled_node_with_one_attempt"]},
-    {"id": "T02", "result": "PASS", "evidence_type": "SYNTHETIC_FIXTURE", "test_nodes": ["tests/execution/test_capability_runtime.py::test_unknown_capability_blocks_before_attempt_or_launch"]},
-    {"id": "T03", "result": "PASS", "evidence_type": "SYNTHETIC_FIXTURE", "test_nodes": ["tests/execution/test_capability_runtime.py::test_contract_incompatibility_blocks_before_attempt_or_launch"]},
-    {"id": "T04", "result": "PASS", "evidence_type": "SYNTHETIC_FIXTURE", "test_nodes": ["tests/execution/test_capability_runtime.py::test_registry_executes_synthetic_compiled_node_with_one_attempt"]},
-    {"id": "T05", "result": "PASS", "evidence_type": "SYNTHETIC_FIXTURE", "test_nodes": ["tests/execution/test_capability_runtime.py::test_capability_classification_controls_opaque_failure_and_sibling_continues"]},
-    {"id": "T06", "result": "PASS", "evidence_type": "SYNTHETIC_FIXTURE", "test_nodes": ["tests/execution/test_capability_runtime.py::test_capability_classification_controls_opaque_failure_and_sibling_continues"]},
-    {"id": "T07", "result": "PASS", "evidence_type": "SYNTHETIC_FIXTURE", "test_nodes": ["tests/execution/test_capability_runtime.py::test_capability_classification_controls_opaque_failure_and_sibling_continues"]},
-    {"id": "T08", "result": "PASS", "evidence_type": "SYNTHETIC_FIXTURE", "test_nodes": ["tests/execution/test_capability_runtime.py::test_missing_required_artifact_fails_and_blocks_consumer"]},
-    {"id": "T09", "result": "PASS", "evidence_type": "SYNTHETIC_FIXTURE", "test_nodes": ["tests/execution/test_capability_runtime.py::test_tampered_parent_artifact_prevents_consumer_launch"]},
-    {"id": "T10", "result": "PASS", "evidence_type": "SYNTHETIC_FIXTURE", "test_nodes": ["tests/execution/test_capability_runtime.py::test_interrupted_attempt_retries_without_overwriting"]},
-    {"id": "T11", "result": "PASS", "evidence_type": "SYNTHETIC_FIXTURE", "test_nodes": ["tests/execution/test_capability_runtime.py::test_valid_attempt_is_reused_without_relaunch"]},
-    {"id": "T12", "result": "PASS", "evidence_type": "SYNTHETIC_FIXTURE", "test_nodes": ["tests/execution/test_capability_runtime.py::test_tampered_attempt_artifact_is_not_reused", "tests/execution/test_capability_runtime.py::test_tampered_parser_evidence_is_not_reused"]},
-    {"id": "T13", "result": "PASS", "evidence_type": "CONTRACT_TEST", "test_nodes": ["tests/execution/test_capability_runtime.py::test_execution_resources_do_not_contaminate_scientific_identity"]},
-    {"id": "T14", "result": "PASS", "evidence_type": "SYNTHETIC_SIESTA_FIXTURE", "test_nodes": ["tests/execution/test_capability_runtime.py::test_siesta_adapter_executes_through_registered_generic_path"]},
-    {"id": "T15", "result": "PASS", "evidence_type": "REGRESSION", "test_nodes": ["tests/runtime_v1/test_single_fdf_vertical.py"]},
-    {"id": "T16", "result": "PASS", "evidence_type": "REGRESSION", "test_nodes": ["tests/campaigns/test_campaign_spec_v1.py"]},
-    {"id": "T17", "result": "PASS", "evidence_type": "REGRESSION", "test_nodes": ["tests/m4/test_allocation_controller.py"]},
-    {"id": "T18", "result": "PASS", "evidence_type": "FULL_SUITE", "test_nodes": ["tests/"]}
-  ]
+  "acceptance": [
+    {"id": "C01", "result": "PASS", "evidence": "synthetic registered capability"},
+    {"id": "C02", "result": "PASS", "evidence": "synthetic SIESTA fixture"},
+    {"id": "C03", "result": "PASS", "evidence": "engine-neutral static audit"},
+    {"id": "C04", "result": "PASS", "evidence": "bounded concurrency peak=2"},
+    {"id": "C05", "result": "PASS", "evidence": "CPU peak=8 of 8"},
+    {"id": "C06", "result": "PASS", "evidence": "exclusive host lease and release"},
+    {"id": "C07", "result": "PASS", "evidence": "walltime launch stop without attempt"},
+    {"id": "C08", "result": "PASS", "evidence": "controlled INTERRUPTED attempt"},
+    {"id": "C09", "result": "PASS", "evidence": "completed reuse and unfinished attempt-0002"},
+    {"id": "C10", "result": "PASS", "evidence": "artifact and parser-evidence tamper rejection"},
+    {"id": "C11", "result": "PASS", "evidence": "failed parent blocks descendant"},
+    {"id": "C12", "result": "PASS", "evidence": "independent sibling completes"},
+    {"id": "C13", "result": "PASS", "evidence": "explicit primary with reversed lexical names"},
+    {"id": "C14", "result": "PASS", "evidence": "second engine and unchanged runtime source hash"},
+    {"id": "C15", "result": "PASS", "evidence": "legacy config canonical translation"},
+    {"id": "C16", "result": "PASS", "evidence": "new package canonical worker and manifest"},
+    {"id": "C17", "result": "PASS", "evidence": "explicit historical controller compatibility"},
+    {"id": "C18", "result": "PASS", "evidence": "ScientificIdentity independent of ExecutionSpec"},
+    {"id": "C19", "result": "PASS", "evidence": "single_fdf regression"},
+    {"id": "C20", "result": "PASS", "evidence": "convergence regression unchanged"},
+    {"id": "C21", "result": "PASS", "evidence": "legacy allocation-controller regression"},
+    {"id": "C22", "result": "PASS", "evidence": "549 passed, 1 skipped"},
+    {"id": "C23", "result": "PASS", "evidence": "sdist/wheel/self-contained imports"},
+    {"id": "C24", "result": "PASS", "evidence": "one default production call graph"}
+  ],
+  "adversarial_answers": {
+    "new_workflow_without_independent_legacy_scheduler": true,
+    "bounded_resource_concurrency": true,
+    "new_engine_without_runtime_edits": true,
+    "siesta_parser_in_canonical_runtime": false,
+    "alphabetical_scientific_input_selection": false,
+    "valid_completed_work_reused": true,
+    "tampered_work_rejected": true,
+    "new_packages_default_to_legacy_runtime": false,
+    "convergence_migrated": false
+  }
 }

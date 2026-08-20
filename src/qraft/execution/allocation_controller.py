@@ -7,7 +7,7 @@ workflows execute through the engine-neutral ``CompiledWorkflowRuntime``.
 """
 
 from .allocation_controller_compat import (
-    AllocationController,
+    AllocationController as HistoricalAllocationController,
     ArtifactTransfer,
     ControllerConfig,
     ControllerTask,
@@ -15,11 +15,16 @@ from .allocation_controller_compat import (
     load_controller_config,
 )
 
+# Backward-compatible import only. New production CLI/package entry points use
+# CanonicalController and never select this historical scheduler implicitly.
+AllocationController = HistoricalAllocationController
+
 __all__ = [
     "AllocationController",
     "ArtifactTransfer",
     "ControllerConfig",
     "ControllerTask",
     "ExecutionStatus",
+    "HistoricalAllocationController",
     "load_controller_config",
 ]

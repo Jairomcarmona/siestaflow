@@ -29,6 +29,30 @@ class SiestaEngineAdapter(EngineAdapter):
     def inspect_input(self, path: Path):
         return self.fdf.parse_path(path)
 
+    def select_primary_input(self, **kwargs: Any) -> str:
+        """Select the FDF by explicit metadata, never by input-name ordering."""
+
+        inputs = dict(kwargs.get("inputs", {}))
+        bindings = dict(kwargs.get("bindings", {}))
+        settings = dict(kwargs.get("settings", {}))
+        declared = settings.get("primary_input")
+        if declared is not None:
+            selected = str(declared)
+            if selected not in inputs:
+                raise ValueError(f"unknown SIESTA primary input: {selected}")
+            return selected
+        candidates = [
+            name
+            for name, binding in bindings.items()
+            if str(getattr(binding, "media_type", "")).casefold()
+            == "application/x-siesta-fdf"
+        ]
+        if len(candidates) != 1:
+            raise ValueError(
+                "SIESTA multi-input execution requires one explicit FDF input"
+            )
+        return candidates[0]
+
     def validate_input(self, inspected: Any, **kwargs: Any):
         options = dict(kwargs.get("validation_options", {}))
         for name in ("pseudo_result", "require_pseudos"):
@@ -40,7 +64,8 @@ class SiestaEngineAdapter(EngineAdapter):
         fs: FileSystem = kwargs["filesystem"]
         validation = self.validate_input(inspected, **kwargs.get("validation_options", {}))
         destination = workspace / Path(inspected.source).name
-        fs.write_text(destination, inspected.render())
+        if not destination.is_file():
+            fs.write_text(destination, inspected.render())
         return PreparedInput(Path(inspected.source), destination, inspected.original_sha256, validation)
 
     def build_command(self, input_path: Path, **kwargs: Any) -> tuple[str, ...]:

@@ -66,6 +66,8 @@ class M4RemoteSmokePackager:
             "scientific_interpretation_allowed": False,
             "production_calculation": False,
             "login_node_persistent_process_required": False,
+            "execution_authority": "CompiledWorkflowRuntime",
+            "legacy_scheduler_default": False,
             "immutable_files": immutable,
         }
         files["manifest.json"] = _json(manifest)
@@ -136,6 +138,12 @@ class M4RemoteSmokePackager:
             "runtime/qraft/project_packages.py": base / "src/qraft/project_packages.py",
             "runtime/qraft/execution/allocation_controller.py": base / "src/qraft/execution/allocation_controller.py",
             "runtime/qraft/execution/allocation_controller_compat.py": base / "src/qraft/execution/allocation_controller_compat.py",
+            "runtime/qraft/execution/canonical_controller.py": base / "src/qraft/execution/canonical_controller.py",
+            "runtime/qraft/execution/capability_plugins.py": base / "src/qraft/execution/capability_plugins.py",
+            "runtime/qraft/execution/capability_runtime.py": base / "src/qraft/execution/capability_runtime.py",
+            "runtime/qraft/execution/command_capability.py": base / "src/qraft/execution/command_capability.py",
+            "runtime/qraft/execution/legacy_translation.py": base / "src/qraft/execution/legacy_translation.py",
+            "runtime/qraft/execution/resource_coordinator.py": base / "src/qraft/execution/resource_coordinator.py",
             "runtime/qraft/execution/adapters.py": base / "src/qraft/execution/adapters.py",
             "runtime/qraft/execution/direct_launcher.py": base / "src/qraft/execution/direct_launcher.py",
             "runtime/qraft/execution/hydra_launcher.py": base / "src/qraft/execution/hydra_launcher.py",
@@ -154,6 +162,17 @@ class M4RemoteSmokePackager:
             source_files[
                 f"runtime/qraft/contracts/{source.name}"
             ] = source
+        for directory in (base / "src/qraft/core", base / "src/qraft/engines/siesta"):
+            for source in sorted(item for item in directory.rglob("*") if item.is_file()):
+                source_files[
+                    f"runtime/{source.relative_to(base / 'src').as_posix()}"
+                ] = source
+        source_files.update({
+            "runtime/qraft/engines/base.py": base / "src/qraft/engines/base.py",
+            "runtime/qraft/errors.py": base / "src/qraft/errors.py",
+            "runtime/qraft/filesystem.py": base / "src/qraft/filesystem.py",
+            "runtime/qraft/hpc.py": base / "src/qraft/hpc.py",
+        })
         files = {name: path.read_bytes() for name, path in source_files.items()}
         files.update({
             "runtime/qraft/__init__.py": (base / "src/qraft/__init__.py").read_bytes(),
@@ -246,9 +265,10 @@ def _worker() -> str:
     return '''#!/usr/bin/env python3
 import json,sys
 from pathlib import Path
-from qraft.execution.allocation_controller import AllocationController,ExecutionStatus
+from qraft.execution.allocation_controller import ExecutionStatus
+from qraft.execution.canonical_controller import CanonicalController
 campaign=Path(sys.argv[1]); root=Path(sys.argv[2])
-controller=AllocationController.from_file(campaign,root=root)
+controller=CanonicalController.from_file(campaign,root=root)
 status=controller.run()
 print(json.dumps({'campaign_id':controller.config.campaign_id,'job_id':controller.slurm.job_id,'status':status.value,'summary':str(controller.summary_path),'login_node_persistent_process_required':False},sort_keys=True))
 raise SystemExit(0 if status is ExecutionStatus.COMPLETED else 2)
@@ -294,6 +314,8 @@ if any(p.is_symlink() for p in root.rglob('*')): fail('PACKAGE_SYMLINK_FORBIDDEN
 sys.path.insert(0,str(root/'runtime'))
 from qraft.execution.allocation_controller import load_controller_config
 load_controller_config(root/'campaign.yaml')
+worker=(root/'scripts/run_worker.py').read_text(encoding='utf-8')
+if 'CanonicalController' not in worker or 'AllocationController.from_file' in worker: fail('CANONICAL_RUNTIME_ENTRY_REQUIRED')
 script=(root/'campaign.slurm').read_text(encoding='utf-8')
 if re.search(r'^\s*srun\b.*run_worker',script,re.M): fail('CONTROLLER_MUST_NOT_USE_SRUN')
 if 'exec python3 "$ROOT/scripts/run_worker.py"' not in script: fail('DIRECT_BATCH_CONTROLLER_MISSING')
@@ -309,10 +331,10 @@ def _readme() -> str:
     return f'''# {PACKAGE_ID}
 
 Self-contained technical acceptance package for `{SYSTEM_ID}`. One `sbatch`
-runs the Python controller directly in its allocation; every SIESTA calculation
-is a bounded `srun --exclusive` job step. State under `state/`, attempts under
-`work/`, and summaries under `results/` survive a later `sbatch` with a new job
-ID. No scientific interpretation is allowed.
+runs the canonical compiled-workflow runtime directly in its allocation; every
+SIESTA calculation is a bounded `srun --exclusive` job step. State under
+`state/`, attempts under `work/`, and summaries under `results/` survive a later
+`sbatch` with a new job ID. No scientific interpretation is allowed.
 
 The package profile is external data, not a core default. Run the preflight on
 Yoltla before submission. A failed preflight must not be bypassed.

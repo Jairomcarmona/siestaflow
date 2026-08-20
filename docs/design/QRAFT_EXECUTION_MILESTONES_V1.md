@@ -168,7 +168,7 @@ non-goals, acceptance gates, evidence, status y closing commit.
 | Acceptance gates | Capability sintética nueva ejecuta sin modificar DAG/core scheduling; Generic Runtime no importa `SiestaOutputParser`. |
 | Required evidence | Capability sintética, contract/dependency/lifecycle/recovery tests y `docs/validation/m1_universal_runtime/`. |
 | Status | `CLOSED` |
-| Closing commit | Este commit: `feat: establish universal capability runtime`. |
+| Closing commit | Este commit: `fix: close M1 runtime convergence gap`; checkpoint preservado: `4964e9c`. |
 
 ### M2 — F02 Convergence Through Canonical DAG
 
@@ -298,7 +298,7 @@ La metodología científica/orchestrator sigue finalizándose. Al congelarse,
 entra como capabilities + recipe/workflow sobre el runtime aceptado, sin nueva
 infraestructura de ejecución.
 
-## Estado al cierre M0
+## Estado vigente de milestones
 
 | Milestone | Estado |
 |---|---|

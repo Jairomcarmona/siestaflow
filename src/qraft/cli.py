@@ -31,7 +31,8 @@ from .remote import RemotePackager, RemoteResultImporter
 from .remote_environment import EnvironmentProbePackager, RemoteEnvironmentImporter, RemoteEnvironmentStatus
 from .siesta_campaigns import CampaignDefinition, SiestaCampaignFactory, simulate_definition
 from .siesta_validation import SiestaContextualValidator
-from .execution.allocation_controller import AllocationController, ExecutionStatus
+from .execution.allocation_controller import ExecutionStatus
+from .execution.canonical_controller import CanonicalController
 from .execution.campaign_progress import read_campaign_progress, render_campaign_progress
 from .m4_remote_package import M4RemoteSmokePackager
 from .controller_package import ControllerPackageBuilder
@@ -1098,7 +1099,7 @@ def _dispatch(args: argparse.Namespace) -> int:
         if args.action == "worker":
             campaign_path = args.campaign.resolve()
             root = (args.root or Path(os.environ.get("SLURM_SUBMIT_DIR", campaign_path.parent))).resolve()
-            controller = AllocationController.from_file(campaign_path, root=root)
+            controller = CanonicalController.from_file(campaign_path, root=root)
             status = controller.run()
             _emit({
                 "campaign_id": controller.config.campaign_id,

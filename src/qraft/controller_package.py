@@ -58,6 +58,12 @@ class ControllerPackageBuilder:
         "src/qraft/project_packages.py",
         "src/qraft/execution/allocation_controller.py",
         "src/qraft/execution/allocation_controller_compat.py",
+        "src/qraft/execution/canonical_controller.py",
+        "src/qraft/execution/capability_plugins.py",
+        "src/qraft/execution/capability_runtime.py",
+        "src/qraft/execution/command_capability.py",
+        "src/qraft/execution/legacy_translation.py",
+        "src/qraft/execution/resource_coordinator.py",
         "src/qraft/execution/campaign_progress.py",
         "src/qraft/execution/adapters.py",
         "src/qraft/execution/direct_launcher.py",
@@ -86,7 +92,21 @@ class ControllerPackageBuilder:
         )
         if not contracts:
             raise ValueError("core contract runtime sources are missing")
-        return (*self.RUNTIME_FILES, *contracts)
+        support = tuple(
+            path.relative_to(self.repository_root).as_posix()
+            for directory in (
+                self.repository_root / "src/qraft/core",
+                self.repository_root / "src/qraft/engines/siesta",
+            )
+            for path in sorted(item for item in directory.rglob("*") if item.is_file())
+        )
+        standalone = (
+            "src/qraft/engines/base.py",
+            "src/qraft/errors.py",
+            "src/qraft/filesystem.py",
+            "src/qraft/hpc.py",
+        )
+        return tuple(dict.fromkeys((*self.RUNTIME_FILES, *contracts, *support, *standalone)))
 
     def build(
         self,
@@ -212,6 +232,8 @@ class ControllerPackageBuilder:
             "package_id": package_id,
             "system_id": config.system_id,
             "launcher_kind": config.launcher_kind,
+            "execution_authority": "CompiledWorkflowRuntime",
+            "legacy_scheduler_default": False,
             "login_node_persistent_process_required": False,
             "immutable_files": immutable,
         })
@@ -350,9 +372,10 @@ def _worker() -> str:
     return """#!/usr/bin/env python3
 import json,sys
 from pathlib import Path
-from qraft.execution.allocation_controller import AllocationController,ExecutionStatus
+from qraft.execution.allocation_controller import ExecutionStatus
+from qraft.execution.canonical_controller import CanonicalController
 campaign=Path(sys.argv[1]); root=Path(sys.argv[2])
-controller=AllocationController.from_file(campaign,root=root)
+controller=CanonicalController.from_file(campaign,root=root)
 status=controller.run()
 print(json.dumps({"campaign_id":controller.config.campaign_id,"job_id":controller.slurm.job_id,"status":status.value,"summary":str(controller.summary_path),"login_node_persistent_process_required":False},sort_keys=True))
 raise SystemExit(0 if status is ExecutionStatus.COMPLETED else 2)
@@ -410,6 +433,8 @@ if actual != seen|{{"checksums.sha256"}}: fail("CHECKSUM_COVERAGE_MISMATCH",str(
 sys.path.insert(0,str(root/"runtime"))
 from qraft.execution.allocation_controller import load_controller_config
 load_controller_config(root/"campaign.yaml")
+worker=(root/"scripts/run_worker.py").read_text(encoding="utf-8")
+if "CanonicalController" not in worker or "AllocationController.from_file" in worker: fail("CANONICAL_RUNTIME_ENTRY_REQUIRED")
 if (root/"run.lock.json").is_file():
  run=json.loads((root/"run.lock.json").read_text(encoding="utf-8"))
  resolution=run.get("payload",{{}}).get("metadata",{{}}).get("execution_resolution")
@@ -434,10 +459,10 @@ print("NO_LOGIN_PERSISTENT_PROCESS_REQUIRED")
 def _readme(package_id: str) -> str:
     return f"""# {package_id}
 
-Self-contained QRAFT 0.2 allocation-controller package. The Python
-controller lives only inside the SLURM allocation. Scientific tasks use the
-launcher declared in `campaign.yaml`; state, attempts and evidence survive
-resubmission.
+Self-contained QRAFT 0.2 canonical-runtime package. Compatibility translation
+loads `campaign.yaml`, then `CompiledWorkflowRuntime` owns DAG state, resources,
+attempts and recovery inside the allocation. Historical controller state is
+handled only through the explicit compatibility API.
 
 ```bash
 python3 verify_package.py

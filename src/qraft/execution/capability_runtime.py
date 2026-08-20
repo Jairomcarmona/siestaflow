@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import shutil
-import time
+import threading
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import asdict, dataclass, is_dataclass
 from datetime import datetime, timezone
 from enum import Enum
@@ -21,7 +21,6 @@ from typing import Any, Mapping
 from ..contracts import (
     EXECUTION_EVIDENCE,
     EXECUTION_REQUEST,
-    CapabilityKind,
     CapabilityRegistry,
     CompiledWorkflow,
     ContractCompatibilityError,
@@ -36,10 +35,29 @@ from ..core import (
     TechnicalValidation,
 )
 from ..filesystem import RealFileSystem
+from .adapters import launcher_registry
+from .resource_coordinator import (
+    CooperativeShutdown,
+    ResourceCoordinator,
+    ResourceLease,
+    ResourceRequest,
+    RuntimeAllocation,
+    ShutdownControl,
+    local_allocation,
+)
 from .srun_launcher import StepLaunchSpec, StepLauncher, StepOutcome
 
 
 _TERMINAL_FAILURES = {"FAILED", "BLOCKED", "CANCELLED"}
+_EXECUTABLE_CAPABILITY_METHODS = (
+    "inspect_input",
+    "validate_input",
+    "prepare_task",
+    "build_command",
+    "parse_output",
+    "discover_artifacts",
+    "classify_result",
+)
 
 
 def _utc_now() -> str:
@@ -113,6 +131,8 @@ class WorkflowRuntimeResult:
     node_results: Mapping[str, NodeResult]
     attempts: Mapping[str, Attempt]
     reused_nodes: tuple[str, ...]
+    peak_cpus: int = 0
+    peak_parallel_steps: int = 0
 
 
 class CompiledWorkflowRuntime:
@@ -130,7 +150,10 @@ class CompiledWorkflowRuntime:
         source_root: Path,
         scientific_identities: Mapping[str, ScientificIdentity],
         execution_specs: Mapping[str, ExecutionSpec] | ExecutionSpec,
-        launcher: StepLauncher,
+        launcher: StepLauncher | Mapping[str, StepLauncher],
+        allocation: RuntimeAllocation | None = None,
+        shutdown: ShutdownControl | None = None,
+        poll_interval_seconds: float = 0.05,
     ) -> None:
         if not registry.frozen:
             raise ValueError("capability registry must be frozen before execution")
@@ -149,7 +172,20 @@ class CompiledWorkflowRuntime:
             raise ValueError("scientific identity mapping must cover every task")
         if set(self.execution_specs) != task_ids:
             raise ValueError("execution spec mapping must cover every task")
-        self.launcher = launcher
+        if isinstance(launcher, Mapping):
+            if not launcher:
+                raise ValueError("launcher mapping must not be empty")
+            self.launchers = {
+                str(name).strip().casefold(): value
+                for name, value in launcher.items()
+            }
+        else:
+            self.launchers = {"*": launcher}
+        requests = tuple(self._resource_request(task) for task in workflow.tasks)
+        self.allocation = allocation or local_allocation(requests)
+        self.coordinator = ResourceCoordinator(self.allocation)
+        self.shutdown = shutdown or CooperativeShutdown()
+        self.poll_interval_seconds = max(0.001, float(poll_interval_seconds))
         self.filesystem = RealFileSystem()
         self.state_path = self.root / "state" / "workflow_runtime.json"
         self.events_path = self.root / "evidence" / "workflow_events.jsonl"
@@ -157,6 +193,8 @@ class CompiledWorkflowRuntime:
         self._results: dict[str, NodeResult] = {}
         self._attempts: dict[str, Attempt] = {}
         self._reused: set[str] = set()
+        self._assigned_hosts: dict[str, tuple[str, ...]] = {}
+        self._state_lock = threading.RLock()
 
     @property
     def runtime_fingerprint(self) -> str:
@@ -173,25 +211,181 @@ class CompiledWorkflowRuntime:
         }
         return hashlib.sha256(_canonical(payload).encode("utf-8")).hexdigest()
 
+    def _resource_request(self, task: WorkflowTaskNode) -> ResourceRequest:
+        execution = self.execution_specs[task.task_id]
+        try:
+            requires_hosts = bool(
+                launcher_registry.require(execution.launcher).requires_hosts
+            )
+        except ValueError:
+            # Explicitly composed fixture/custom launchers need no global
+            # registry mutation unless they request host-aware placement.
+            requires_hosts = False
+        return ResourceRequest(
+            task_id=task.task_id,
+            cpus=execution.allocated_cpus,
+            nodes=execution.nodes,
+            exclusive_hosts=requires_hosts,
+        )
+
+    def _launcher_for(self, task: WorkflowTaskNode) -> StepLauncher:
+        name = self.execution_specs[task.task_id].launcher.casefold()
+        if name in self.launchers:
+            return self.launchers[name]
+        if "*" in self.launchers:
+            return self.launchers["*"]
+        raise ValueError(f"no launcher composed for execution adapter: {name}")
+
+    def _terminate_launchers(self) -> tuple[str, ...]:
+        affected: set[str] = set()
+        seen: set[int] = set()
+        for launcher in self.launchers.values():
+            identity = id(launcher)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            affected.update(launcher.terminate_all())
+        return tuple(sorted(affected))
+
+    def _remaining_allocation_allows(self, task: WorkflowTaskNode) -> bool:
+        estimate = float(
+            task.resources.get(
+                "estimated_runtime_seconds",
+                self.execution_specs[task.task_id].walltime_seconds,
+            )
+        )
+        if estimate < 0:
+            raise ValueError("estimated_runtime_seconds cannot be negative")
+        required = estimate + self.allocation.shutdown_margin_seconds
+        return self.allocation.remaining_seconds() > required
+
     def run(self) -> WorkflowRuntimeResult:
         self.root.mkdir(parents=True, exist_ok=True)
         self._verify_external_artifacts()
         self._load_or_initialize_state()
         self._recover_completed_nodes()
+        invocation = {
+            "allocation_id": self.allocation.allocation_id,
+            "started_at": _utc_now(),
+            "capacity": {
+                "cpus": self.allocation.total_cpus,
+                "nodes": self.allocation.total_nodes,
+                "max_parallel_steps": self.allocation.max_parallel_steps,
+                "hosts": list(self.allocation.hosts),
+            },
+        }
+        with self._state_lock:
+            self._state.setdefault("allocation_history", []).append(invocation)
+            self._save_state()
+        self._event("RUNTIME_INVOCATION_STARTED", **invocation)
         attempted_this_run: set[str] = set()
 
-        while True:
-            self._block_descendants()
-            ready = [
-                task
-                for task in self.workflow.tasks
-                if self._is_ready(task) and task.task_id not in attempted_this_run
-            ]
-            if not ready:
-                break
-            for task in ready:
-                attempted_this_run.add(task.task_id)
-                self._execute_task(task)
+        active: dict[Future[None], tuple[WorkflowTaskNode, ResourceLease]] = {}
+        with ThreadPoolExecutor(
+            max_workers=self.allocation.max_parallel_steps
+        ) as executor:
+            while True:
+                self._block_descendants()
+                if (
+                    not self.shutdown.requested
+                    and self.allocation.remaining_seconds()
+                    <= self.allocation.shutdown_margin_seconds
+                ):
+                    self.shutdown.request("WALLTIME_MARGIN")
+                    self._event(
+                        "WALLTIME_LAUNCH_STOP",
+                        remaining_seconds=self.allocation.remaining_seconds(),
+                    )
+
+                launched = False
+                if not self.shutdown.requested:
+                    ready = [
+                        task
+                        for task in self.workflow.tasks
+                        if task.task_id not in attempted_this_run
+                        and self._is_ready(task)
+                    ]
+                    for task in ready:
+                        request = self._resource_request(task)
+                        if not self.coordinator.can_ever_fit(request):
+                            attempted_this_run.add(task.task_id)
+                            self._set_task(
+                                task.task_id,
+                                "BLOCKED",
+                                "resource request exceeds allocation capacity",
+                            )
+                            continue
+                        if not self._remaining_allocation_allows(task):
+                            self.shutdown.request("INSUFFICIENT_WALLTIME")
+                            self._event(
+                                "WALLTIME_LAUNCH_STOP",
+                                task_id=task.task_id,
+                                remaining_seconds=self.allocation.remaining_seconds(),
+                            )
+                            break
+                        lease = self.coordinator.try_acquire(request)
+                        if lease is None:
+                            continue
+                        attempted_this_run.add(task.task_id)
+                        self._assigned_hosts[task.task_id] = lease.hosts
+                        future = executor.submit(self._execute_task, task)
+                        active[future] = (task, lease)
+                        launched = True
+                        self._event(
+                            "RESOURCE_ACQUIRED",
+                            task_id=task.task_id,
+                            cpus=lease.cpus,
+                            hosts=list(lease.hosts),
+                        )
+
+                if active:
+                    if self.shutdown.requested:
+                        immediate = self.shutdown.reason == "SIGTERM"
+                        grace_expired = (
+                            self.shutdown.elapsed_seconds
+                            >= self.allocation.termination_grace_seconds
+                        )
+                        if (
+                            immediate
+                            or grace_expired
+                            or self.allocation.remaining_seconds() <= 1
+                        ):
+                            affected = self._terminate_launchers()
+                            if affected:
+                                self._event(
+                                    "ACTIVE_ATTEMPTS_TERMINATED",
+                                    attempt_ids=list(affected),
+                                    reason=self.shutdown.reason,
+                                )
+                    done, _ = wait(
+                        tuple(active),
+                        timeout=self.poll_interval_seconds,
+                        return_when=FIRST_COMPLETED,
+                    )
+                    for future in done:
+                        task, lease = active.pop(future)
+                        try:
+                            future.result()
+                        except Exception as exc:  # defensive isolation
+                            self._set_task(
+                                task.task_id,
+                                "INCOMPLETE",
+                                f"runtime worker error: {type(exc).__name__}: {exc}",
+                            )
+                        finally:
+                            self._assigned_hosts.pop(task.task_id, None)
+                            self.coordinator.release(lease)
+                            self._event(
+                                "RESOURCE_RELEASED",
+                                task_id=task.task_id,
+                                cpus=lease.cpus,
+                                hosts=list(lease.hosts),
+                            )
+                    continue
+                if not launched:
+                    break
+
+        self.coordinator.assert_released()
 
         statuses = {
             task_id: record["status"]
@@ -199,6 +393,8 @@ class CompiledWorkflowRuntime:
         }
         if all(value == "COMPLETED" for value in statuses.values()):
             overall = "COMPLETED"
+        elif self.shutdown.requested:
+            overall = "INTERRUPTED"
         elif any(value == "FAILED" for value in statuses.values()):
             overall = "FAILED"
         elif any(value == "INTERRUPTED" for value in statuses.values()):
@@ -206,12 +402,23 @@ class CompiledWorkflowRuntime:
         else:
             overall = "BLOCKED"
         self._state["status"] = overall
+        invocation.update(
+            {
+                "finished_at": _utc_now(),
+                "status": overall,
+                "peak_cpus": self.coordinator.peak_cpus,
+                "peak_parallel_steps": self.coordinator.peak_steps,
+            }
+        )
+        self._event("RUNTIME_INVOCATION_FINISHED", **invocation)
         self._save_state()
         return WorkflowRuntimeResult(
             overall,
             dict(self._results),
             dict(self._attempts),
             tuple(sorted(self._reused)),
+            self.coordinator.peak_cpus,
+            self.coordinator.peak_steps,
         )
 
     def _initial_state(self) -> dict[str, Any]:
@@ -221,6 +428,7 @@ class CompiledWorkflowRuntime:
             "workflow_id": self.workflow.workflow_id,
             "status": "PENDING",
             "revision": 0,
+            "allocation_history": [],
             "tasks": {
                 task.task_id: {
                     "status": "PENDING",
@@ -252,32 +460,39 @@ class CompiledWorkflowRuntime:
         self._state = payload
 
     def _save_state(self) -> None:
-        self._state["revision"] = int(self._state.get("revision", 0)) + 1
-        self._state["updated_at"] = _utc_now()
-        payload = json.loads(_canonical(self._state))
-        wrapper = {
-            "schema_version": self.STATE_SCHEMA,
-            "payload": payload,
-            "sha256": hashlib.sha256(_canonical(payload).encode("utf-8")).hexdigest(),
-        }
-        self.filesystem.atomic_write_json(self.state_path, wrapper)
+        with self._state_lock:
+            self._state["revision"] = int(self._state.get("revision", 0)) + 1
+            self._state["updated_at"] = _utc_now()
+            payload = json.loads(_canonical(self._state))
+            wrapper = {
+                "schema_version": self.STATE_SCHEMA,
+                "payload": payload,
+                "sha256": hashlib.sha256(
+                    _canonical(payload).encode("utf-8")
+                ).hexdigest(),
+            }
+            self.filesystem.atomic_write_json(self.state_path, wrapper)
 
     def _event(self, event: str, **fields: object) -> None:
-        record = {"event": event, "at": _utc_now(), **fields}
-        self.filesystem.append_text(self.events_path, _canonical(record) + "\n")
+        with self._state_lock:
+            record = {"event": event, "at": _utc_now(), **fields}
+            self.filesystem.append_text(
+                self.events_path, _canonical(record) + "\n"
+            )
 
     def _set_task(self, task_id: str, status: str, reason: str, **fields: object) -> None:
-        current = self._state["tasks"][task_id]
-        previous = current["status"]
-        current.update({"status": status, "reason": reason, **fields})
-        self._event(
-            "TASK_STATE",
-            task_id=task_id,
-            previous=previous,
-            status=status,
-            reason=reason,
-        )
-        self._save_state()
+        with self._state_lock:
+            current = self._state["tasks"][task_id]
+            previous = current["status"]
+            current.update({"status": status, "reason": reason, **fields})
+            self._event(
+                "TASK_STATE",
+                task_id=task_id,
+                previous=previous,
+                status=status,
+                reason=reason,
+            )
+            self._save_state()
 
     def _verify_external_artifacts(self) -> None:
         for artifact in self.workflow.external_artifacts:
@@ -449,25 +664,66 @@ class CompiledWorkflowRuntime:
             raise ValueError(f"workflow task has no executable input: {task.task_id}")
         return resolved
 
+    def _resolve_executable_capability(self, task: WorkflowTaskNode):
+        registered = self.registry.resolve(
+            task.capability_id,
+            required_inputs=(EXECUTION_REQUEST,),
+            required_outputs=(EXECUTION_EVIDENCE,),
+        )
+        missing = [
+            name
+            for name in _EXECUTABLE_CAPABILITY_METHODS
+            if not callable(getattr(registered.implementation, name, None))
+        ]
+        if missing:
+            raise TypeError(
+                f"runtime capability lacks executable contract methods: {missing}"
+            )
+        return registered
+
+    @staticmethod
+    def _select_primary_input(
+        task: WorkflowTaskNode,
+        capability: object,
+        inputs: Mapping[str, Path],
+    ) -> str:
+        if len(inputs) == 1:
+            return next(iter(inputs))
+        selector = getattr(capability, "select_primary_input", None)
+        if not callable(selector):
+            raise TypeError(
+                f"multi-input capability must explicitly select its primary input: "
+                f"{task.capability_id}"
+            )
+        selected = str(
+            selector(
+                inputs=dict(inputs),
+                bindings={item.name: item for item in task.inputs},
+                settings=dict(task.settings),
+            )
+        )
+        if selected not in inputs:
+            raise ValueError(
+                f"capability selected unknown primary input {selected!r} for {task.task_id}"
+            )
+        return selected
+
     def _execute_task(self, task: WorkflowTaskNode) -> None:
+        hosts = self._assigned_hosts.get(task.task_id, ())
         record = self._state["tasks"][task.task_id]
         try:
-            registered = self.registry.resolve(
-                task.capability_id,
-                required_inputs=(EXECUTION_REQUEST,),
-                required_outputs=(EXECUTION_EVIDENCE,),
-            )
-            if registered.descriptor.kind is not CapabilityKind.ENGINE:
-                raise TypeError(
-                    f"runtime capability is not an ENGINE: {task.capability_id}"
-                )
+            registered = self._resolve_executable_capability(task)
             inputs = self._resolve_inputs(task)
-            primary = inputs[sorted(inputs)[0]]
+            primary_name = self._select_primary_input(
+                task, registered.implementation, inputs
+            )
+            primary = inputs[primary_name]
             inspected = registered.implementation.inspect_input(primary)
             validation = registered.implementation.validate_input(
                 inspected,
                 settings=dict(task.settings),
                 inputs=dict(inputs),
+                bindings={item.name: item for item in task.inputs},
             )
             raw_status = getattr(getattr(validation, "status", None), "value", getattr(validation, "status", None))
             if raw_status is not None and str(raw_status).upper() in {"FAIL", "BLOCKED"}:
@@ -481,10 +737,16 @@ class CompiledWorkflowRuntime:
         attempt_root = self._attempt_path(task.task_id, attempt_id)
         attempt_root.mkdir(parents=True, exist_ok=False)
         input_evidence: dict[str, str] = {}
+        staged_inputs: dict[str, Path] = {}
+        bindings = {item.name: item for item in task.inputs}
         for name, source in sorted(inputs.items()):
-            destination = attempt_root / ".qraft" / "inputs" / name / source.name
-            destination.parent.mkdir(parents=True, exist_ok=False)
+            destination = attempt_root / _safe_relative(
+                bindings[name].destination,
+                field=f"{task.task_id}.{name}.destination",
+            )
+            destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, destination)
+            staged_inputs[name] = destination
             input_evidence[destination.relative_to(attempt_root).as_posix()] = _sha_file(destination)
 
         started = _utc_now()
@@ -497,12 +759,16 @@ class CompiledWorkflowRuntime:
             manifest_sha256=None,
         )
         try:
+            staged_inspected = registered.implementation.inspect_input(
+                staged_inputs[primary_name]
+            )
             prepared = registered.implementation.prepare_task(
-                inspected,
+                staged_inspected,
                 attempt_root,
                 filesystem=self.filesystem,
                 settings=dict(task.settings),
-                inputs=dict(inputs),
+                inputs=dict(staged_inputs),
+                bindings=bindings,
                 task_id=task.task_id,
                 attempt_id=attempt_id,
             )
@@ -520,7 +786,7 @@ class CompiledWorkflowRuntime:
             )
             if not command:
                 raise ValueError("capability returned an empty command")
-            outcome = self.launcher.launch(
+            outcome = self._launcher_for(task).launch(
                 StepLaunchSpec(
                     task_id=task.task_id,
                     attempt_id=attempt_id,
@@ -533,6 +799,7 @@ class CompiledWorkflowRuntime:
                     executable=command[0],
                     executable_arguments=command[1:],
                     environment=execution_spec.environment,
+                    hosts=hosts,
                     processes_per_node=execution_spec.ranks_per_node,
                 )
             )
@@ -552,8 +819,9 @@ class CompiledWorkflowRuntime:
 
         manifest_path = attempt_root / "attempt.json"
         manifest_sha = _sha_file(manifest_path)
-        self._attempts[task.task_id] = attempt
-        self._results[task.task_id] = attempt.result
+        with self._state_lock:
+            self._attempts[task.task_id] = attempt
+            self._results[task.task_id] = attempt.result
         self._set_task(
             task.task_id,
             attempt.result.execution_state,
@@ -650,7 +918,7 @@ class CompiledWorkflowRuntime:
                     raise ValueError(f"capability/workflow artifact hash mismatch: {output.relative_path}")
             elif output.required:
                 missing.append(output.relative_path)
-        if missing:
+        if missing and execution_state != "INTERRUPTED":
             technical = TechnicalValidation(
                 "FAIL",
                 "REQUIRED_ARTIFACT_MISSING",

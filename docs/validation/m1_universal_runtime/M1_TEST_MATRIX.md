@@ -1,5 +1,7 @@
 # M1 test matrix
 
+## Checkpoint `4964e9c` matrix (preserved)
+
 Command keys:
 
 - `FOCUSED`: final 80-test M1 matrix recorded in `evidence/commands.txt`.
@@ -30,3 +32,38 @@ Command keys:
 Package acceptance: BUILD passed and the wheel contains/imports the generic
 runtime, explicit SIESTA composition helper, stable controller facade and
 legacy compatibility module.
+
+## Runtime convergence closure matrix
+
+Command keys for this table:
+
+- `CLOSURE_FOCUSED`: 101-test closure/regression matrix.
+- `CLOSURE_FULL`: final repository suite.
+- `CLOSURE_BUILD`: final sdist/wheel/inventory/import smoke.
+
+| ID | Property | Status | Exact evidence | Command |
+|---|---|---|---|---|
+| C01 | Synthetic registered capability through canonical runtime | PASS | original `test_registry_executes_synthetic_compiled_node_with_one_attempt` | CLOSURE_FOCUSED |
+| C02 | SIESTA fixture through same runtime | PASS | original `test_siesta_adapter_executes_through_registered_generic_path` | CLOSURE_FOCUSED |
+| C03 | Runtime/coordinator engine-neutral | PASS | closure architecture static test | CLOSURE_FOCUSED |
+| C04 | Bounded independent-node concurrency | PASS | `test_ready_tree_runs_with_exact_bounded_concurrency` | CLOSURE_FOCUSED |
+| C05 | CPU budget never exceeded | PASS | `test_cpu_budget_waits_and_releases_without_overallocation` | CLOSURE_FOCUSED |
+| C06 | Host/node policy and release | PASS | `test_host_leases_are_exclusive_and_released` | CLOSURE_FOCUSED |
+| C07 | Unsafe walltime launch prevented | PASS | `test_walltime_stop_is_resumable_and_completed_work_reuses` | CLOSURE_FOCUSED |
+| C08 | Controlled interruption is `INTERRUPTED` | PASS | `test_controlled_interruption_resumes_only_unfinished_attempt` | CLOSURE_FOCUSED |
+| C09 | Allocation continuation/reuse | PASS | walltime and controlled-interruption recovery fixtures | CLOSURE_FOCUSED |
+| C10 | Tampered work rejected | PASS | original artifact/parser evidence tamper fixtures | CLOSURE_FOCUSED |
+| C11 | Failed parent blocks descendant | PASS | original opaque failure fixture | CLOSURE_FOCUSED |
+| C12 | Independent sibling completes | PASS | original opaque failure fixture | CLOSURE_FOCUSED |
+| C13 | Explicit multi-input selection | PASS | parameterized lexical-order reversal fixture | CLOSURE_FOCUSED |
+| C14 | Second engine, zero runtime edits | PASS | source-hash-bound second-engine fixture | CLOSURE_FOCUSED |
+| C15 | Legacy config translation | PASS | schema translation fixture | CLOSURE_FOCUSED |
+| C16 | New package canonical default | PASS | generated worker/manifest and self-contained import | CLOSURE_FOCUSED |
+| C17 | Historical recovery supported | PASS | unchanged legacy suite and explicit facade boundary | CLOSURE_FOCUSED |
+| C18 | Scientific/execution identity separation | PASS | original identity test and single-FDF regression | CLOSURE_FOCUSED |
+| C19 | `single_fdf` regression | PASS | `tests/runtime_v1/test_single_fdf_vertical.py` | CLOSURE_FOCUSED |
+| C20 | Convergence unchanged | PASS | `tests/campaigns/test_campaign_spec_v1.py`; no source diff | CLOSURE_FOCUSED + CLOSURE_FULL |
+| C21 | Legacy controller regression | PASS | `tests/m4/test_allocation_controller.py` | CLOSURE_FOCUSED |
+| C22 | Full suite | PASS | 549 passed, 1 skipped | CLOSURE_FULL |
+| C23 | Build/wheel/install smoke | PASS | final sdist/wheel and both wheel/self-contained imports | CLOSURE_BUILD |
+| C24 | No second default production runtime | PASS | CLI/package static call-graph audit | CLOSURE_FOCUSED |

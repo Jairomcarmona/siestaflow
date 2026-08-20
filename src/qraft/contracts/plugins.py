@@ -21,6 +21,7 @@ from .versioning import (
 
 class CapabilityKind(str, Enum):
     ENGINE = "ENGINE"
+    EXECUTABLE = "EXECUTABLE"
     VALIDATION_RULE = "VALIDATION_RULE"
     RULE_PROVIDER = "RULE_PROVIDER"
     LAUNCHER = "LAUNCHER"
@@ -33,6 +34,15 @@ class CapabilityKind(str, Enum):
 
 _REQUIRED_METHODS = {
     CapabilityKind.ENGINE: (
+        "inspect_input",
+        "validate_input",
+        "prepare_task",
+        "build_command",
+        "parse_output",
+        "discover_artifacts",
+        "classify_result",
+    ),
+    CapabilityKind.EXECUTABLE: (
         "inspect_input",
         "validate_input",
         "prepare_task",

@@ -29,7 +29,9 @@ def read_campaign_progress(value: Path) -> dict[str, Any]:
     """Validate persisted state and return a stable progress snapshot."""
     root, campaign_path = _resolve_root(value)
     config = load_controller_config(campaign_path)
-    state_path = root / "state" / "campaign_state.json"
+    canonical_state = root / "state" / "workflow_runtime.json"
+    legacy_state = root / "state" / "campaign_state.json"
+    state_path = canonical_state if canonical_state.is_file() else legacy_state
     if not state_path.is_file():
         tasks = {
             task.task_id: {
@@ -51,13 +53,22 @@ def read_campaign_progress(value: Path) -> dict[str, Any]:
         digest = hashlib.sha256(_canonical(payload).encode("utf-8")).hexdigest()
         if digest != wrapper.get("sha256"):
             raise ValueError("campaign state checksum mismatch")
-        if payload.get("campaign_id") != config.campaign_id:
-            raise ValueError("campaign state identity mismatch")
         tasks = payload.get("tasks", {})
         if not isinstance(tasks, dict):
             raise ValueError("campaign state tasks are invalid")
+        expected_tasks = {task.task_id for task in config.tasks}
+        if set(tasks) != expected_tasks:
+            raise ValueError("campaign state task identity mismatch")
+        if state_path == legacy_state and payload.get("campaign_id") != config.campaign_id:
+            raise ValueError("campaign state identity mismatch")
         campaign_status = str(payload.get("status", "UNKNOWN"))
         current_job_id = payload.get("current_job_id")
+        if state_path == canonical_state:
+            summary = root / "results" / "campaign_summary.json"
+            if summary.is_file():
+                current_job_id = json.loads(
+                    summary.read_text(encoding="utf-8")
+                ).get("job_id")
         revision = int(payload.get("revision", 0))
     ordered: list[dict[str, Any]] = []
     for index, task in enumerate(config.tasks, start=1):

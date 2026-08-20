@@ -27,3 +27,40 @@ $out = 'C:\Users\Jairo\Downloads\SIESTAFLOW_CONTEXT\.codex-build\m1-universal-ru
 git diff --check
 git diff --name-only
 rg -n 'engines\.siesta|SiestaOutputParser|engine\s*==|task_kind\s*==' src/qraft/execution/capability_runtime.py src/qraft/execution/allocation_controller.py
+
+# Runtime convergence closure baseline at 4964e9c
+git status --short
+git branch --show-current
+git rev-parse HEAD
+git log -1 --oneline
+# result: clean feat/qraft-m1-universal-runtime at 4964e9c44fffb671224279665ccfd651766c13a3
+
+$env:PYTHONPATH=(Resolve-Path 'src').Path; & '..\qraft-productization-build-venv\Scripts\python.exe' -m pytest -q tests/contracts tests/workflows tests/execution/test_capability_runtime.py tests/m4/test_allocation_controller.py tests/runtime_v1/test_single_fdf_vertical.py tests/campaigns/test_campaign_spec_v1.py
+# result: 80 passed in 12.58s
+
+$env:PYTHONPATH=(Resolve-Path 'src').Path; & '..\qraft-productization-build-venv\Scripts\python.exe' -m pytest -q
+# result: 537 passed, 1 skipped in 71.38s
+
+# New resource scheduling and architecture gates
+$env:PYTHONPATH=(Resolve-Path 'src').Path; & '..\qraft-productization-build-venv\Scripts\python.exe' -m pytest -q tests/execution/test_runtime_convergence_closure.py
+# result: 12 passed in 1.17s
+
+# Final closure focused matrix
+$env:PYTHONPATH=(Resolve-Path 'src').Path; & '..\qraft-productization-build-venv\Scripts\python.exe' -m pytest -q tests/contracts tests/workflows tests/execution/test_capability_runtime.py tests/execution/test_runtime_convergence_closure.py tests/m4/test_allocation_controller.py tests/m4/test_controller_package.py tests/m4/test_remote_package.py tests/runtime_v1/test_single_fdf_vertical.py tests/campaigns/test_campaign_spec_v1.py
+# result: 101 passed in 31.10s
+
+# Final closure full suite
+$env:PYTHONPATH=(Resolve-Path 'src').Path; & '..\qraft-productization-build-venv\Scripts\python.exe' -m pytest -q
+# result: 549 passed, 1 skipped in 90.56s
+
+# Final closure package smoke
+$out='C:\Users\Jairo\Downloads\SIESTAFLOW_CONTEXT\.codex-build\m1-runtime-convergence-closure-final'; & '..\qraft-productization-build-venv\Scripts\python.exe' -m build --no-isolation --outdir $out
+# result: sdist/wheel built; FINAL_WHEEL_INVENTORY_IMPORT_PASS
+# generated controller package self-contained canonical import: PASS
+
+# Final architecture/static audit
+git diff --check
+rg -n 'SiestaOutputParser|engines\.siesta|engine\s*==|task_kind\s*==|require_scf_converged|inputs\[sorted\(inputs\)\[0\]\]' src/qraft/execution/capability_runtime.py src/qraft/execution/resource_coordinator.py
+rg -n 'CanonicalController\.from_file|AllocationController\.from_file' src/qraft/cli.py src/qraft/controller_package.py src/qraft/m4_remote_package.py
+git diff --name-only -- src/qraft/protocols/convergence.py src/qraft/core/runtime.py
+# result: engine-neutral runtime no hits; production entries canonical; forbidden-scope diff empty

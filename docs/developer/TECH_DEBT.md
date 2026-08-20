@@ -33,14 +33,16 @@ The following productization findings were resolved in the boundary closure:
   400 lines after CampaignSpec v1. Their current size is acceptable, but new
   protocols must reuse their typed contracts and extract cohesive services
   rather than extending either module into a protocol catch-all.
-- The schema 1/2 allocation controller remains SIESTA-shaped at its persisted
-  compatibility boundary. M1 isolates that implementation in
-  `allocation_controller_compat.py`; new `CompiledWorkflow` execution is
-  engine-neutral and resolves implementations through `CapabilityRegistry`.
-  Do not add new scientific semantics to the compatibility path.
-- Persisted Attempt representations are not yet repository-wide unified. The
-  M1 compiled-workflow path has one authoritative immutable Attempt lifecycle;
-  legacy evidence retains deterministic compatibility views until migrated.
+- The schema 1/2 allocation controller remains SIESTA-shaped only at its
+  explicit historical persisted-state boundary. New CLI and package workers
+  translate accepted configs into `CompiledWorkflow`/`ExecutionSpec` and use
+  `CompiledWorkflowRuntime`; `HistoricalAllocationController` is retained for
+  nondestructive recovery of old `campaign_state.json`. Do not add new
+  production authoring or scientific semantics to that compatibility path.
+- Persisted Attempt representations are not yet repository-wide unified. All
+  new canonical production execution has one immutable Attempt lifecycle;
+  historical controller evidence retains deterministic compatibility views
+  and is never destructively migrated.
 - Convergence runtime migration → M2. `ConvergenceProtocol` deliberately keeps
   its existing sequential `execute_fdf_plan()` loop during M1.
 - Native persistent REPL history is not implemented; v1 history is per session.
@@ -51,6 +53,10 @@ The following productization findings were resolved in the boundary closure:
 
 ## P2
 
+- Resource scheduling closure is proven by deterministic synthetic fixtures
+  and self-contained package/build gates, not a real cluster acceptance run.
+  Real Slurm/Hydra capacity and signal acceptance remains deployment evidence,
+  not a second runtime implementation.
 - Historical standalone packaging duplicates selected runtime files. It remains
   a tested deployment fallback but increases release maintenance.
 - Optional verbose/details presentation over persisted evidence is not yet
