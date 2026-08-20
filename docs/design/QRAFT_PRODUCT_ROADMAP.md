@@ -9,6 +9,14 @@ principios estables pertenecen a
 [`QRAFT_BACKBONE.md`](QRAFT_BACKBONE.md) y el detalle del corte 0.2 a
 [`QRAFT_0_2_RELEASE_STATUS.md`](QRAFT_0_2_RELEASE_STATUS.md).
 
+## Execution architecture rebaseline after d5f0397
+
+La secuencia vinculante de implementación y sus gates se congela en
+[`QRAFT_EXECUTION_MILESTONES_V1.md`](QRAFT_EXECUTION_MILESTONES_V1.md). Los
+estados históricos de Fase 3/4 en este roadmap siguen siendo evidencia válida
+de sus respectivos cortes, pero no sustituyen los nuevos gates de unificación
+del runtime. El rebaseline no promueve M1–M10 por funcionalidad histórica.
+
 ## Prioridad y dependencia crítica
 
 El camino remoto positivo de Fase 3 fue completado por el job Yoltla `781100`

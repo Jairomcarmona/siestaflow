@@ -35,6 +35,9 @@ The following productization findings were resolved in the boundary closure:
   rather than extending either module into a protocol catch-all.
 - `allocation_controller.py` remains large and combines orchestration with
   evidence/output concerns. Refactor only behind existing behavioral tests.
+- Runtime/controller remains partially SIESTA-aware until M1. The M1 generic
+  runtime and capability boundary own the remediation; do not add protocol-
+  specific execution paths meanwhile.
 - Native persistent REPL history is not implemented; v1 history is per session.
 - Legacy packaging commands still need a checked-out source tree containing
   their historical assets. They remain hidden from installed CLI help until

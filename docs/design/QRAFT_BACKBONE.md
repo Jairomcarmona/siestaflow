@@ -10,6 +10,11 @@ secuencia de entrega en
 documento define la misión, los límites y los invariantes que no deben
 depender de un corte temporal.
 
+La secuencia vinculante de implementación de la arquitectura de ejecución y
+sus gates está en
+[`QRAFT_EXECUTION_MILESTONES_V1.md`](QRAFT_EXECUTION_MILESTONES_V1.md); no
+modifica los invariantes de esta columna vertebral.
+
 ## 1. Misión y autoridad científica
 
 QRAFT transforma una intención científica declarada en un workflow DFT
