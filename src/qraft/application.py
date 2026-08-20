@@ -15,6 +15,10 @@ from .errors import PreflightError
 from .execution.adapters import launcher_registry
 from .execution_profiles import ExecutionProfile, ProfileStore
 from .output import OutputContributor
+from .campaign_spec import CampaignSpec, is_campaign_file
+from .protocols.convergence import (
+    ConvergenceProtocol, build_convergence_plan, execute_convergence_plan,
+)
 from .protocols.single_fdf import (
     build_fdf_plan, execute_fdf_plan, resolve_execution_spec,
 )
@@ -69,6 +73,12 @@ protocol_registry.register(ProtocolAdapter(
         "fdf", "profile", "partition", "nodes", "mpi_ranks",
         "cpus_per_rank", "launcher", "executable", "walltime_seconds",
     ),
+))
+protocol_registry.register(ProtocolAdapter(
+    "convergence", build_convergence_plan, execute_convergence_plan,
+    "materialize and execute a typed numerical-convergence campaign",
+    "siesta",
+    accepted_parameters=("campaign", "profile", "runs_root"),
 ))
 
 
@@ -181,6 +191,31 @@ class QraftApplication:
         self, *, command_overrides: Mapping[str, Any] | None = None
     ) -> dict[str, Any]:
         fdf, protocol, profile, overrides = self._resolved_inputs(command_overrides)
+        if is_campaign_file(fdf):
+            campaign = CampaignSpec.load(fdf)
+            result = ConvergenceProtocol().plan(
+                campaign,
+                profile=profile.execution_layer() if profile else None,
+                project_config=self.configuration.project_config,
+                recipe=self.configuration.recipe,
+                overrides=overrides,
+                output_root=self.configuration.runs_root / "rendered",
+            )
+            if profile:
+                from .core import ExecutionSpec
+
+                payload = result["execution_spec"]
+                spec = ExecutionSpec(**{
+                    key: value for key, value in payload.items()
+                    if key not in {"fingerprint", "ranks_per_node", "allocated_cpus", "schema_version"}
+                })
+                profile.validate_spec(spec)
+            result["profile"] = {
+                "name": profile.name if profile else None,
+                "scheduler": profile.scheduler if profile else launcher_registry.require(str(result["execution_spec"]["launcher"])).scheduler,
+                "source": str(profile.source) if profile and profile.source else None,
+            }
+            return result
         result = protocol.planner(
             fdf,
             pseudo_manifest=self.configuration.pseudo_manifest,
@@ -220,6 +255,36 @@ class QraftApplication:
         preflight_callback: Callable[[Mapping[str, Any]], None] | None = None,
     ) -> dict[str, Any]:
         fdf, protocol, profile, overrides = self._resolved_inputs(command_overrides)
+        if is_campaign_file(fdf):
+            preview = self.plan(command_overrides=command_overrides)
+            campaign_preflight = preview["preflight"]
+            environment_preflight = self._preflight({
+                "fdf": str(CampaignSpec.load(fdf).system.fdf),
+                "execution_spec": preview["execution_spec"],
+            })
+            checks = [
+                *environment_preflight["checks"],
+                *({"name": f"{item['layer']}:{item['code']}", "status": "BLOCKED" if item["severity"] == "ERROR" else "PASS", "detail": item["message"]} for item in campaign_preflight["findings"]),
+            ]
+            preflight = {"status": "PASS" if environment_preflight["status"] == "PASS" and campaign_preflight["status"] == "PASS" else "BLOCKED", "checks": checks, "environment": environment_preflight["environment"], "campaign": campaign_preflight}
+            if preflight_callback is not None:
+                preflight_callback(preflight)
+            if preflight["status"] != "PASS":
+                raise PreflightError("preflight blocked campaign execution", preflight)
+            self._save_session(overrides, profile)
+            result = ConvergenceProtocol().run(
+                CampaignSpec.load(fdf),
+                profile=profile.execution_layer() if profile else None,
+                project_config=self.configuration.project_config,
+                recipe=self.configuration.recipe,
+                overrides=overrides,
+                runs_root=self.configuration.runs_root,
+                force_new_attempt=force_new_attempt,
+                invocation=invocation or self.invocation("run", command_overrides),
+                profile_metadata=preview["profile"],
+            )
+            result["preflight"] = preflight
+            return result
         preview = self.plan(command_overrides=command_overrides)
         profile_metadata = preview["profile"]
         preflight = self._preflight(preview)
@@ -356,7 +421,28 @@ class QraftApplication:
     def validate(
         self, *, command_overrides: Mapping[str, Any] | None = None
     ) -> dict[str, Any]:
+        if self.configuration.fdf is not None and is_campaign_file(self.configuration.fdf):
+            campaign = CampaignSpec.load(self.configuration.fdf)
+            scientific = ConvergenceProtocol().preflight(campaign)
+            return {
+                "status": scientific["status"],
+                "checks": [
+                    {"name": f"{item['layer']}:{item['code']}", "status": "BLOCKED" if item["severity"] == "ERROR" else "PASS", "detail": item["message"], "severity": item["severity"]}
+                    for item in scientific["findings"]
+                ],
+                "campaign": scientific,
+                "execution_checked": False,
+            }
         return self._preflight(self.plan(command_overrides=command_overrides))
+
+    def render(self, *, output_root: Path | None = None) -> dict[str, Any]:
+        if self.configuration.fdf is None or not is_campaign_file(self.configuration.fdf):
+            raise ValueError("qraft render requires a CampaignSpec YAML or JSON")
+        campaign = CampaignSpec.load(self.configuration.fdf)
+        return ConvergenceProtocol().render(
+            campaign,
+            output_root or self.configuration.runs_root / "rendered",
+        )
 
     def _preflight(self, plan: Mapping[str, Any]) -> dict[str, Any]:
         report = self.environment(command_overrides={
@@ -474,7 +560,10 @@ class QraftApplication:
             **active,
             "execution": plan["execution_spec"],
             "profile_resolved": plan["profile"],
-            "scientific_identity": plan["scientific_identity"]["fingerprint"],
+            "scientific_identity": (
+                plan["scientific_identity"]["fingerprint"]
+                if "scientific_identity" in plan else plan.get("campaign_fingerprint")
+            ),
         }
 
     def status(self) -> dict[str, Any]:
@@ -486,13 +575,17 @@ class QraftApplication:
                     states.append({"path": str(path), **json.loads(path.read_text(encoding="utf-8"))})
                 except (OSError, json.JSONDecodeError, TypeError):
                     states.append({"path": str(path), "technical_status": "UNREADABLE"})
-        return {"root": str(root), "states": states}
+        campaign_result = root / "campaign-result.json"
+        return {
+            "root": str(root), "states": states,
+            "campaign": json.loads(campaign_result.read_text(encoding="utf-8")) if campaign_result.is_file() else None,
+        }
 
     def attempts(self) -> tuple[dict[str, Any], ...]:
         root = self.configuration.runs_root.resolve()
         attempts: list[dict[str, Any]] = []
         if root.is_dir():
-            for path in sorted(root.glob("*/*/attempt.json")):
+            for path in sorted(root.rglob("attempt.json")):
                 try:
                     value = json.loads(path.read_text(encoding="utf-8"))
                     attempts.append({

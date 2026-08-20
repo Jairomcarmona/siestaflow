@@ -107,7 +107,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(
         dest="domain",
         required=True,
-        metavar="{env,config,profile,validate,plan,run,status,resume}",
+        metavar="{env,config,profile,validate,plan,render,run,status,resume}",
     )
 
     def add_resolution_options(command: argparse.ArgumentParser) -> None:
@@ -129,6 +129,10 @@ def build_parser() -> argparse.ArgumentParser:
     add_resolution_options(config)
     validate = sub.add_parser("validate", help="validate one FDF and its execution preflight")
     _add_single_fdf_arguments(validate, execute=False)
+    render = sub.add_parser("render", help="materialize CampaignSpec FDF variants without execution")
+    render.add_argument("fdf", type=Path)
+    render.add_argument("--output", type=Path, default=Path(".qraft-render"))
+    render.add_argument("--json", action="store_true")
     profiles = sub.add_parser("profile", help="list, show or validate execution profiles")
     profile_sub = profiles.add_subparsers(dest="action", required=True)
     profile_sub.add_parser("list").add_argument("--json", action="store_true")
@@ -614,11 +618,9 @@ def _dispatch(args: argparse.Namespace) -> int:
             preflight_callback=(None if args.json else lambda value: print(render_preflight(value))),
         )
         _emit(result, args.json)
-        return (
-            0 if result["status"] == "REUSED_VALIDATED_ATTEMPT"
-            or result["attempt"]["result"]["technical_validation"]["status"] == "PASS"
-            else 3
-        )
+        if "technical_validation" in result:
+            return 0 if result["technical_validation"] == "PASS" else 3
+        return 0 if result["status"] == "REUSED_VALIDATED_ATTEMPT" or result["attempt"]["result"]["technical_validation"]["status"] == "PASS" else 3
     if args.domain == "validate":
         overrides = {
             "partition": args.partition,
@@ -641,6 +643,11 @@ def _dispatch(args: argparse.Namespace) -> int:
         report = application.validate(command_overrides=overrides)
         _emit(report, True) if args.json else print(render_preflight(report))
         return 0 if report["status"] == "PASS" else 2
+    if args.domain == "render":
+        application = QraftApplication(ApplicationConfiguration(fdf=args.fdf))
+        result = application.render(output_root=args.output)
+        _emit(result, args.json)
+        return 0
     if args.domain in {"plan", "_fdf-run"}:
         environment: dict[str, str] = {}
         for item in args.env:
@@ -686,12 +693,9 @@ def _dispatch(args: argparse.Namespace) -> int:
             ),
         )
         _emit(result, args.json)
-        return (
-            0
-            if result["status"] == "REUSED_VALIDATED_ATTEMPT"
-            or result["attempt"]["result"]["technical_validation"]["status"] == "PASS"
-            else 3
-        )
+        if "technical_validation" in result:
+            return 0 if result["technical_validation"] == "PASS" else 3
+        return 0 if result["status"] == "REUSED_VALIDATED_ATTEMPT" or result["attempt"]["result"]["technical_validation"]["status"] == "PASS" else 3
     if args.domain == "results":
         exporter = {"dos-pdos": DOSPDOSResultExporter, "bands": BandResultExporter, "optics": OpticalResultExporter}[args.action]()
         _emit(exporter.export(args.package, args.output, dry_run=args.dry_run), args.json)

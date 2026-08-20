@@ -199,6 +199,15 @@ class QraftShell(cmd.Cmd):
         result = self.application.plan(command_overrides=self._inline(arg))
         self.stdout.write(render_plan(result) + "\n")
 
+    def do_render(self, arg: str) -> None:
+        """render [CAMPAIGN] [OUTPUT]: materialize inspectable FDFs without execution."""
+        tokens = shlex.split(arg)
+        if tokens:
+            self.application.set_value("fdf", tokens[0])
+        output = Path(tokens[1]) if len(tokens) > 1 else None
+        result = self.application.render(output_root=output)
+        self.stdout.write(json.dumps(result, indent=2, ensure_ascii=False) + "\n")
+
     def do_run(self, arg: str) -> None:
         """run [FDF] [KEY VALUE ...]: execute through the shared QRAFT backend."""
         overrides = self._inline(arg)

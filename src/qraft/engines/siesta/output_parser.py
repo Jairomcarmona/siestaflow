@@ -16,6 +16,9 @@ class SiestaOutputParser:
     PROVISIONAL = "PROVISIONAL_UNTIL_REAL_OUTPUT_IMPORTED"
     _BENIGN_WARNING_MARKERS = (
         "basis_enthalpy and basis_harris_enthalpy files are deprecated",
+        "warning: this information might be incomplete",
+        "begin: ts checks and warnings",
+        "end: ts checks and warnings",
     )
 
     @classmethod
