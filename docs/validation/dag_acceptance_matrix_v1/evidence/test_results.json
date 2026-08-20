@@ -1,0 +1,61 @@
+{
+  "source_commit": "8def70ea80ffbed203e451a81f0cdd0c86dbd37e",
+  "recorded_at": "2026-08-20T03:20:26.4024405Z",
+  "runs": [
+    {
+      "id": "focused_wsl",
+      "command": "wsl bash -lc 'cd /mnt/c/Users/Jairo/Downloads/SIESTAFLOW_CONTEXT/qraft-campaign-spec-v1-worktree; python3 -m pytest -q tests/runtime_v1/test_single_fdf_vertical.py tests/campaigns/test_campaign_spec_v1.py tests/m2/test_outputs_campaigns.py tests/workflows/test_workflow_compiler.py'",
+      "exit_code": 0,
+      "result": "47 passed in 5.61s",
+      "evidence_type": "EXISTING_TEST",
+      "test_paths": [
+        "tests/runtime_v1/test_single_fdf_vertical.py",
+        "tests/campaigns/test_campaign_spec_v1.py",
+        "tests/m2/test_outputs_campaigns.py",
+        "tests/workflows/test_workflow_compiler.py"
+      ],
+      "covers": ["F01", "F02", "A02", "A03", "parser_fixture_matrix"]
+    },
+    {
+      "id": "adversarial_controller_wsl",
+      "command": "wsl bash -lc 'cd /mnt/c/Users/Jairo/Downloads/SIESTAFLOW_CONTEXT/qraft-campaign-spec-v1-worktree; python3 -m pytest -q tests/m4/test_allocation_controller.py::test_failure_does_not_stop_independent_task tests/m4/test_allocation_controller.py::test_failed_dependency_blocks_child_without_launch tests/m4/test_allocation_controller.py::test_truncated_output_and_missing_required_artifact_are_incomplete tests/m4/test_allocation_controller.py::test_dependency_artifact_is_hash_bound_and_transferred tests/m4/test_allocation_controller.py::test_new_job_id_resumes_incomplete_campaign_without_fake_allocation tests/m4/test_allocation_controller.py::test_shutdown_signals_stop_new_launches_and_close_active_step tests/m4/test_allocation_controller.py::test_completed_result_is_rejected_and_repeated_after_manifest_tamper tests/m4/test_allocation_controller.py::test_protected_input_hash_mismatch_never_launches tests/runtime_v1/test_single_fdf_vertical.py::test_run_persists_immutable_attempt_and_reuses_valid_result tests/runtime_v1/test_single_fdf_vertical.py::test_tampered_attempt_manifest_is_never_reused'",
+      "exit_code": 0,
+      "result": "11 passed in 3.09s",
+      "evidence_type": "EXISTING_TEST",
+      "test_paths": [
+        "tests/m4/test_allocation_controller.py::test_failure_does_not_stop_independent_task",
+        "tests/m4/test_allocation_controller.py::test_failed_dependency_blocks_child_without_launch",
+        "tests/m4/test_allocation_controller.py::test_truncated_output_and_missing_required_artifact_are_incomplete",
+        "tests/m4/test_allocation_controller.py::test_dependency_artifact_is_hash_bound_and_transferred",
+        "tests/m4/test_allocation_controller.py::test_new_job_id_resumes_incomplete_campaign_without_fake_allocation",
+        "tests/m4/test_allocation_controller.py::test_shutdown_signals_stop_new_launches_and_close_active_step",
+        "tests/m4/test_allocation_controller.py::test_completed_result_is_rejected_and_repeated_after_manifest_tamper",
+        "tests/m4/test_allocation_controller.py::test_protected_input_hash_mismatch_never_launches",
+        "tests/runtime_v1/test_single_fdf_vertical.py::test_run_persists_immutable_attempt_and_reuses_valid_result",
+        "tests/runtime_v1/test_single_fdf_vertical.py::test_tampered_attempt_manifest_is_never_reused"
+      ],
+      "covers": ["A02", "A03", "A04", "A05", "A06", "A07", "A08"]
+    },
+    {
+      "id": "wsl_n4_real_campaign",
+      "command": "qraft _fdf-run campaign.yaml --partition local --nodes 1 --np 4 --cpus-per-rank 1 --launcher openmpi --launcher-command /usr/bin/mpirun --siesta /home/jmc/.local/siesta-5.4.2-openmpi/bin/siesta --runs-root .qraft-runs --json",
+      "exit_code": 0,
+      "result": "two MgO mesh points PASS; SCF converged; technical PASS; scientific CONVERGED; second session reused both valid attempts",
+      "evidence_type": "REAL_RUNTIME",
+      "source_evidence": [
+        "docs/validation/wsl_n4_campaign_spec_v1/results/qraft.out",
+        "docs/validation/wsl_n4_campaign_spec_v1/evidence/technical_validation.json",
+        "docs/validation/wsl_n4_campaign_spec_v1/evidence/recovery.json",
+        "docs/validation/wsl_n4_campaign_spec_v1/evidence/identity_proof.json"
+      ],
+      "covers": ["F01", "F02", "A07"]
+    },
+    {
+      "id": "windows_runner",
+      "command": "C:\\Users\\Jairo\\Downloads\\SIESTAFLOW_CONTEXT\\qraft-productization-build-venv\\Scripts\\python.exe -m pytest -q tests/runtime_v1/test_single_fdf_vertical.py tests/campaigns/test_campaign_spec_v1.py tests/m2/test_outputs_campaigns.py tests/workflows/test_workflow_compiler.py",
+      "exit_code": 1,
+      "result": "PermissionError WinError 5 while pytest accessed its temporary directory; rerun in WSL was successful",
+      "evidence_type": "ENVIRONMENT_PRECONDITION"
+    }
+  ]
+}
