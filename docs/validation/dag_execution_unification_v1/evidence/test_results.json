@@ -1,0 +1,43 @@
+{
+  "commit_before": "80f3d04bb436a4354a594dec3bd05edf5c09a4fe",
+  "recorded_at": "2026-08-20T03:34:16.7494551Z",
+  "runs": [
+    {
+      "id": "characterization",
+      "command": "C:\\Users\\Jairo\\Downloads\\SIESTAFLOW_CONTEXT\\qraft-productization-build-venv\\Scripts\\python.exe -m pytest -q tests/workflows/test_dag_execution_unification.py",
+      "exit_code": 0,
+      "result": "1 passed in 0.03s",
+      "evidence_type": "EXISTING_TEST",
+      "tests": ["tests/workflows/test_dag_execution_unification.py::test_convergence_execution_seam_is_characterized_before_unification"],
+      "covers": ["LEVEL_C_SEAM"]
+    },
+    {
+      "id": "dag_focused_wsl",
+      "command": "wsl.exe bash -lc 'cd /mnt/c/Users/Jairo/Downloads/SIESTAFLOW_CONTEXT/qraft-campaign-spec-v1-worktree && python3 -m pytest -q tests/workflows/test_dag_execution_unification.py tests/m4/test_allocation_controller.py::test_sequential_steps_use_one_slot tests/m4/test_allocation_controller.py::test_two_steps_run_together_but_cpu_pool_limits_next_wave tests/m4/test_allocation_controller.py::test_failure_does_not_stop_independent_task tests/m4/test_allocation_controller.py::test_failed_dependency_blocks_child_without_launch tests/m4/test_allocation_controller.py::test_dependency_artifact_is_hash_bound_and_transferred tests/m4/test_allocation_controller.py::test_new_job_id_resumes_incomplete_campaign_without_fake_allocation tests/workflows/test_workflow_compiler.py::test_valid_workflow_compiles_to_deterministic_hash_bound_dag'",
+      "exit_code": 0,
+      "result": "8 passed in 2.78s",
+      "evidence_type": "EXISTING_TEST",
+      "tests": [
+        "tests/workflows/test_dag_execution_unification.py::test_convergence_execution_seam_is_characterized_before_unification",
+        "tests/m4/test_allocation_controller.py::test_sequential_steps_use_one_slot",
+        "tests/m4/test_allocation_controller.py::test_two_steps_run_together_but_cpu_pool_limits_next_wave",
+        "tests/m4/test_allocation_controller.py::test_failure_does_not_stop_independent_task",
+        "tests/m4/test_allocation_controller.py::test_failed_dependency_blocks_child_without_launch",
+        "tests/m4/test_allocation_controller.py::test_dependency_artifact_is_hash_bound_and_transferred",
+        "tests/m4/test_allocation_controller.py::test_new_job_id_resumes_incomplete_campaign_without_fake_allocation",
+        "tests/workflows/test_workflow_compiler.py::test_valid_workflow_compiles_to_deterministic_hash_bound_dag"
+      ],
+      "covers": ["T1", "T2", "T3", "T4", "T5", "T6"]
+    },
+    {
+      "id": "windows_environment",
+      "command": "focused controller/compiler command recorded in evidence/commands.txt",
+      "exit_code": 1,
+      "result": "pytest could not inspect its user temporary directory; WSL rerun passed",
+      "evidence_type": "ENVIRONMENT_PRECONDITION"
+    }
+  ],
+  "siesta_real_run": false,
+  "hpc_run": false,
+  "full_suite": false
+}

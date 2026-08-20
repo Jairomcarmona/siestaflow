@@ -1,0 +1,18 @@
+{
+  "commit_before": "80f3d04bb436a4354a594dec3bd05edf5c09a4fe",
+  "commit_after": "the commit containing this dossier",
+  "before": {
+    "single_fdf": "independent runtime authority",
+    "convergence": "protocol-owned direct execution loop through execute_fdf_plan",
+    "workflow_controller": "separate compiler and AllocationController authority"
+  },
+  "after": {
+    "single_fdf": "unchanged independent runtime authority",
+    "convergence": "unchanged protocol-owned direct execution loop; seam characterized",
+    "workflow_controller": "unchanged separate compiler/controller authority"
+  },
+  "unified_for_f02": false,
+  "global_unification_complete": false,
+  "level": "C",
+  "reason": "A safe adapter would need an explicit mapping for capabilities, inputs/outputs, hash-bound artifacts, attempts, technical validation and recovery. No adapter was introduced in this closure."
+}
