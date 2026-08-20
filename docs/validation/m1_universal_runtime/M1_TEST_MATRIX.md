@@ -67,3 +67,29 @@ Command keys for this table:
 | C22 | Full suite | PASS | 549 passed, 1 skipped | CLOSURE_FULL |
 | C23 | Build/wheel/install smoke | PASS | final sdist/wheel and both wheel/self-contained imports | CLOSURE_BUILD |
 | C24 | No second default production runtime | PASS | CLI/package static call-graph audit | CLOSURE_FOCUSED |
+
+## Final invariant hotfix matrix
+
+Command keys for this table:
+
+- `HOTFIX_I01`, `HOTFIX_I02`, `HOTFIX_I03`: invariant-specific focused runs.
+- `HOTFIX_FOCUSED`: final combined M1 focused regression.
+- `HOTFIX_FULL`: one final repository suite.
+- `HOTFIX_BUILD`: one final sdist/wheel/import smoke.
+
+| ID | Property | Status | Exact evidence | Command |
+|---|---|---|---|---|
+| H01 | Task-id invariance | PASS | `test_legacy_scientific_identity_ignores_task_rename` | HOTFIX_I01 |
+| H02 | Execution-spec independence | PASS | `test_legacy_execution_changes_do_not_change_scientific_identity` | HOTFIX_I01 |
+| H03 | Scientific-input sensitivity | PASS | `test_legacy_scientific_identity_changes_with_protected_input` | HOTFIX_I01 |
+| H04 | Node over-allocation prevention/release | PASS | `test_node_capacity_prevents_overallocation_and_releases` | HOTFIX_I02 |
+| H05 | Valid two-node concurrency | PASS | `test_valid_node_concurrency_reaches_allocated_node_capacity` | HOTFIX_I02 |
+| H06 | Joint independent CPU/node limits | PASS | `test_cpu_and_node_limits_are_independently_enforced` | HOTFIX_I02 |
+| H07 | Mutable restart immutable evidence | PASS | `test_mutable_restart_keeps_immutable_evidence_and_reuses` | HOTFIX_I03 |
+| H08 | Restart recovery without relaunch | PASS | same test; reused nodes `(A, B)` | HOTFIX_I03 |
+| H09 | Immutable evidence tamper rejection | PASS | parameterized tamper fixture | HOTFIX_I03 |
+| H10 | Parent source tamper rejection | PASS | parameterized tamper fixture | HOTFIX_I03 |
+| H11 | SIESTA consumption confirmation | PASS | `test_siesta_capability_rejects_unconfirmed_restart_consumption` | HOTFIX_I03 |
+| H12 | Combined M1 regression | PASS | capability runtime, closure and historical controller | HOTFIX_FOCUSED: 55 passed |
+| H13 | Final repository regression | PASS | all tests | HOTFIX_FULL: 559 passed, 1 skipped |
+| H14 | Package/product path | PASS | sdist, wheel, neutral import, canonical import | HOTFIX_BUILD |

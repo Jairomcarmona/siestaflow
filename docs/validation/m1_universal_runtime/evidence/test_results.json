@@ -1,6 +1,6 @@
 {
-  "schema_version": "m1-runtime-convergence-closure-1.0",
-  "timestamp": "2026-08-20T00:29:30.5408513-06:00",
+  "schema_version": "m1-final-invariant-hotfix-1.0",
+  "timestamp": "2026-08-20T01:14:40.3921193-06:00",
   "checkpoint_evidence": {
     "commit": "4964e9c44fffb671224279665ccfd651766c13a3",
     "branch": "feat/qraft-m1-universal-runtime",
@@ -21,6 +21,29 @@
       "wheel": "PASS",
       "wheel_inventory_import": "PASS",
       "self_contained_package_import": "PASS"
+    }
+  },
+  "final_invariant_hotfix": {
+    "source_branch": "fix/qraft-m1-runtime-convergence-closure",
+    "source_commit": "ae794f12a631849a155a1a03c3db07dd5730d2d9",
+    "branch": "fix/qraft-m1-final-invariant-hotfix",
+    "commit": "SELF: fix: enforce final M1 runtime invariants",
+    "python": "3.13.14",
+    "platform": "Windows-11",
+    "baseline_focused": {"exit_code": 0, "passed": 45, "failed": 0, "seconds": 9.99},
+    "baseline_full": {"exit_code": 0, "passed": 549, "failed": 0, "skipped": 1, "seconds": 90.55},
+    "i01_focused": {"exit_code": 0, "passed": 3, "failed": 0, "seconds": 2.69},
+    "i02_focused": {"exit_code": 0, "passed": 3, "failed": 0, "seconds": 0.22},
+    "i03_focused": {"exit_code": 0, "passed": 4, "failed": 0, "seconds": 0.98},
+    "combined_focused": {"exit_code": 0, "passed": 55, "failed": 0, "seconds": 10.71},
+    "full": {"exit_code": 0, "passed": 559, "failed": 0, "skipped": 1, "seconds": 90.65},
+    "build": {
+      "exit_code": 0,
+      "sdist": "PASS",
+      "wheel": "PASS",
+      "engine_neutral_import": "PASS",
+      "canonical_controller_import": "PASS",
+      "initial_extra_import_assertion": "CORRECTED_ON_SAME_WHEEL"
     }
   },
   "acceptance": [
@@ -49,6 +72,20 @@
     {"id": "C23", "result": "PASS", "evidence": "sdist/wheel/self-contained imports"},
     {"id": "C24", "result": "PASS", "evidence": "one default production call graph"}
   ],
+  "hotfix_acceptance": [
+    {"id": "I01-A", "result": "PASS", "evidence": "task rename invariant"},
+    {"id": "I01-B", "result": "PASS", "evidence": "ExecutionSpec independence"},
+    {"id": "I01-C", "result": "PASS", "evidence": "protected input mutation changes identity"},
+    {"id": "I02-A", "result": "PASS", "evidence": "node over-allocation prevented"},
+    {"id": "I02-B", "result": "PASS", "evidence": "valid node concurrency peak=2"},
+    {"id": "I02-C", "result": "PASS", "evidence": "CPU and node capacity independently enforced"},
+    {"id": "I02-D", "result": "PASS", "evidence": "used nodes/cpus/hosts released"},
+    {"id": "I03-A", "result": "PASS", "evidence": "mutable restart working copy and immutable evidence"},
+    {"id": "I03-B", "result": "PASS", "evidence": "completed restart consumer reused without relaunch"},
+    {"id": "I03-C", "result": "PASS", "evidence": "immutable and parent-source tamper reject reuse"},
+    {"id": "I03-D", "result": "PASS", "evidence": "unconfirmed SIESTA restart consumption is technical FAIL"},
+    {"id": "I03-E", "result": "PASS", "evidence": "generic runtime static neutrality"}
+  ],
   "adversarial_answers": {
     "new_workflow_without_independent_legacy_scheduler": true,
     "bounded_resource_concurrency": true,
@@ -58,6 +95,18 @@
     "valid_completed_work_reused": true,
     "tampered_work_rejected": true,
     "new_packages_default_to_legacy_runtime": false,
-    "convergence_migrated": false
+    "convergence_migrated": false,
+    "task_id_in_translated_scientific_identity": false,
+    "execution_resources_in_scientific_identity": false,
+    "scientific_input_mutation_changes_identity": true,
+    "resource_coordinator_tracks_used_nodes": true,
+    "node_capacity_independent_of_host_policy": true,
+    "all_resource_leases_released": true,
+    "mutable_restart_evidence_separated": true,
+    "working_restart_mutation_tolerated": true,
+    "source_and_input_tamper_rejected": true,
+    "restart_consumption_capability_owned": true,
+    "generic_runtime_has_dm_semantics": false,
+    "m2_started": false
   }
 }

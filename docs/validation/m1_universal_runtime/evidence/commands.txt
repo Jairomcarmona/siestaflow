@@ -64,3 +64,69 @@ rg -n 'SiestaOutputParser|engines\.siesta|engine\s*==|task_kind\s*==|require_scf
 rg -n 'CanonicalController\.from_file|AllocationController\.from_file' src/qraft/cli.py src/qraft/controller_package.py src/qraft/m4_remote_package.py
 git diff --name-only -- src/qraft/protocols/convergence.py src/qraft/core/runtime.py
 # result: engine-neutral runtime no hits; production entries canonical; forbidden-scope diff empty
+
+# Final invariant hotfix baseline at ae794f1
+git status --short
+git branch --show-current
+git rev-parse HEAD
+git log -1 --oneline
+# result: clean fix/qraft-m1-runtime-convergence-closure at ae794f12a631849a155a1a03c3db07dd5730d2d9
+
+git switch -c fix/qraft-m1-final-invariant-hotfix
+
+$env:PYTHONPATH=(Resolve-Path 'src').Path; & '..\qraft-productization-build-venv\Scripts\python.exe' -m pytest -q tests/execution/test_capability_runtime.py tests/execution/test_runtime_convergence_closure.py tests/m4/test_allocation_controller.py
+# baseline result: 45 passed in 9.99s
+
+$env:PYTHONPATH=(Resolve-Path 'src').Path; & '..\qraft-productization-build-venv\Scripts\python.exe' -m pytest -q
+# baseline result: 549 passed, 1 skipped in 90.55s
+
+# I01 focused
+$env:PYTHONPATH=(Resolve-Path 'src').Path; & '..\qraft-productization-build-venv\Scripts\python.exe' -m pytest -q tests/execution/test_runtime_convergence_closure.py -k "legacy_scientific_identity or legacy_execution_changes"
+# result: 3 passed, 12 deselected in 2.69s
+
+# I02 focused
+$env:PYTHONPATH=(Resolve-Path 'src').Path; & '..\qraft-productization-build-venv\Scripts\python.exe' -m pytest -q tests/execution/test_runtime_convergence_closure.py -k "node_capacity or valid_node_concurrency or cpu_and_node_limits"
+# result: 3 passed, 15 deselected in 0.22s
+
+# I03 focused
+$env:PYTHONPATH=(Resolve-Path 'src').Path; & '..\qraft-productization-build-venv\Scripts\python.exe' -m pytest -q tests/execution/test_runtime_convergence_closure.py -k "mutable_restart or siesta_capability_rejects_unconfirmed_restart"
+# result: 4 passed, 18 deselected in 0.98s
+
+# Combined M1 focused regression, first run
+$env:PYTHONPATH=(Resolve-Path 'src').Path; & '..\qraft-productization-build-venv\Scripts\python.exe' -m pytest -q tests/execution/test_capability_runtime.py tests/execution/test_runtime_convergence_closure.py tests/m4/test_allocation_controller.py
+# result: 1 failed, 54 passed in 28.71s; CPU-only fixture declared one node while expecting two concurrent leases
+
+# Combined M1 focused regression after correcting fixture allocation to two nodes
+$env:PYTHONPATH=(Resolve-Path 'src').Path; & '..\qraft-productization-build-venv\Scripts\python.exe' -m pytest -q tests/execution/test_capability_runtime.py tests/execution/test_runtime_convergence_closure.py tests/m4/test_allocation_controller.py
+# result: 55 passed in 10.71s
+
+# ONE final full suite
+$env:PYTHONPATH=(Resolve-Path 'src').Path; & '..\qraft-productization-build-venv\Scripts\python.exe' -m pytest -q
+# result: 559 passed, 1 skipped in 90.65s
+
+# ONE final package build
+$outDir='C:\Users\Jairo\Downloads\SIESTAFLOW_CONTEXT\.codex-build\m1-final-invariant-hotfix'; & '..\qraft-productization-build-venv\Scripts\python.exe' -m build --no-isolation --outdir $outDir
+# result: qraft-0.2.0.tar.gz and qraft-0.2.0-py3-none-any.whl built
+
+# First import assertion overconstrained canonical composition by also requiring no loaded SIESTA plugin
+$wheel=Get-ChildItem -LiteralPath $outDir -Filter '*.whl' | Select-Object -First 1; $script="import pathlib,sys; wheel=pathlib.Path(r'$($wheel.FullName)'); sys.path.insert(0,str(wheel)); from qraft.execution.canonical_controller import CanonicalController; from qraft.execution.capability_runtime import CompiledWorkflowRuntime; assert CanonicalController; assert CompiledWorkflowRuntime; assert not any(name.startswith('qraft.engines.siesta') for name in sys.modules); print('FINAL_HOTFIX_WHEEL_IMPORT_PASS')"; & '..\qraft-productization-build-venv\Scripts\python.exe' -c $script
+# result: AssertionError after both canonical imports succeeded; corrected without rebuilding
+
+# Correct wheel import smoke on the same wheel
+$neutral="import pathlib,sys; wheel=pathlib.Path(r'$($wheel.FullName)'); sys.path.insert(0,str(wheel)); import qraft.execution; assert not any(name.startswith('qraft.engines.siesta') for name in sys.modules); print('ENGINE_NEUTRAL_WHEEL_IMPORT_PASS')"; & '..\qraft-productization-build-venv\Scripts\python.exe' -c $neutral
+# result: ENGINE_NEUTRAL_WHEEL_IMPORT_PASS
+$canonical="import pathlib,sys; wheel=pathlib.Path(r'$($wheel.FullName)'); sys.path.insert(0,str(wheel)); from qraft.execution.canonical_controller import CanonicalController; from qraft.execution.capability_runtime import CompiledWorkflowRuntime; assert CanonicalController and CompiledWorkflowRuntime; print('CANONICAL_CONTROLLER_WHEEL_IMPORT_PASS')"; & '..\qraft-productization-build-venv\Scripts\python.exe' -c $canonical
+# result: CANONICAL_CONTROLLER_WHEEL_IMPORT_PASS
+
+# Final architecture/static audit
+git diff --check
+git diff -- src/qraft/protocols/convergence.py src/qraft/core/runtime.py src/qraft/execution/allocation_controller_compat.py
+rg -n -i 'SiestaOutputParser|engines\.siesta|dm_restart|["'']\.DM["'']' src/qraft/execution/capability_runtime.py src/qraft/execution/resource_coordinator.py
+rg -n 'used_nodes|peak_nodes|request.nodes' src/qraft/execution/resource_coordinator.py src/qraft/execution/capability_runtime.py
+rg -n 'CanonicalController\.from_file|AllocationController\.from_file' src/qraft/cli.py src/qraft/controller_package.py src/qraft/m4_remote_package.py
+# result: forbidden source diff empty; generic engine-specific search empty; node accounting explicit; production entries canonical
+
+# Dossier and preserved-checkpoint hash verification
+foreach($line in Get-Content 'docs\validation\m1_universal_runtime\evidence\hashes.sha256'){ $parts=$line -split '\s+',2; (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path 'docs\validation\m1_universal_runtime' $parts[1])).Hash.ToLowerInvariant() -eq $parts[0] }
+& '..\qraft-productization-build-venv\Scripts\python.exe' -c "import hashlib,pathlib,subprocess; root=pathlib.Path('docs/validation/m1_universal_runtime'); manifests=(('4964e9c44fffb671224279665ccfd651766c13a3','checkpoint_4964e9c_hashes.sha256'),('ae794f12a631849a155a1a03c3db07dd5730d2d9','checkpoint_ae794f1_hashes.sha256')); assert all(hashlib.sha256(subprocess.check_output(['git','show',f'{commit}:docs/validation/m1_universal_runtime/{relative}'])).hexdigest()==expected for commit,manifest in manifests for expected,relative in (line.split(None,1) for line in (root/'evidence'/manifest).read_text().splitlines() if line.strip()))"
+# result: HOTFIX_HASHES_VERIFIED=True; CHECKPOINT_HASHES_VERIFIED=True

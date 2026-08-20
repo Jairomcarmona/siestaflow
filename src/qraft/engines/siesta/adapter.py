@@ -53,6 +53,42 @@ class SiestaEngineAdapter(EngineAdapter):
             )
         return candidates[0]
 
+    def mutable_input_names(self, **kwargs: Any) -> tuple[str, ...]:
+        """Declare transferred density-matrix inputs as mutable engine inputs."""
+
+        bindings = dict(kwargs.get("bindings", {}))
+        return tuple(
+            sorted(
+                name
+                for name, binding in bindings.items()
+                if getattr(binding, "source_task_id", None) is not None
+                and Path(str(getattr(binding, "destination", ""))).suffix.casefold()
+                == ".dm"
+            )
+        )
+
+    def validate_consumed_inputs(self, parsed: Any, **kwargs: Any):
+        """Require parser evidence that a declared restart input was consumed."""
+
+        classified = kwargs["classified"]
+        mutable_inputs = tuple(kwargs.get("mutable_inputs", ()))
+        if not mutable_inputs or str(getattr(classified, "status", "")).upper() != "PASS":
+            return classified
+        if bool(getattr(parsed, "dm_restart_succeeded", False)):
+            return classified
+        attempted = bool(getattr(parsed, "dm_restart_attempted", False))
+        reason = (
+            "SIESTA attempted restart input consumption without success"
+            if attempted
+            else "SIESTA output did not confirm restart input consumption"
+        )
+        return TechnicalValidation(
+            status="FAIL",
+            classification="RESTART_INPUT_NOT_CONSUMED",
+            reasons=(reason,),
+            parser_summary=asdict(parsed),
+        )
+
     def validate_input(self, inspected: Any, **kwargs: Any):
         options = dict(kwargs.get("validation_options", {}))
         for name in ("pseudo_result", "require_pseudos"):

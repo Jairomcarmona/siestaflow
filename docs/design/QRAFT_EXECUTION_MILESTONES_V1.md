@@ -168,7 +168,7 @@ non-goals, acceptance gates, evidence, status y closing commit.
 | Acceptance gates | Capability sintética nueva ejecuta sin modificar DAG/core scheduling; Generic Runtime no importa `SiestaOutputParser`. |
 | Required evidence | Capability sintética, contract/dependency/lifecycle/recovery tests y `docs/validation/m1_universal_runtime/`. |
 | Status | `CLOSED` |
-| Closing commit | Este commit: `fix: close M1 runtime convergence gap`; checkpoint preservado: `4964e9c`. |
+| Closing commit | Este commit: `fix: enforce final M1 runtime invariants`; cierre `ae794f1` y checkpoint `4964e9c` preservados. |
 
 ### M2 — F02 Convergence Through Canonical DAG
 

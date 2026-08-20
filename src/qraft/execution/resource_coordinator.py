@@ -124,6 +124,7 @@ class ResourceRequest:
 class ResourceLease:
     task_id: str
     cpus: int
+    nodes: int
     hosts: tuple[str, ...] = ()
 
 
@@ -133,10 +134,12 @@ class ResourceCoordinator:
     def __init__(self, allocation: RuntimeAllocation) -> None:
         self.allocation = allocation
         self._used_cpus = 0
+        self._used_nodes = 0
         self._used_hosts: set[str] = set()
         self._leases: dict[str, ResourceLease] = {}
         self._lock = threading.Lock()
         self._peak_cpus = 0
+        self._peak_nodes = 0
         self._peak_steps = 0
 
     def can_ever_fit(self, request: ResourceRequest) -> bool:
@@ -158,6 +161,8 @@ class ResourceCoordinator:
                 return None
             if request.cpus > self.allocation.total_cpus - self._used_cpus:
                 return None
+            if request.nodes > self.allocation.total_nodes - self._used_nodes:
+                return None
             hosts: tuple[str, ...] = ()
             if request.exclusive_hosts:
                 available = tuple(
@@ -168,11 +173,13 @@ class ResourceCoordinator:
                 if len(available) < request.nodes:
                     return None
                 hosts = available[: request.nodes]
-            lease = ResourceLease(request.task_id, request.cpus, hosts)
+            lease = ResourceLease(request.task_id, request.cpus, request.nodes, hosts)
             self._leases[request.task_id] = lease
             self._used_cpus += request.cpus
+            self._used_nodes += request.nodes
             self._used_hosts.update(hosts)
             self._peak_cpus = max(self._peak_cpus, self._used_cpus)
+            self._peak_nodes = max(self._peak_nodes, self._used_nodes)
             self._peak_steps = max(self._peak_steps, len(self._leases))
             return lease
 
@@ -182,6 +189,7 @@ class ResourceCoordinator:
             if current != lease:
                 raise RuntimeError(f"unknown or mismatched resource lease: {lease.task_id}")
             self._used_cpus -= lease.cpus
+            self._used_nodes -= lease.nodes
             self._used_hosts.difference_update(lease.hosts)
 
     @property
@@ -195,6 +203,11 @@ class ResourceCoordinator:
             return self._used_cpus
 
     @property
+    def used_nodes(self) -> int:
+        with self._lock:
+            return self._used_nodes
+
+    @property
     def used_hosts(self) -> tuple[str, ...]:
         with self._lock:
             return tuple(sorted(self._used_hosts))
@@ -205,13 +218,18 @@ class ResourceCoordinator:
             return self._peak_cpus
 
     @property
+    def peak_nodes(self) -> int:
+        with self._lock:
+            return self._peak_nodes
+
+    @property
     def peak_steps(self) -> int:
         with self._lock:
             return self._peak_steps
 
     def assert_released(self) -> None:
         with self._lock:
-            if self._leases or self._used_cpus or self._used_hosts:
+            if self._leases or self._used_cpus or self._used_nodes or self._used_hosts:
                 raise RuntimeError("resource leases remain active after runtime completion")
 
 

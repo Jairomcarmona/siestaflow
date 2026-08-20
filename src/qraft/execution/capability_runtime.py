@@ -132,6 +132,7 @@ class WorkflowRuntimeResult:
     attempts: Mapping[str, Attempt]
     reused_nodes: tuple[str, ...]
     peak_cpus: int = 0
+    peak_nodes: int = 0
     peak_parallel_steps: int = 0
 
 
@@ -335,6 +336,7 @@ class CompiledWorkflowRuntime:
                             "RESOURCE_ACQUIRED",
                             task_id=task.task_id,
                             cpus=lease.cpus,
+                            nodes=lease.nodes,
                             hosts=list(lease.hosts),
                         )
 
@@ -379,6 +381,7 @@ class CompiledWorkflowRuntime:
                                 "RESOURCE_RELEASED",
                                 task_id=task.task_id,
                                 cpus=lease.cpus,
+                                nodes=lease.nodes,
                                 hosts=list(lease.hosts),
                             )
                     continue
@@ -407,6 +410,7 @@ class CompiledWorkflowRuntime:
                 "finished_at": _utc_now(),
                 "status": overall,
                 "peak_cpus": self.coordinator.peak_cpus,
+                "peak_nodes": self.coordinator.peak_nodes,
                 "peak_parallel_steps": self.coordinator.peak_steps,
             }
         )
@@ -418,6 +422,7 @@ class CompiledWorkflowRuntime:
             dict(self._attempts),
             tuple(sorted(self._reused)),
             self.coordinator.peak_cpus,
+            self.coordinator.peak_nodes,
             self.coordinator.peak_steps,
         )
 
@@ -564,6 +569,20 @@ class CompiledWorkflowRuntime:
             path = attempt_root / _safe_relative(relative, field="input evidence")
             if not path.is_file() or _sha_file(path) != digest:
                 raise ValueError(f"attempt input evidence mismatch: {relative}")
+        for relative, digest in payload.get("working_input_evidence", {}).items():
+            path = attempt_root / _safe_relative(relative, field="working input evidence")
+            if not path.is_file() or _sha_file(path) != digest:
+                raise ValueError(f"attempt working input mismatch: {relative}")
+        input_sources = payload.get("input_sources")
+        if input_sources is not None:
+            if not isinstance(input_sources, dict):
+                raise ValueError("attempt input source evidence invalid")
+            current_sources = self._resolve_inputs(task)
+            if set(current_sources) != set(input_sources):
+                raise ValueError("attempt input source set mismatch")
+            for name, path in current_sources.items():
+                if _sha_file(path) != input_sources[name]:
+                    raise ValueError(f"attempt input source mismatch: {name}")
         for relative, digest in payload.get("evidence_files", {}).items():
             path = attempt_root / _safe_relative(relative, field="attempt evidence")
             if not path.is_file() or _sha_file(path) != digest:
@@ -656,7 +675,10 @@ class CompiledWorkflowRuntime:
                 path = parent_attempt / _safe_relative(
                     output.relative_path, field=f"{task.task_id}.{binding.name}"
                 )
-                expected = self._attempts[parent_id].artifacts.get(output.relative_path)
+                parent_attempt_evidence = self._attempts.get(parent_id)
+                if parent_attempt_evidence is None:
+                    raise ValueError(f"parent completion unavailable: {parent_id}")
+                expected = parent_attempt_evidence.artifacts.get(output.relative_path)
                 if not path.is_file() or expected is None or _sha_file(path) != expected:
                     raise ValueError(f"parent artifact hash mismatch: {parent_id}.{output.name}")
             resolved[binding.name] = path
@@ -708,6 +730,39 @@ class CompiledWorkflowRuntime:
             )
         return selected
 
+    @staticmethod
+    def _mutable_input_names(
+        task: WorkflowTaskNode,
+        capability: object,
+        inputs: Mapping[str, Path],
+    ) -> frozenset[str]:
+        declarer = getattr(capability, "mutable_input_names", None)
+        if not callable(declarer):
+            return frozenset()
+        declared = tuple(
+            map(
+                str,
+                declarer(
+                    inputs=dict(inputs),
+                    bindings={item.name: item for item in task.inputs},
+                    settings=dict(task.settings),
+                )
+                or (),
+            )
+        )
+        if len(set(declared)) != len(declared):
+            raise ValueError("capability declared duplicate mutable inputs")
+        unknown = sorted(set(declared) - set(inputs))
+        if unknown:
+            raise ValueError(f"capability declared unknown mutable inputs: {unknown}")
+        if declared and not callable(
+            getattr(capability, "validate_consumed_inputs", None)
+        ):
+            raise TypeError(
+                "capability declaring mutable inputs must validate their consumption"
+            )
+        return frozenset(declared)
+
     def _execute_task(self, task: WorkflowTaskNode) -> None:
         hosts = self._assigned_hosts.get(task.task_id, ())
         record = self._state["tasks"][task.task_id]
@@ -728,6 +783,9 @@ class CompiledWorkflowRuntime:
             raw_status = getattr(getattr(validation, "status", None), "value", getattr(validation, "status", None))
             if raw_status is not None and str(raw_status).upper() in {"FAIL", "BLOCKED"}:
                 raise ValueError(f"capability input validation {raw_status}")
+            mutable_inputs = self._mutable_input_names(
+                task, registered.implementation, inputs
+            )
         except (KeyError, ContractCompatibilityError, OSError, TypeError, ValueError) as exc:
             self._set_task(task.task_id, "BLOCKED", str(exc))
             return
@@ -737,17 +795,33 @@ class CompiledWorkflowRuntime:
         attempt_root = self._attempt_path(task.task_id, attempt_id)
         attempt_root.mkdir(parents=True, exist_ok=False)
         input_evidence: dict[str, str] = {}
+        input_sources: dict[str, str] = {}
+        working_input_evidence: dict[str, str] = {}
         staged_inputs: dict[str, Path] = {}
         bindings = {item.name: item for item in task.inputs}
-        for name, source in sorted(inputs.items()):
+        for index, (name, source) in enumerate(sorted(inputs.items()), start=1):
             destination = attempt_root / _safe_relative(
                 bindings[name].destination,
                 field=f"{task.task_id}.{name}.destination",
             )
+            evidence_relative = Path(
+                ".qraft",
+                "input-evidence",
+                f"{index:03d}-{hashlib.sha256(name.encode('utf-8')).hexdigest()[:12]}",
+            )
+            evidence_path = attempt_root / evidence_relative
+            evidence_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, evidence_path)
             destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source, destination)
+            shutil.copy2(evidence_path, destination)
             staged_inputs[name] = destination
-            input_evidence[destination.relative_to(attempt_root).as_posix()] = _sha_file(destination)
+            digest = _sha_file(evidence_path)
+            input_evidence[evidence_relative.as_posix()] = digest
+            input_sources[name] = digest
+            if name not in mutable_inputs:
+                working_input_evidence[
+                    destination.relative_to(attempt_root).as_posix()
+                ] = digest
 
         started = _utc_now()
         self._set_task(
@@ -812,6 +886,9 @@ class CompiledWorkflowRuntime:
                 started,
                 command,
                 input_evidence,
+                input_sources,
+                working_input_evidence,
+                mutable_inputs,
             )
         except Exception as exc:
             self._set_task(task.task_id, "INCOMPLETE", f"attempt error: {type(exc).__name__}: {exc}")
@@ -840,6 +917,9 @@ class CompiledWorkflowRuntime:
         started: str,
         command: tuple[str, ...],
         input_evidence: Mapping[str, str],
+        input_sources: Mapping[str, str],
+        working_input_evidence: Mapping[str, str],
+        mutable_inputs: frozenset[str],
     ) -> Attempt:
         stdout_path = attempt_root / "stdout.txt"
         stderr_path = attempt_root / "stderr.txt"
@@ -858,6 +938,14 @@ class CompiledWorkflowRuntime:
             outcome=outcome,
             settings=dict(task.settings),
         )
+        if mutable_inputs:
+            classified = capability.validate_consumed_inputs(
+                parsed,
+                classified=classified,
+                mutable_inputs=tuple(sorted(mutable_inputs)),
+                bindings={item.name: item for item in task.inputs},
+                settings=dict(task.settings),
+            )
         technical = normalize_technical_validation(classified)
         if outcome.terminated_by_controller:
             technical = TechnicalValidation(
@@ -945,6 +1033,9 @@ class CompiledWorkflowRuntime:
             "capability_id": task.capability_id,
             "command": list(command),
             "input_evidence": dict(input_evidence),
+            "input_sources": dict(input_sources),
+            "working_input_evidence": dict(working_input_evidence),
+            "mutable_inputs": sorted(mutable_inputs),
             "evidence_files": {
                 "stdout.txt": _sha_file(stdout_path),
                 "stderr.txt": _sha_file(stderr_path),

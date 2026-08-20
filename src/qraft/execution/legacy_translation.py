@@ -235,19 +235,16 @@ def translate_controller_config(
             for path, digest in sorted(task.input_hashes.items())
             if Path(path).suffix.casefold() in {".psml", ".psf"}
         }
-        identity_payload = {
-            "task_id": task.task_id,
-            "inputs": dict(sorted(task.input_hashes.items())),
-            "kind": task.task_kind,
-        }
+        scientific_inputs = dict(sorted(task.input_hashes.items()))
+        protected_content_digest = _digest(sorted(scientific_inputs.values()))
         identities[task.task_id] = ScientificIdentity(
             engine="command" if is_command else "siesta",
             effective_fdf_sha256=primary_digest,
             geometry_sha256=geometry_digest,
-            species_mapping_sha256=_digest(identity_payload),
+            species_mapping_sha256=protected_content_digest,
             pseudopotentials=pseudos,
-            components={"legacy_translation": _digest(identity_payload)},
-            included_scientific_files=dict(sorted(task.input_hashes.items())),
+            components={"protected_scientific_inputs": protected_content_digest},
+            included_scientific_files=scientific_inputs,
         )
         requested_nodes = task.nodes if task.nodes > 0 else 1
         execution_nodes = (

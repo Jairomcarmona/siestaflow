@@ -24,6 +24,11 @@ Corrective branch: `fix/qraft-m1-runtime-convergence-closure`.
 Closure commit: the commit containing this dossier, with subject
 `fix: close M1 runtime convergence gap`.
 
+Final invariant hotfix source: `ae794f12a631849a155a1a03c3db07dd5730d2d9`.
+
+Final invariant hotfix: the commit containing this dossier, with subject
+`fix: enforce final M1 runtime invariants`.
+
 ## Checkpoint and closure
 
 Checkpoint `4964e9c` introduced `CompiledWorkflowRuntime`, registry dispatch,
@@ -45,6 +50,14 @@ campaign worker and both generated package workers select this path. The old
 `HistoricalAllocationController` compatibility surface for historical state
 and its accepted regression suite; it is not the default for new production
 execution.
+
+The final invariant hotfix removes task labels and placement metadata from
+legacy-translated scientific identity, adds explicit generic node capacity to
+resource leases, and separates immutable staged-input evidence from
+capability-declared mutable working inputs. Parent/source provenance and
+non-mutable inputs remain hash-checked during reuse. SIESTA alone identifies
+transferred `.DM` inputs and validates parser-owned restart-consumption
+evidence.
 
 ## Input and capability authority
 
@@ -71,6 +84,7 @@ zero runtime source edits.
 - `src/qraft/engines/siesta/adapter.py`
 - `tests/execution/test_capability_runtime.py`
 - `tests/execution/test_runtime_convergence_closure.py`
+- `docs/validation/m1_universal_runtime/FINAL_INVARIANT_HOTFIX.md`
 - generated controller-package inventory and entry-point updates
 
 ## Explicit non-goals
@@ -90,5 +104,6 @@ evidence, use Yoltla or perform a real DFT/HPC run.
   synthetic scheduling and package/build gates close M1 software authority.
 
 The original checkpoint evidence hashes are preserved in
-`evidence/checkpoint_4964e9c_hashes.sha256`. Prior controller evidence remains
+`evidence/checkpoint_4964e9c_hashes.sha256`; the runtime-convergence closure
+hashes are preserved in `evidence/checkpoint_ae794f1_hashes.sha256`. Prior controller evidence remains
 referenced from [`dag_execution_unification_v1`](../dag_execution_unification_v1/).

@@ -48,3 +48,24 @@ WSL focused validation also passed; no HPC environment was used.
 
 The closure used deterministic local fixtures rather than real HPC or DFT.
 M2 convergence execution was not migrated or modified.
+
+## Final invariant hotfix
+
+| Invariant gate | Status | Evidence |
+|---|---|---|
+| Task rename leaves translated scientific identity unchanged | PASS | `test_legacy_scientific_identity_ignores_task_rename` |
+| Execution placement changes only `ExecutionSpec` | PASS | `test_legacy_execution_changes_do_not_change_scientific_identity` |
+| Protected scientific-input mutation changes identity | PASS | `test_legacy_scientific_identity_changes_with_protected_input` |
+| Generic node capacity prevents over-allocation | PASS | `test_node_capacity_prevents_overallocation_and_releases` |
+| Valid node concurrency reaches allocated capacity | PASS | `test_valid_node_concurrency_reaches_allocated_node_capacity` |
+| CPU and node limits are independently enforced | PASS | `test_cpu_and_node_limits_are_independently_enforced` |
+| Mutable working restart retains immutable evidence and reuses | PASS | `test_mutable_restart_keeps_immutable_evidence_and_reuses` |
+| Immutable-input and parent-source tamper reject reuse | PASS | parameterized `test_mutable_restart_tamper_rejects_reuse` |
+| SIESTA owns restart declaration and consumption confirmation | PASS | `test_siesta_capability_rejects_unconfirmed_restart_consumption` |
+| Generic runtime remains free of SIESTA/DM semantics | PASS | architecture static assertion and source audit |
+| Final focused regression | PASS | 55 passed |
+| Final full suite | PASS | 559 passed, 1 skipped |
+| Final build/wheel/import | PASS | one build; neutral and canonical wheel imports |
+
+No global identity schema, convergence source, historical controller, DAG
+contract, or production entry point changed.

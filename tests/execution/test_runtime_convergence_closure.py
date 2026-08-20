@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import subprocess
 import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -26,7 +28,8 @@ from qraft.contracts import (
     WorkflowTaskNode,
 )
 from qraft.controller_package import ControllerPackageBuilder
-from qraft.core import ExecutionSpec
+from qraft.core import ExecutionSpec, TechnicalValidation
+from qraft.engines.siesta.adapter import SiestaEngineAdapter, SyntheticSiestaLauncher
 from qraft.execution.allocation_controller import (
     AllocationController,
     HistoricalAllocationController,
@@ -36,6 +39,8 @@ from qraft.execution.capability_runtime import CompiledWorkflowRuntime
 from qraft.execution.legacy_translation import translate_controller_config
 from qraft.execution.resource_coordinator import (
     CooperativeShutdown,
+    ResourceCoordinator,
+    ResourceRequest,
     RuntimeAllocation,
 )
 from qraft.execution.srun_launcher import StepLaunchSpec, StepOutcome
@@ -134,9 +139,98 @@ class InterruptingLauncher:
         return affected
 
 
+class RestartCapability(SyntheticCapability):
+    def mutable_input_names(self, **kwargs):
+        bindings = dict(kwargs.get("bindings", {}))
+        return tuple(
+            name
+            for name, binding in bindings.items()
+            if binding.source_task_id is not None
+        )
+
+    def classify_result(self, parsed, **kwargs):
+        self.classifications += 1
+        if OPAQUE_PASS in parsed:
+            return TechnicalValidation(
+                "PASS",
+                "SYNTHETIC_ACCEPTED",
+                ("capability accepted opaque output",),
+                {"opaque": parsed},
+            )
+        return TechnicalValidation(
+            "FAIL",
+            "SYNTHETIC_REJECTED",
+            ("capability rejected opaque output",),
+            {"opaque": parsed},
+        )
+
+    def validate_consumed_inputs(self, parsed, **kwargs):
+        classified = kwargs["classified"]
+        if "RESTART_CONSUMED" in parsed:
+            return classified
+        return TechnicalValidation(
+            "FAIL",
+            "RESTART_INPUT_NOT_CONSUMED",
+            ("synthetic capability did not confirm restart consumption",),
+            {"opaque": parsed},
+        )
+
+
+class RestartMutationLauncher:
+    def __init__(self, *, confirms_consumption: bool = True) -> None:
+        self.confirms_consumption = confirms_consumption
+        self.launches: list[StepLaunchSpec] = []
+        self.restart_before: str | None = None
+        self.restart_after: str | None = None
+
+    def launch(self, spec: StepLaunchSpec) -> StepOutcome:
+        self.launches.append(spec)
+        if spec.task_id == "B":
+            restart = spec.workdir / "restart.bin"
+            self.restart_before = hashlib.sha256(restart.read_bytes()).hexdigest()
+            restart.write_bytes(restart.read_bytes() + b"mutated by engine\n")
+            self.restart_after = hashlib.sha256(restart.read_bytes()).hexdigest()
+        output = OPAQUE_PASS
+        if spec.task_id == "B" and self.confirms_consumption:
+            output += "\nRESTART_CONSUMED"
+        spec.stdout_path.write_text(output + "\n", encoding="utf-8")
+        spec.stderr_path.write_text("", encoding="utf-8")
+        (spec.workdir / "result.dat").write_text(
+            f"artifact:{spec.task_id}:{spec.attempt_id}\n", encoding="utf-8"
+        )
+        return StepOutcome(
+            spec.task_id,
+            spec.attempt_id,
+            (spec.executable, *spec.executable_arguments),
+            0,
+            0.01,
+            False,
+        )
+
+    def terminate_all(self, *, kill: bool = False):
+        return ()
+
+
 def _run_in_thread(current: CompiledWorkflowRuntime):
     pool = ThreadPoolExecutor(max_workers=1)
     return pool, pool.submit(current.run)
+
+
+def _restart_workflow(root: Path) -> CompiledWorkflow:
+    parent = node("A")
+    child = replace(
+        node("B", dependencies=("A",), source_task="A"),
+        inputs=(
+            WorkflowInputBinding(
+                "input",
+                "restart.bin",
+                "text/plain",
+                source_task_id="A",
+                source_output_name="result",
+            ),
+        ),
+    )
+    return workflow(root, (parent, child))
 
 
 def test_ready_tree_runs_with_exact_bounded_concurrency(tmp_path: Path):
@@ -186,7 +280,7 @@ def test_cpu_budget_waits_and_releases_without_overallocation(tmp_path: Path):
         scientific_identities={task.task_id: identity() for task in compiled.tasks},
         execution_specs=specs,
         launcher=launcher,
-        allocation=RuntimeAllocation(8, 1, max_parallel_steps=3),
+        allocation=RuntimeAllocation(8, 2, max_parallel_steps=3),
     )
     pool, future = _run_in_thread(current)
     try:
@@ -202,6 +296,171 @@ def test_cpu_budget_waits_and_releases_without_overallocation(tmp_path: Path):
     assert launcher.max_cpus <= 8
     assert [item.task_id for item in launcher.launches][-1] == "B"
     assert current.coordinator.used_cpus == 0
+
+
+def test_node_capacity_prevents_overallocation_and_releases():
+    coordinator = ResourceCoordinator(RuntimeAllocation(32, 2, max_parallel_steps=4))
+    first = coordinator.try_acquire(ResourceRequest("A", cpus=4, nodes=2))
+    assert first is not None
+    assert coordinator.try_acquire(ResourceRequest("B", cpus=4, nodes=2)) is None
+    assert coordinator.used_nodes == coordinator.peak_nodes == 2
+    coordinator.release(first)
+
+    second = coordinator.try_acquire(ResourceRequest("B", cpus=4, nodes=2))
+    assert second is not None
+    coordinator.release(second)
+    coordinator.assert_released()
+    assert coordinator.used_nodes == 0
+    assert coordinator.used_cpus == 0
+    assert coordinator.used_hosts == ()
+
+
+def test_valid_node_concurrency_reaches_allocated_node_capacity():
+    coordinator = ResourceCoordinator(RuntimeAllocation(32, 2, max_parallel_steps=4))
+    first = coordinator.try_acquire(ResourceRequest("A", cpus=4, nodes=1))
+    second = coordinator.try_acquire(ResourceRequest("B", cpus=4, nodes=1))
+    assert first is not None and second is not None
+    assert coordinator.used_nodes == coordinator.peak_nodes == 2
+    coordinator.release(first)
+    coordinator.release(second)
+    coordinator.assert_released()
+
+
+def test_cpu_and_node_limits_are_independently_enforced():
+    node_bound = ResourceCoordinator(RuntimeAllocation(32, 2, max_parallel_steps=4))
+    node_lease = node_bound.try_acquire(ResourceRequest("A", cpus=1, nodes=2))
+    assert node_lease is not None
+    assert node_bound.try_acquire(ResourceRequest("B", cpus=1, nodes=1)) is None
+    node_bound.release(node_lease)
+    node_bound.assert_released()
+
+    cpu_bound = ResourceCoordinator(RuntimeAllocation(4, 2, max_parallel_steps=4))
+    cpu_lease = cpu_bound.try_acquire(ResourceRequest("A", cpus=4, nodes=1))
+    assert cpu_lease is not None
+    assert cpu_bound.try_acquire(ResourceRequest("B", cpus=1, nodes=1)) is None
+    cpu_bound.release(cpu_lease)
+    cpu_bound.assert_released()
+
+
+def test_mutable_restart_keeps_immutable_evidence_and_reuses(tmp_path: Path):
+    compiled = _restart_workflow(tmp_path)
+    capability = RestartCapability()
+    first_launcher = RestartMutationLauncher()
+    first_runtime = CompiledWorkflowRuntime(
+        workflow=compiled,
+        registry=registry_for(capability),
+        root=tmp_path / "run",
+        source_root=tmp_path,
+        scientific_identities={task.task_id: identity() for task in compiled.tasks},
+        execution_specs=execution(),
+        launcher=first_launcher,
+    )
+    first = first_runtime.run()
+    assert first.status == "COMPLETED"
+    assert first_launcher.restart_before != first_launcher.restart_after
+
+    attempt_root = tmp_path / "run" / "work" / "B" / "attempt-0001"
+    payload = json.loads((attempt_root / "attempt.json").read_text())["payload"]
+    evidence_relative, evidence_hash = next(iter(payload["input_evidence"].items()))
+    assert evidence_relative.startswith(".qraft/input-evidence/")
+    assert hashlib.sha256((attempt_root / evidence_relative).read_bytes()).hexdigest() == evidence_hash
+    assert hashlib.sha256((attempt_root / "restart.bin").read_bytes()).hexdigest() != evidence_hash
+    assert payload["mutable_inputs"] == ["input"]
+    assert "restart.bin" not in payload["working_input_evidence"]
+
+    reuse_launcher = RestartMutationLauncher()
+    reused = CompiledWorkflowRuntime(
+        workflow=compiled,
+        registry=registry_for(RestartCapability()),
+        root=tmp_path / "run",
+        source_root=tmp_path,
+        scientific_identities={task.task_id: identity() for task in compiled.tasks},
+        execution_specs=execution(),
+        launcher=reuse_launcher,
+    ).run()
+    assert reused.status == "COMPLETED"
+    assert reused.reused_nodes == ("A", "B")
+    assert reuse_launcher.launches == []
+
+
+@pytest.mark.parametrize("tamper_target", ["immutable", "parent-source"])
+def test_mutable_restart_tamper_rejects_reuse(tmp_path: Path, tamper_target: str):
+    compiled = _restart_workflow(tmp_path)
+    common = {
+        "workflow": compiled,
+        "root": tmp_path / "run",
+        "source_root": tmp_path,
+        "scientific_identities": {
+            task.task_id: identity() for task in compiled.tasks
+        },
+        "execution_specs": execution(),
+    }
+    first_launcher = RestartMutationLauncher()
+    first = CompiledWorkflowRuntime(
+        registry=registry_for(RestartCapability()),
+        launcher=first_launcher,
+        **common,
+    ).run()
+    assert first.status == "COMPLETED"
+
+    if tamper_target == "immutable":
+        child_root = tmp_path / "run" / "work" / "B" / "attempt-0001"
+        payload = json.loads((child_root / "attempt.json").read_text())["payload"]
+        evidence_relative = next(iter(payload["input_evidence"]))
+        (child_root / evidence_relative).write_bytes(b"tampered immutable evidence\n")
+    else:
+        parent_artifact = tmp_path / "run" / "work" / "A" / "attempt-0001" / "result.dat"
+        parent_artifact.write_bytes(b"tampered parent source\n")
+
+    retry_launcher = RestartMutationLauncher()
+    retried = CompiledWorkflowRuntime(
+        registry=registry_for(RestartCapability()),
+        launcher=retry_launcher,
+        **common,
+    ).run()
+    assert retried.status == "COMPLETED"
+    assert "B" not in retried.reused_nodes
+    assert any(item.task_id == "B" for item in retry_launcher.launches)
+
+
+def test_siesta_capability_rejects_unconfirmed_restart_consumption():
+    adapter = SiestaEngineAdapter()
+    binding = WorkflowInputBinding(
+        "restart",
+        "seed.DM",
+        "application/octet-stream",
+        source_task_id="A",
+        source_output_name="density",
+    )
+    assert adapter.mutable_input_names(bindings={"restart": binding}) == ("restart",)
+
+    without_confirmation = adapter.parse_output(
+        SyntheticSiestaLauncher.normal_output("B").splitlines(keepends=True),
+        settings={"synthetic": True},
+    )
+    classified = adapter.classify_result(without_confirmation)
+    assert classified.status == "PASS"
+    rejected = adapter.validate_consumed_inputs(
+        without_confirmation,
+        classified=classified,
+        mutable_inputs=("restart",),
+    )
+    assert rejected.status == "FAIL"
+    assert rejected.classification == "RESTART_INPUT_NOT_CONSUMED"
+
+    confirmed_text = (
+        "Attempting to read DM from file succeeded\n"
+        + SyntheticSiestaLauncher.normal_output("B")
+    )
+    confirmed = adapter.parse_output(
+        confirmed_text.splitlines(keepends=True), settings={"synthetic": True}
+    )
+    accepted = adapter.validate_consumed_inputs(
+        confirmed,
+        classified=adapter.classify_result(confirmed),
+        mutable_inputs=("restart",),
+    )
+    assert accepted.status == "PASS"
 
 
 def test_host_leases_are_exclusive_and_released(tmp_path: Path):
@@ -473,6 +732,63 @@ def test_legacy_config_translates_to_compiled_workflow_and_execution_spec(
     assert plan.scientific_identities["task-1"].fingerprint
 
 
+def test_legacy_scientific_identity_ignores_task_rename(tmp_path: Path):
+    campaign, _ = make_package(tmp_path, ["SUCCESS"], total_cpus=2)
+    config = load_controller_config(campaign)
+    original = config.tasks[0]
+    renamed = replace(original, task_id="point-B")
+    renamed_config = replace(config, tasks=(renamed,))
+
+    first = translate_controller_config(config, root=tmp_path)
+    second = translate_controller_config(renamed_config, root=tmp_path)
+
+    assert (
+        first.scientific_identities[original.task_id].fingerprint
+        == second.scientific_identities[renamed.task_id].fingerprint
+    )
+
+
+def test_legacy_execution_changes_do_not_change_scientific_identity(tmp_path: Path):
+    campaign, _ = make_package(tmp_path, ["SUCCESS"], total_cpus=8)
+    config = load_controller_config(campaign)
+    original = config.tasks[0]
+    relocated = replace(original, mpi_processes=4, nodes=2)
+    relocated_config = replace(config, tasks=(relocated,), launcher_kind="mpiexec")
+
+    first = translate_controller_config(config, root=tmp_path)
+    second = translate_controller_config(relocated_config, root=tmp_path)
+
+    assert (
+        first.scientific_identities[original.task_id].fingerprint
+        == second.scientific_identities[original.task_id].fingerprint
+    )
+    assert (
+        first.execution_specs[original.task_id].fingerprint
+        != second.execution_specs[original.task_id].fingerprint
+    )
+
+
+def test_legacy_scientific_identity_changes_with_protected_input(tmp_path: Path):
+    campaign, _ = make_package(tmp_path, ["SUCCESS"], total_cpus=2)
+    config = load_controller_config(campaign)
+    original = config.tasks[0]
+    first = translate_controller_config(config, root=tmp_path)
+
+    input_path = tmp_path / original.input_path
+    input_path.write_bytes(input_path.read_bytes() + b"scientific mutation\n")
+    mutated_hash = hashlib.sha256(input_path.read_bytes()).hexdigest()
+    mutated = replace(
+        original,
+        input_hashes={**original.input_hashes, original.input_path: mutated_hash},
+    )
+    second = translate_controller_config(replace(config, tasks=(mutated,)), root=tmp_path)
+
+    assert (
+        first.scientific_identities[original.task_id].fingerprint
+        != second.scientific_identities[original.task_id].fingerprint
+    )
+
+
 def test_new_package_worker_targets_canonical_runtime(tmp_path: Path):
     source = tmp_path / "source"
     source.mkdir()
@@ -526,6 +842,8 @@ def test_architecture_has_one_default_production_runtime_and_no_engine_logic():
         'task_kind == "siesta"',
         "require_scf_converged",
         "inputs[sorted(inputs)[0]]",
+        '".DM"',
+        "dm_restart",
     ):
         assert forbidden not in runtime_source
         assert forbidden not in resource_source
