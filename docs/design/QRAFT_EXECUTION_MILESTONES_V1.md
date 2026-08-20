@@ -180,8 +180,8 @@ non-goals, acceptance gates, evidence, status y closing commit.
 | Non-goals | Cambiar metodología o física. |
 | Acceptance gates | Mismo resultado, punto, `ScientificIdentity`, validación técnica, attempts, recovery/reuse y resultado usuario; `for point in points: execute_fdf_plan(...)` no es autoridad. |
 | Required evidence | Comparación before/after y `docs/validation/m2_f02_canonical_dag/`. |
-| Status | `NOT_STARTED` |
-| Closing commit | No aplicable hasta cierre. |
+| Status | `CLOSED` |
+| Closing commit | `feat: route F02 convergence through canonical DAG`. |
 
 ### M3 — Generic Composition + Failure Model
 
@@ -304,7 +304,8 @@ infraestructura de ejecución.
 |---|---|
 | M0 | `CLOSED` |
 | M1 | `CLOSED` |
-| M2–M10 | `NOT_STARTED` |
+| M2 | `CLOSED` |
+| M3–M10 | `NOT_STARTED` |
 | DFT+U / LR-U | `DEFERRED` |
 
 Un agente futuro debe construir sólo el siguiente milestone abierto, en la capa

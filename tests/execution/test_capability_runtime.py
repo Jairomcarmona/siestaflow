@@ -385,6 +385,33 @@ def test_valid_attempt_is_reused_without_relaunch(tmp_path: Path):
     assert len(launcher.launches) == 1
 
 
+def test_force_new_attempts_preserves_valid_immutable_attempts(tmp_path: Path):
+    compiled = workflow(tmp_path, (node("A"),))
+    launcher = RecordingLauncher()
+    registry = registry_for(SyntheticCapability())
+    assert runtime(tmp_path, compiled, registry, launcher).run().status == "COMPLETED"
+    first_manifest = (
+        tmp_path / "run" / "work" / "A" / "attempt-0001" / "attempt.json"
+    ).read_bytes()
+    refreshed = CompiledWorkflowRuntime(
+        workflow=compiled,
+        registry=registry,
+        root=tmp_path / "run",
+        source_root=tmp_path,
+        scientific_identities={task.task_id: identity() for task in compiled.tasks},
+        execution_specs=execution(),
+        launcher=launcher,
+        force_new_attempts=True,
+    ).run()
+    assert refreshed.status == "COMPLETED"
+    assert refreshed.reused_nodes == ()
+    assert refreshed.attempts["A"].attempt_id == "attempt-0002"
+    assert (
+        tmp_path / "run" / "work" / "A" / "attempt-0001" / "attempt.json"
+    ).read_bytes() == first_manifest
+    assert len(launcher.launches) == 2
+
+
 def test_tampered_attempt_artifact_is_not_reused(tmp_path: Path):
     compiled = workflow(tmp_path, (node("A"),))
     launcher = RecordingLauncher()

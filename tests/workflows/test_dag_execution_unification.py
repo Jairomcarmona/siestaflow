@@ -13,7 +13,7 @@ def _method(module: ast.Module, name: str) -> ast.FunctionDef:
     raise AssertionError(f"method not found: {name}")
 
 
-def test_convergence_execution_seam_is_characterized_before_unification() -> None:
+def test_convergence_execution_uses_the_canonical_runtime() -> None:
     source_path = Path(__file__).parents[2] / "src/qraft/protocols/convergence.py"
     tree = ast.parse(source_path.read_text(encoding="utf-8"))
     run_method = _method(tree, "run")
@@ -24,9 +24,24 @@ def test_convergence_execution_seam_is_characterized_before_unification() -> Non
         and isinstance(node.func, ast.Name)
         and node.func.id == "execute_fdf_plan"
     ]
-    assert len(direct_calls) == 1
-    assert any(
-        isinstance(node, ast.For)
-        and any(child in direct_calls for child in ast.walk(node))
-        for node in ast.walk(run_method)
-    ), "the current protocol-owned execution loop must remain explicit until bridged"
+    compiler_calls = [
+        node for node in ast.walk(run_method)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "compile"
+        and isinstance(node.func.value, ast.Call)
+        and isinstance(node.func.value.func, ast.Name)
+        and node.func.value.func.id == "WorkflowCompiler"
+    ]
+    runtime_calls = [
+        node for node in ast.walk(run_method)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "run"
+        and isinstance(node.func.value, ast.Call)
+        and isinstance(node.func.value.func, ast.Name)
+        and node.func.value.func.id == "CompiledWorkflowRuntime"
+    ]
+    assert not direct_calls
+    assert len(compiler_calls) == 1
+    assert len(runtime_calls) == 1

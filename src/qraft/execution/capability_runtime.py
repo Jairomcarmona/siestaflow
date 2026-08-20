@@ -155,6 +155,7 @@ class CompiledWorkflowRuntime:
         allocation: RuntimeAllocation | None = None,
         shutdown: ShutdownControl | None = None,
         poll_interval_seconds: float = 0.05,
+        force_new_attempts: bool = False,
     ) -> None:
         if not registry.frozen:
             raise ValueError("capability registry must be frozen before execution")
@@ -187,6 +188,7 @@ class CompiledWorkflowRuntime:
         self.coordinator = ResourceCoordinator(self.allocation)
         self.shutdown = shutdown or CooperativeShutdown()
         self.poll_interval_seconds = max(0.001, float(poll_interval_seconds))
+        self.force_new_attempts = bool(force_new_attempts)
         self.filesystem = RealFileSystem()
         self.state_path = self.root / "state" / "workflow_runtime.json"
         self.events_path = self.root / "evidence" / "workflow_events.jsonl"
@@ -515,6 +517,14 @@ class CompiledWorkflowRuntime:
             if record["status"] != "COMPLETED":
                 if record["status"] == "RUNNING":
                     self._set_task(task.task_id, "INTERRUPTED", "crashed RUNNING attempt")
+                continue
+            if self.force_new_attempts:
+                self._set_task(
+                    task.task_id,
+                    "PENDING",
+                    "force new attempt requested",
+                    manifest_sha256=None,
+                )
                 continue
             try:
                 attempt = self._load_valid_attempt(task, record)

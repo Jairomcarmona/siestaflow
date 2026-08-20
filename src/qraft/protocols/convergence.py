@@ -16,13 +16,18 @@ from typing import Any, Mapping, Sequence
 
 from .. import __version__
 from ..campaign_spec import CampaignSpec, ParameterMode, PreflightSeverity, ScientificValue
+from ..contracts import CapabilityRegistry
 from ..engines.siesta.campaign_adapter import MaterializedFDF, SiestaCampaignAdapter
 from ..engines.siesta.fdf_parser import FDFParser
 from ..engines.siesta.input_validator import SiestaInputValidator
 from ..engines.siesta.models import FDFBlock, FDFInclude
 from ..models import DecisionStatus
 from ..output import DagEntry, ExecutionSession, NodeEntry, OutputModel, OutputTable, QraftOutputWriter
-from .single_fdf import execute_fdf_plan, resolve_execution_spec
+from ..execution.capability_plugins import SIESTA_ENGINE_CAPABILITY, register_siesta_engine
+from ..execution.capability_runtime import CompiledWorkflowRuntime
+from ..execution.runtime_composition import compose_runtime
+from ..workflows import WorkflowCompiler
+from .single_fdf import build_scientific_identity, resolve_execution_spec
 
 
 ALGORITHM = "qraft.convergence.v1"
@@ -108,8 +113,6 @@ class ConvergenceProtocol:
                 if not target.is_file():
                     findings.append(PreflightFinding("siesta", PreflightSeverity.ERROR, "INCLUDE_MISSING", str(target)))
             try:
-                from .single_fdf import build_scientific_identity
-
                 build_scientific_identity(
                     campaign.system.fdf,
                     pseudo_manifest=campaign.system.pseudo_manifest,
@@ -208,18 +211,57 @@ class ConvergenceProtocol:
             execution={"partition": execution.partition, "nodes": execution.nodes, "MPI ranks": execution.mpi_ranks, "launcher": execution.launcher},
             dag=tuple(DagEntry(item["node_id"], item["kind"], "READY" if not item["depends_on"] else "WAITING", tuple(item["depends_on"])) for item in _dag(len(rendered["points"]))),
         ))
+        definition = rendered_root / "convergence-workflow.json"
+        _atomic_json(
+            definition,
+            self._workflow_definition(campaign, rendered["points"], execution),
+        )
+        compilation = WorkflowCompiler().compile(definition)
+        if not compilation.valid or compilation.compiled is None:
+            raise ValueError(
+                "canonical convergence workflow compilation failed: "
+                + "; ".join(item.code for item in compilation.report.findings)
+            )
+        identities = {
+            item["node_id"]: build_scientific_identity(
+                Path(item["fdf"]),
+                pseudo_manifest=(
+                    Path(item["pseudo_manifest"])
+                    if item.get("pseudo_manifest")
+                    else None
+                ),
+            )
+            for item in rendered["points"]
+        }
+        registry = CapabilityRegistry()
+        register_siesta_engine(registry)
+        registry.freeze()
+        composition = compose_runtime(execution, max_parallel_steps=1)
+        runtime_result = CompiledWorkflowRuntime(
+            workflow=compilation.compiled,
+            registry=registry,
+            root=root,
+            source_root=rendered_root,
+            scientific_identities=identities,
+            execution_specs=execution,
+            launcher=composition.launcher,
+            allocation=composition.allocation,
+            force_new_attempts=force_new_attempt,
+        ).run()
         points: list[ConvergencePoint] = []
         for index, item in enumerate(rendered["points"], 1):
-            point_root = root / "points" / item["node_id"]
-            result = execute_fdf_plan(Path(item["fdf"]), pseudo_manifest=Path(item["pseudo_manifest"]) if item.get("pseudo_manifest") else None, profile=profile, project_config=project_config, recipe=recipe, overrides=overrides, runs_root=point_root, force_new_attempt=force_new_attempt, invocation=f"{invocation or 'qraft run'} [{item['node_id']}]", profile_metadata=profile_metadata)
-            attempt = result["attempt"]
-            technical = attempt["result"]["technical_validation"]["status"]
-            attempt_dir = point_root / attempt["scientific_identity_sha256"] / attempt["attempt_id"]
-            stdout = attempt_dir / attempt["stdout"]
-            stderr = attempt_dir / attempt["stderr"]
+            attempt = runtime_result.attempts[item["node_id"]]
+            technical = (
+                "PASS"
+                if attempt.result.technical_validation.status == "PASS"
+                else "FAIL"
+            )
+            attempt_dir = root / "work" / attempt.node_id / attempt.attempt_id
+            stdout = attempt_dir / attempt.stdout
+            stderr = attempt_dir / attempt.stderr
             energy = extract_total_energy(stdout) if technical == "PASS" else None
             atoms = _atom_count(Path(item["fdf"]))
-            points.append(ConvergencePoint(index, item["value"], technical, energy, energy / atoms if energy is not None and atoms else None, None, attempt.get("attempt_id"), item["fdf"], str(stdout), str(stderr), result["status"] == "REUSED_VALIDATED_ATTEMPT"))
+            points.append(ConvergencePoint(index, item["value"], technical, energy, energy / atoms if energy is not None and atoms else None, None, attempt.attempt_id, item["fdf"], str(stdout), str(stderr), item["node_id"] in runtime_result.reused_nodes))
         evaluated, decision, selected = evaluate_convergence(points, campaign.criterion.metric, campaign.criterion.delta, campaign.criterion.consecutive)
         all_technical = all(point.technical_status == "PASS" for point in evaluated)
         status = "COMPLETED" if all_technical else "FAILED"
@@ -248,6 +290,55 @@ class ConvergenceProtocol:
         for value in scan.resolved_values():
             variants.append(self.adapter.materialize(campaign.system.fdf, scanned_name=scan_name, scanned_value=value, resolved={**fixed, scan_name: (value, scan.unit)}, engine_options=campaign.engine_options))
         return tuple(variants)
+
+    @staticmethod
+    def _workflow_definition(
+        campaign: CampaignSpec,
+        points: Sequence[Mapping[str, Any]],
+        execution: Any,
+    ) -> dict[str, Any]:
+        tasks: list[dict[str, Any]] = []
+        for point in points:
+            fdf = Path(str(point["fdf"])).resolve()
+            point_root = fdf.parent
+            inputs = [{
+                "name": "fdf",
+                "source": fdf.relative_to(point_root.parent).as_posix(),
+                "destination": "input.fdf",
+                "media_type": "application/x-siesta-fdf",
+            }]
+            for index, path in enumerate(sorted(point_root.rglob("*")), 1):
+                if not path.is_file() or path.resolve() == fdf:
+                    continue
+                inputs.append({
+                    "name": f"scientific_input_{index:03d}",
+                    "source": path.relative_to(point_root.parent).as_posix(),
+                    "destination": path.relative_to(point_root).as_posix(),
+                    "media_type": "application/octet-stream",
+                })
+            tasks.append({
+                "task_id": str(point["node_id"]),
+                "kind": "calculation",
+                "capability": SIESTA_ENGINE_CAPABILITY,
+                "inputs": inputs,
+                "outputs": [],
+                "resources": {
+                    "nodes": execution.nodes,
+                    "mpi_processes": execution.mpi_ranks,
+                    "processes_per_node": execution.ranks_per_node,
+                    "cpus_per_process": execution.cpus_per_rank,
+                    "walltime_seconds": execution.walltime_seconds,
+                },
+                "settings": {"primary_input": "fdf"},
+            })
+        return {
+            "schema_version": "1.0",
+            "workflow_id": f"{campaign.campaign_id}-convergence",
+            "project_id": campaign.campaign_id,
+            "description": "Canonical convergence point execution DAG",
+            "metadata": {"protocol": "convergence", "scientific_policy": "external"},
+            "tasks": tasks,
+        }
 
     @staticmethod
     def _copy_dependencies(campaign: CampaignSpec, target: Path) -> Path | None:

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import inspect
+import os
 import sys
 from pathlib import Path
 
@@ -223,28 +225,68 @@ def test_campaign_run_qraft_out_csv_and_recovery(tmp_path: Path) -> None:
     campaign = campaign_file(tmp_path)
     fake = tmp_path / "fake.py"
     fake.write_text(
-        "import re,sys\ntext=sys.stdin.read()\n"
+        "import re,sys\ntext=open(sys.argv[1], encoding='utf-8').read()\n"
         "v=float(re.search(r'Mesh\\.Cutoff\\s+([0-9.]+)',text,re.I).group(1))\n"
         "energy={200.0:-10.0,250.0:-10.0005,300.0:-10.0009}[v]\n"
         "print('Siesta started')\nprint('SCF cycle 1')\nprint('SCF converged')\n"
         "print(f'siesta: E_KS(eV) = {energy}')\nprint('Job completed')\n",
         encoding="utf-8",
     )
-    overrides = {"partition": "local", "launcher": "direct", "executable": sys.executable, "executable_arguments": [str(fake)]}
+    wrapper = tmp_path / ("fake-siesta.cmd" if os.name == "nt" else "fake-siesta")
+    if os.name == "nt":
+        wrapper.write_text(
+            f'@echo off\r\n"{sys.executable}" "{fake}" %1\r\n',
+            encoding="utf-8",
+        )
+    else:
+        wrapper.write_text(
+            f'#!/bin/sh\nexec "{sys.executable}" "{fake}" "$1"\n',
+            encoding="utf-8",
+        )
+        wrapper.chmod(0o755)
+    overrides = {"partition": "local", "launcher": "direct", "executable": str(wrapper)}
     root = tmp_path / "runs"
     app = QraftApplication(ApplicationConfiguration(fdf=campaign, runs_root=root, overrides=overrides))
     first = app.run()
     assert first["technical_validation"] == "PASS"
     assert first["scientific_decision"] == "CONVERGED"
+    assert [point["energy_ev"] for point in first["points"]] == [-10.0, -10.0005, -10.0009]
+    assert [point["energy_per_atom_ev"] for point in first["points"]] == [-10.0, -10.0005, -10.0009]
+    assert first["points"][0]["delta"] is None
+    assert [point["delta"] for point in first["points"][1:]] == pytest.approx([0.0005, 0.0004])
+    assert first["selected_point"] == 300
     assert (root / "qraft.out").is_file()
     assert (root / "results" / "convergence.csv").is_file()
-    manifests = sorted((root / "points").rglob("attempt.json"))
+    workflow = json.loads((root / "rendered" / "convergence-workflow.json").read_text(encoding="utf-8"))
+    assert [task["task_id"] for task in workflow["tasks"]] == ["point_001", "point_002", "point_003"]
+    assert all(task["capability"] == "siestaflow.engine.siesta" for task in workflow["tasks"])
+    assert all(task.get("depends_on", []) == [] and task["outputs"] == [] for task in workflow["tasks"])
+    assert all({item["destination"] for item in task["inputs"]} >= {"input.fdf", "C.psf"} for task in workflow["tasks"])
+    manifests = sorted((root / "work").rglob("attempt.json"))
     originals = [path.read_bytes() for path in manifests]
+    assert len(manifests) == 3
+    for item, manifest in zip(first["points"], manifests):
+        attempt = json.loads(manifest.read_text(encoding="utf-8"))["payload"]["attempt"]
+        expected = build_scientific_identity(Path(item["fdf"]))
+        assert attempt["scientific_identity_sha256"] == expected.fingerprint
+        assert item["technical_status"] == "PASS" and Path(item["stdout"]).is_file()
     second = app.run()
     assert all(point["reused"] for point in second["points"])
     assert [path.read_bytes() for path in manifests] == originals
+    refreshed = ConvergenceProtocol().run(
+        CampaignSpec.load(campaign), overrides=overrides, runs_root=root,
+        force_new_attempt=True,
+    )
+    assert not any(point["reused"] for point in refreshed["points"])
+    assert {point["attempt_id"] for point in refreshed["points"]} == {"attempt-0002"}
+    assert [path.read_bytes() for path in manifests] == originals
     result = json.loads((root / "campaign-result.json").read_text(encoding="utf-8"))
     assert result["algorithm"] == "qraft.convergence.v1"
+
+
+def test_convergence_execution_authority_is_canonical_runtime() -> None:
+    source = Path(inspect.getsourcefile(ConvergenceProtocol) or "")
+    assert "execute_fdf_plan(" not in source.read_text(encoding="utf-8")
 
 
 def test_execution_changes_do_not_change_rendered_science(tmp_path: Path) -> None:
