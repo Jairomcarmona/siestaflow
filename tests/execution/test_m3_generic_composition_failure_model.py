@@ -40,8 +40,21 @@ SEED = ArtifactPortContract("org.example.m3-seed", "application/json")
 
 
 class MultiInputSyntheticCapability(SyntheticCapability):
+    def __init__(self) -> None:
+        super().__init__()
+        self.consumed_inputs: dict[str, dict[str, str]] = {}
+
     def select_primary_input(self, **kwargs):
-        return sorted(kwargs["inputs"])[0]
+        return str(kwargs["settings"]["primary_input"])
+
+    def validate_input(self, inspected, **kwargs):
+        evidence_key = kwargs["settings"].get("evidence_task")
+        if evidence_key is not None:
+            self.consumed_inputs[str(evidence_key)] = {
+                name: hashlib.sha256(Path(path).read_bytes()).hexdigest()
+                for name, path in kwargs["inputs"].items()
+            }
+        return super().validate_input(inspected, **kwargs)
 
 
 def _external(name: str = "seed") -> dict[str, str]:
@@ -62,7 +75,12 @@ def _produced(name: str, source_task: str) -> dict[str, object]:
     }
 
 
-def _task(task_id: str, inputs: list[dict[str, object]]) -> dict[str, object]:
+def _task(
+    task_id: str,
+    inputs: list[dict[str, object]],
+    *,
+    settings: dict[str, str] | None = None,
+) -> dict[str, object]:
     return {
         "task_id": task_id,
         "kind": "postprocess",
@@ -76,17 +94,22 @@ def _task(task_id: str, inputs: list[dict[str, object]]) -> dict[str, object]:
             "required": True,
         }],
         "resources": RESOURCES,
-        "settings": {},
+        "settings": settings or {},
     }
 
 
-def _fragment(task_id: str, inputs: list[dict[str, object]]) -> WorkflowFragment:
+def _fragment(
+    task_id: str,
+    inputs: list[dict[str, object]],
+    *,
+    settings: dict[str, str] | None = None,
+) -> WorkflowFragment:
     contracts = {
         str(item["name"]): SEED if "source" in item else RESULT
         for item in inputs
     }
     return WorkflowFragment.single(
-        task_id.lower(), _task(task_id, inputs), input_contracts=contracts
+        task_id.lower(), _task(task_id, inputs, settings=settings), input_contracts=contracts
     )
 
 
@@ -116,10 +139,11 @@ def _runtime(
     *,
     root: Path | None = None,
     allocation_id: str = "local",
+    capability: MultiInputSyntheticCapability | None = None,
 ) -> CompiledWorkflowRuntime:
     return CompiledWorkflowRuntime(
         workflow=workflow,
-        registry=registry_for(MultiInputSyntheticCapability()),
+        registry=registry_for(capability or MultiInputSyntheticCapability()),
         root=root or tmp_path / "run",
         source_root=tmp_path,
         scientific_identities={task.task_id: identity() for task in workflow.tasks},
@@ -149,7 +173,7 @@ def test_principal_composed_fanout_fanin_failure_isolation(tmp_path: Path) -> No
         _fragment("JOIN", [
             _produced("left", "A"),
             _produced("right", "C"),
-        ]),
+        ], settings={"primary_input": "left", "evidence_task": "JOIN"}),
     )
     definition, workflow = _compile(tmp_path, fragments)
     assert definition["metadata"]["composition"]["fragments"] == [
@@ -161,7 +185,10 @@ def test_principal_composed_fanout_fanin_failure_isolation(tmp_path: Path) -> No
     }
     launcher = RecordingLauncher({"B": [(OPAQUE_FAIL, 0, False, True)]})
     root = tmp_path / "run"
-    result = _runtime(tmp_path, workflow, launcher, root=root).run()
+    capability = MultiInputSyntheticCapability()
+    result = _runtime(
+        tmp_path, workflow, launcher, root=root, capability=capability
+    ).run()
 
     assert _states(root) == {
         "ROOT": "COMPLETED", "A": "COMPLETED", "B": "FAILED",
@@ -174,7 +201,9 @@ def test_principal_composed_fanout_fanin_failure_isolation(tmp_path: Path) -> No
     payload = json.loads((join / "attempt.json").read_text(encoding="utf-8"))["payload"]
     for name, parent in (("left", "A"), ("right", "C")):
         parent_artifact = root / "work" / parent / "attempt-0001" / "result.dat"
-        assert payload["input_sources"][name] == hashlib.sha256(parent_artifact.read_bytes()).hexdigest()
+        digest = hashlib.sha256(parent_artifact.read_bytes()).hexdigest()
+        assert payload["input_sources"][name] == digest
+        assert capability.consumed_inputs["JOIN"][name] == digest
     assert result.attempts["JOIN"].result.execution_state == "COMPLETED"
 
 

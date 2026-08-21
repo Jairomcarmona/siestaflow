@@ -5,6 +5,14 @@
   "m3_focused": "3 passed in 0.79s",
   "focused_regression": "51 passed in 7.93s",
   "final_full_pytest": "566 passed",
+  "fanin_evidence_micro_hotfix": {
+    "test_only_after_full_suite": true,
+    "m3_focused": "3 passed in 0.76s",
+    "focused_regression": "39 passed in 4.78s",
+    "full_suite_rerun": false,
+    "join_capability_consumes": ["left", "right"],
+    "join_input_hashes_match_parent_artifacts": true
+  },
   "principal_terminal_states": {
     "ROOT": "COMPLETED",
     "A": "COMPLETED",
