@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "baseline_commit": "dcb8dfd6fe316087595588da22d9ee548c25d7aa",
+  "focused_baseline": "48 passed in 7.76s",
+  "m3_focused": "3 passed in 0.79s",
+  "focused_regression": "51 passed in 7.93s",
+  "final_full_pytest": "566 passed",
+  "principal_terminal_states": {
+    "ROOT": "COMPLETED",
+    "A": "COMPLETED",
+    "B": "FAILED",
+    "C": "COMPLETED",
+    "B_CHILD": "BLOCKED",
+    "JOIN": "COMPLETED"
+  },
+  "allocation_rollover": {
+    "first": "alloc-001",
+    "second": "alloc-002",
+    "reused": ["ROOT"],
+    "continued_attempt": "WORK/attempt-0002"
+  },
+  "gates": {
+    "M3-01": "PASS",
+    "M3-02": "PASS",
+    "M3-03": "PASS",
+    "M3-04": "PASS",
+    "M3-05": "PASS",
+    "M3-06": "PASS",
+    "M3-07": "PASS",
+    "M3-08": "PASS",
+    "M3-09": "PASS",
+    "M3-10": "PASS"
+  }
+}

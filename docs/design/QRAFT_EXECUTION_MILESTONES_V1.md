@@ -193,8 +193,8 @@ non-goals, acceptance gates, evidence, status y closing commit.
 | Non-goals | Física nueva. |
 | Acceptance gates | Fan-out, fan-in cuando aplique, artifact contracts, branch isolation, dependent blocking y recovery. |
 | Required evidence | Fixtures genéricos y `docs/validation/m3_generic_composition_failure_model/`. |
-| Status | `NOT_STARTED` |
-| Closing commit | No aplicable hasta cierre. |
+| Status | `CLOSED` |
+| Closing commit | `test: close M3 generic composition failure model`. |
 
 ### M4 — F03 Chained Numerical Convergence
 
@@ -305,7 +305,8 @@ infraestructura de ejecución.
 | M0 | `CLOSED` |
 | M1 | `CLOSED` |
 | M2 | `CLOSED` |
-| M3–M10 | `NOT_STARTED` |
+| M3 | `CLOSED` |
+| M4–M10 | `NOT_STARTED` |
 | DFT+U / LR-U | `DEFERRED` |
 
 Un agente futuro debe construir sólo el siguiente milestone abierto, en la capa
