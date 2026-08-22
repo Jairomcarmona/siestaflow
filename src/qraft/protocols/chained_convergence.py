@@ -229,7 +229,11 @@ class ChainedConvergenceProtocol:
             SCIENTIFIC_ARTIFACT, producer="qraft.chained-convergence", payload=payload
         ).to_dict()
         self._write_immutable(path, envelope)
-        return {**envelope, "_path": str(path.resolve())}
+        return {
+            **envelope,
+            "_path": str(path.resolve()),
+            "_file_sha256": _sha_file(path),
+        }
 
     def _with_inheritance(
         self, campaign: CampaignSpec, parameter: str, artifact: Mapping[str, Any]
@@ -247,7 +251,7 @@ class ChainedConvergenceProtocol:
             inheritance=InheritanceSource(
                 evidence=str(path),
                 value=self._scientific_value(payload["selection"]["value"]),
-                evidence_sha256=_sha_file(path),
+                evidence_sha256=str(verified["_file_sha256"]),
             ),
         )
         return replace(campaign, parameters=parameters)
@@ -257,7 +261,19 @@ class ChainedConvergenceProtocol:
         expected_parameter: str,
     ) -> dict[str, Any]:
         path = Path(str(artifact["_path"])).resolve()
-        raw = json.loads(path.read_text(encoding="utf-8"))
+        expected_file_sha256 = artifact.get("_file_sha256")
+        if not isinstance(expected_file_sha256, str):
+            raise ValueError("selection artifact lacks producer file SHA-256")
+        expected_content_sha256 = artifact.get("content_sha256")
+        if not isinstance(expected_content_sha256, str):
+            raise ValueError("selection artifact lacks producer content SHA-256")
+        raw_bytes = path.read_bytes()
+        file_sha256 = _sha_bytes(raw_bytes)
+        if file_sha256 != expected_file_sha256:
+            raise ValueError("selection artifact producer file hash mismatch")
+        raw = json.loads(raw_bytes.decode("utf-8"))
+        if raw.get("content_sha256") != expected_content_sha256:
+            raise ValueError("selection artifact producer content hash mismatch")
         envelope = ContractEnvelope.from_dict(raw, required_contract=SCIENTIFIC_ARTIFACT)
         payload = dict(envelope.payload)
         required = {
@@ -276,14 +292,18 @@ class ChainedConvergenceProtocol:
             or set(payload["selection"]) != {"value", "unit"}
         ):
             raise ValueError("selection artifact does not match inherited parameter")
-        return {**raw, "payload": payload, "_path": str(path)}
+        return {
+            **raw,
+            "payload": payload,
+            "_path": str(path),
+            "_file_sha256": file_sha256,
+        }
 
     def _profile_artifact(
         self, path: Path, artifacts: tuple[Mapping[str, Any], ...]
     ) -> dict[str, Any]:
         selections: dict[str, Any] = {}
         for artifact in artifacts:
-            path_value = Path(str(artifact["_path"])).resolve()
             verified = self._verify_selection(
                 artifact,
                 expected_stage=str(artifact["payload"]["stage"]),
@@ -293,7 +313,7 @@ class ChainedConvergenceProtocol:
             selections[str(payload["parameter"])] = {
                 "value": payload["selection"]["value"],
                 "unit": payload["selection"]["unit"],
-                "selection_artifact_sha256": _sha_file(path_value),
+                "selection_artifact_sha256": verified["_file_sha256"],
                 "selection_contract_sha256": verified["content_sha256"],
             }
         envelope = ContractEnvelope.create(
@@ -318,7 +338,7 @@ class ChainedConvergenceProtocol:
             "parameter": parameter,
             "downstream_stage": downstream,
             "selection_artifact": str(by_parameter[parameter]["_path"]),
-            "selection_artifact_sha256": _sha_file(Path(str(by_parameter[parameter]["_path"]))),
+            "selection_artifact_sha256": by_parameter[parameter]["_file_sha256"],
             "selected_value": by_parameter[parameter]["payload"]["selection"]["value"],
         } for parameter, downstream in links]
 
@@ -345,7 +365,11 @@ class ChainedConvergenceProtocol:
                 "authority": value.authority.value,
             }
         if isinstance(value, Mapping):
-            return {str(key): ChainedConvergenceProtocol._json_result(item) for key, item in value.items() if key != "_path"}
+            return {
+                str(key): ChainedConvergenceProtocol._json_result(item)
+                for key, item in value.items()
+                if key not in {"_path", "_file_sha256"}
+            }
         if isinstance(value, tuple):
             return [ChainedConvergenceProtocol._json_result(item) for item in value]
         if isinstance(value, list):

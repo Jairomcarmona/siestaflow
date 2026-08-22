@@ -231,12 +231,16 @@ def test_basis_energy_shift_handoff_preserves_upstream_unit(tmp_path: Path) -> N
     )
     assert result["status"] == "COMPLETED"
     selection = root / "handoff" / "basis-selection.json"
+    raw_selection = json.loads(selection.read_text(encoding="utf-8"))
     payload = ContractEnvelope.from_dict(
-        json.loads(selection.read_text(encoding="utf-8")), required_contract=SCIENTIFIC_ARTIFACT
+        raw_selection, required_contract=SCIENTIFIC_ARTIFACT
     ).payload
     assert payload["selection"] == {"value": 300, "unit": "meV"}
     inherited = protocol._with_inheritance(mesh, "basis_energy_shift", {
-        "payload": payload, "_path": str(selection),
+        **raw_selection,
+        "payload": payload,
+        "_path": str(selection),
+        "_file_sha256": _sha(selection),
     }).parameters["basis_energy_shift"]
     assert inherited.unit == "meV"
     assert inherited.inheritance is not None
@@ -245,6 +249,109 @@ def test_basis_energy_shift_handoff_preserves_upstream_unit(tmp_path: Path) -> N
     for stage in ("mesh", "kpoints"):
         for fdf in (root / "stages" / stage / "rendered").glob("point_*/input.fdf"):
             assert "PAO.EnergyShift 300 meV" in fdf.read_text(encoding="utf-8")
+
+
+def test_selection_verification_requires_producer_file_and_content_hashes(
+    tmp_path: Path,
+) -> None:
+    basis, _, _ = _templates(tmp_path)
+    protocol = ChainedConvergenceProtocol()
+    selection = tmp_path / "handoff" / "basis-selection.json"
+    artifact = protocol._selection_artifact(
+        selection,
+        "basis",
+        basis,
+        {
+            "scientific_decision": "CONVERGED",
+            "selected_point": "DZP",
+            "points": [],
+        },
+    )
+
+    assert protocol._verify_selection(
+        artifact, expected_stage="basis", expected_parameter="basis_size"
+    )["payload"]["selection"]["value"] == "DZP"
+    with pytest.raises(ValueError, match="producer content hash mismatch"):
+        protocol._verify_selection(
+            {**artifact, "content_sha256": "0" * 64},
+            expected_stage="basis",
+            expected_parameter="basis_size",
+        )
+
+    replacement_payload = {
+        **artifact["payload"],
+        "selection": {"value": "SZ", "unit": artifact["payload"]["selection"]["unit"]},
+    }
+    replacement = ContractEnvelope.create(
+        SCIENTIFIC_ARTIFACT,
+        producer="qraft.chained-convergence",
+        payload=replacement_payload,
+    ).to_dict()
+    selection.write_text(
+        json.dumps(replacement, sort_keys=True, indent=2) + "\n", encoding="utf-8"
+    )
+    ContractEnvelope.from_dict(replacement, required_contract=SCIENTIFIC_ARTIFACT)
+    with pytest.raises(ValueError, match="producer file hash mismatch"):
+        protocol._verify_selection(
+            artifact, expected_stage="basis", expected_parameter="basis_size"
+        )
+
+
+def test_valid_basis_substitution_blocks_downstream_stages(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    basis, mesh, kpoints = _templates(tmp_path)
+    protocol = ChainedConvergenceProtocol()
+    launches: list[str] = []
+    selected = {"basis": "DZP", "mesh": 300, "kpoints": (3, 3, 3)}
+
+    def synthetic_stage(stage: str, *_args: object) -> dict:
+        launches.append(stage)
+        return {
+            "status": "COMPLETED",
+            "technical_validation": "PASS",
+            "scientific_decision": "CONVERGED",
+            "selected_point": selected[stage],
+            "points": [],
+        }
+
+    genuine_selection = protocol._selection_artifact
+
+    def substitute_basis(
+        path: Path, stage: str, campaign: CampaignSpec, result: dict
+    ) -> dict:
+        artifact = genuine_selection(path, stage, campaign, result)
+        if stage == "basis":
+            replacement = ContractEnvelope.create(
+                SCIENTIFIC_ARTIFACT,
+                producer="qraft.chained-convergence",
+                payload={
+                    **artifact["payload"],
+                    "selection": {
+                        "value": "SZ",
+                        "unit": artifact["payload"]["selection"]["unit"],
+                    },
+                },
+            ).to_dict()
+            path.write_text(
+                json.dumps(replacement, sort_keys=True, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            ContractEnvelope.from_dict(
+                replacement, required_contract=SCIENTIFIC_ARTIFACT
+            )
+        return artifact
+
+    monkeypatch.setattr(protocol, "_run_stage", synthetic_stage)
+    monkeypatch.setattr(protocol, "_selection_artifact", substitute_basis)
+    root = tmp_path / "substitution"
+    with pytest.raises(ValueError, match="producer file hash mismatch"):
+        protocol.run(basis, mesh, kpoints, runs_root=root)
+
+    assert launches == ["basis"]
+    assert not (root / "stages" / "mesh").exists()
+    assert not (root / "stages" / "kpoints").exists()
+    assert not (root / "numerical-profile.json").exists()
 
 
 def test_loose_pseudopotential_mismatch_is_rejected_before_execution(tmp_path: Path) -> None:
