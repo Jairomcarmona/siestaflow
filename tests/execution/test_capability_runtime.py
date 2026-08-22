@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from qraft.contracts import (
     ARTIFACT_REFERENCE,
     EXECUTION_EVIDENCE,
@@ -115,19 +117,25 @@ class RecordingLauncher:
         return ()
 
 
-def registry_for(capability: object, *, compatible: bool = True) -> CapabilityRegistry:
+def registry_for(
+    capability: object,
+    *,
+    compatible: bool = True,
+    implementation_version: str = "1.0.0",
+    plugin_version: str = "1.0.0",
+) -> CapabilityRegistry:
     inputs = (EXECUTION_REQUEST,) if compatible else (VALIDATION_REPORT,)
     outputs = (EXECUTION_EVIDENCE,) if compatible else (ARTIFACT_REFERENCE,)
     descriptor = CapabilityDescriptor(
         capability_id=PASS_CAPABILITY,
         kind=CapabilityKind.ENGINE,
-        implementation_version="1.0.0",
+        implementation_version=implementation_version,
         input_contracts=inputs,
         output_contracts=outputs,
     )
     plugin = PluginDescriptor(
         plugin_id="org.example.plugin.synthetic",
-        plugin_version="1.0.0",
+        plugin_version=plugin_version,
         core_contract_version=ContractVersion(1, 0),
         capabilities=(descriptor,),
         provider="tests",
@@ -374,15 +382,91 @@ def test_interrupted_attempt_retries_without_overwriting(tmp_path: Path):
     assert (tmp_path / "run" / "work" / "A" / "attempt-0001" / "attempt.json").is_file()
 
 
+def test_reserved_attempt_survives_crash_before_workspace_creation(tmp_path: Path):
+    compiled = workflow(tmp_path, (node("A"),))
+    launcher = RecordingLauncher()
+    registry = registry_for(SyntheticCapability())
+    interrupted = runtime(tmp_path, compiled, registry, launcher)
+    atomic_write_json = interrupted.filesystem.atomic_write_json
+
+    def crash_after_reservation(path: Path, payload: object) -> None:
+        atomic_write_json(path, payload)
+        task = payload["payload"]["tasks"]["A"]
+        if task["last_attempt"] == "attempt-0001":
+            raise KeyboardInterrupt("simulated crash after attempt reservation")
+
+    interrupted.filesystem.atomic_write_json = crash_after_reservation
+    with pytest.raises(KeyboardInterrupt, match="attempt reservation"):
+        interrupted.run()
+
+    state = __import__("json").loads(
+        (tmp_path / "run" / "state" / "workflow_runtime.json").read_text()
+    )["payload"]["tasks"]["A"]
+    assert state["attempts"] == 1 and state["last_attempt"] == "attempt-0001"
+    assert not (tmp_path / "run" / "work" / "A" / "attempt-0001").exists()
+
+    resumed = runtime(tmp_path, compiled, registry, launcher).run()
+    assert resumed.status == "COMPLETED"
+    assert resumed.attempts["A"].attempt_id == "attempt-0002"
+    assert len(launcher.launches) == 1
+    recovered = __import__("json").loads(
+        (tmp_path / "run" / "state" / "workflow_runtime.json").read_text()
+    )["payload"]["tasks"]["A"]
+    assert recovered["attempts"] == 2 and recovered["last_attempt"] == "attempt-0002"
+    assert (tmp_path / "run" / "work" / "A" / "attempt-0002" / "attempt.json").is_file()
+
+
 def test_valid_attempt_is_reused_without_relaunch(tmp_path: Path):
     compiled = workflow(tmp_path, (node("A"),))
     launcher = RecordingLauncher()
     registry = registry_for(SyntheticCapability())
-    assert runtime(tmp_path, compiled, registry, launcher).run().status == "COMPLETED"
-    second = runtime(tmp_path, compiled, registry, launcher).run()
+    first = runtime(tmp_path, compiled, registry, launcher)
+    assert first.run().status == "COMPLETED"
+    resumed = runtime(tmp_path, compiled, registry, launcher)
+    assert resumed.runtime_fingerprint == first.runtime_fingerprint
+    second = resumed.run()
     assert second.status == "COMPLETED"
     assert second.reused_nodes == ("A",)
     assert len(launcher.launches) == 1
+
+
+def test_capability_implementation_version_invalidates_runtime_reuse(tmp_path: Path):
+    compiled = workflow(tmp_path, (node("A"),))
+    launcher = RecordingLauncher()
+    original = runtime(
+        tmp_path,
+        compiled,
+        registry_for(SyntheticCapability(), implementation_version="1.0.0"),
+        launcher,
+    )
+    assert original.run().status == "COMPLETED"
+    changed = runtime(
+        tmp_path,
+        compiled,
+        registry_for(SyntheticCapability(), implementation_version="2.0.0"),
+        launcher,
+    )
+    assert changed.runtime_fingerprint != original.runtime_fingerprint
+    with pytest.raises(ValueError, match="workflow runtime identity mismatch"):
+        changed.run()
+    assert len(launcher.launches) == 1
+
+
+def test_plugin_version_participates_in_runtime_provenance(tmp_path: Path):
+    compiled = workflow(tmp_path, (node("A"),))
+    stable = runtime(
+        tmp_path,
+        compiled,
+        registry_for(SyntheticCapability(), plugin_version="1.0.0"),
+        RecordingLauncher(),
+    )
+    changed = runtime(
+        tmp_path,
+        compiled,
+        registry_for(SyntheticCapability(), plugin_version="2.0.0"),
+        RecordingLauncher(),
+    )
+    assert changed.runtime_fingerprint != stable.runtime_fingerprint
 
 
 def test_force_new_attempts_preserves_valid_immutable_attempts(tmp_path: Path):

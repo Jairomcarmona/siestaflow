@@ -211,8 +211,28 @@ class CompiledWorkflowRuntime:
                 key: value.fingerprint
                 for key, value in sorted(self.execution_specs.items())
             },
+            "capability_provenance": self._capability_provenance(),
         }
         return hashlib.sha256(_canonical(payload).encode("utf-8")).hexdigest()
+
+    def _capability_provenance(self) -> dict[str, dict[str, str]]:
+        provenance: dict[str, dict[str, str]] = {}
+        for task in sorted(self.workflow.tasks, key=lambda item: item.task_id):
+            try:
+                registered = self.registry.resolve(task.capability_id)
+            except KeyError:
+                # The workflow payload already binds an unresolved identifier;
+                # preserve the existing runtime behavior that reports it as
+                # blocked rather than failing while initializing state.
+                provenance[task.task_id] = {"capability_id": task.capability_id}
+                continue
+            provenance[task.task_id] = {
+                "capability_id": registered.descriptor.capability_id,
+                "implementation_version": registered.descriptor.implementation_version,
+                "plugin_id": registered.plugin.plugin_id,
+                "plugin_version": registered.plugin.plugin_version,
+            }
+        return provenance
 
     def _resource_request(self, task: WorkflowTaskNode) -> ResourceRequest:
         execution = self.execution_specs[task.task_id]
@@ -803,46 +823,45 @@ class CompiledWorkflowRuntime:
         number = int(record["attempts"]) + 1
         attempt_id = f"attempt-{number:04d}"
         attempt_root = self._attempt_path(task.task_id, attempt_id)
-        attempt_root.mkdir(parents=True, exist_ok=False)
-        input_evidence: dict[str, str] = {}
-        input_sources: dict[str, str] = {}
-        working_input_evidence: dict[str, str] = {}
-        staged_inputs: dict[str, Path] = {}
-        bindings = {item.name: item for item in task.inputs}
-        for index, (name, source) in enumerate(sorted(inputs.items()), start=1):
-            destination = attempt_root / _safe_relative(
-                bindings[name].destination,
-                field=f"{task.task_id}.{name}.destination",
-            )
-            evidence_relative = Path(
-                ".qraft",
-                "input-evidence",
-                f"{index:03d}-{hashlib.sha256(name.encode('utf-8')).hexdigest()[:12]}",
-            )
-            evidence_path = attempt_root / evidence_relative
-            evidence_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source, evidence_path)
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(evidence_path, destination)
-            staged_inputs[name] = destination
-            digest = _sha_file(evidence_path)
-            input_evidence[evidence_relative.as_posix()] = digest
-            input_sources[name] = digest
-            if name not in mutable_inputs:
-                working_input_evidence[
-                    destination.relative_to(attempt_root).as_posix()
-                ] = digest
-
         started = _utc_now()
         self._set_task(
             task.task_id,
             "RUNNING",
-            "attempt launched",
+            "attempt reserved",
             attempts=number,
             last_attempt=attempt_id,
             manifest_sha256=None,
         )
         try:
+            attempt_root.mkdir(parents=True, exist_ok=False)
+            input_evidence: dict[str, str] = {}
+            input_sources: dict[str, str] = {}
+            working_input_evidence: dict[str, str] = {}
+            staged_inputs: dict[str, Path] = {}
+            bindings = {item.name: item for item in task.inputs}
+            for index, (name, source) in enumerate(sorted(inputs.items()), start=1):
+                destination = attempt_root / _safe_relative(
+                    bindings[name].destination,
+                    field=f"{task.task_id}.{name}.destination",
+                )
+                evidence_relative = Path(
+                    ".qraft",
+                    "input-evidence",
+                    f"{index:03d}-{hashlib.sha256(name.encode('utf-8')).hexdigest()[:12]}",
+                )
+                evidence_path = attempt_root / evidence_relative
+                evidence_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, evidence_path)
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(evidence_path, destination)
+                staged_inputs[name] = destination
+                digest = _sha_file(evidence_path)
+                input_evidence[evidence_relative.as_posix()] = digest
+                input_sources[name] = digest
+                if name not in mutable_inputs:
+                    working_input_evidence[
+                        destination.relative_to(attempt_root).as_posix()
+                    ] = digest
             staged_inspected = registered.implementation.inspect_input(
                 staged_inputs[primary_name]
             )
