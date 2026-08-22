@@ -889,6 +889,12 @@ class CompiledWorkflowRuntime:
             )
             if not command:
                 raise ValueError("capability returned an empty command")
+            if command[0] == execution_spec.executable:
+                command = (
+                    command[0],
+                    *execution_spec.executable_arguments,
+                    *command[1:],
+                )
             outcome = self._launcher_for(task).launch(
                 StepLaunchSpec(
                     task_id=task.task_id,

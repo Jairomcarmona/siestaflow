@@ -23,6 +23,15 @@ except ImportError:  # pragma: no cover - QRAFT requires Python >= 3.11.
     tomllib = None  # type: ignore[assignment]
 
 from .. import __version__ as QRAFT_VERSION
+from ..contracts import (
+    ArtifactReference,
+    ArtifactRole,
+    CapabilityRegistry,
+    CompiledWorkflow,
+    WorkflowInputBinding,
+    WorkflowTaskKind,
+    WorkflowTaskNode,
+)
 from ..core import (
     Attempt,
     DAGNode,
@@ -36,6 +45,9 @@ from ..engines.siesta.input_validator import SiestaInputValidator
 from ..engines.siesta.models import FDFBlock, FDFInclude, OutputClassification
 from ..engines.siesta.output_parser import SiestaOutputParser
 from ..execution.adapters import launcher_registry
+from ..execution.capability_plugins import SIESTA_ENGINE_CAPABILITY, register_siesta_engine
+from ..execution.capability_runtime import CompiledWorkflowRuntime
+from ..execution.runtime_composition import compose_runtime
 from ..execution.slurm_environment import SlurmEnvironment
 from ..execution.srun_launcher import StepLaunchSpec, StepOutcome
 from ..models import DecisionStatus
@@ -738,7 +750,7 @@ def _find_reusable_attempt(root: Path, scientific_fingerprint: str) -> dict[str,
     return None
 
 
-def execute_fdf_plan(
+def _execute_fdf_plan_legacy(
     fdf: Path,
     *,
     pseudo_manifest: Path | None = None,
@@ -1223,4 +1235,278 @@ def execute_fdf_plan(
         "attempt": attempt.to_dict(),
         "plan": plan,
         "qraft_output": str(output_writer.path),
+    }
+
+
+def _single_fdf_runtime_workflow(
+    fdf: Path, *, pseudo_manifest: Path | None = None
+) -> tuple[CompiledWorkflow, Path]:
+    """Adapt one FDF input set into the canonical runtime's single node."""
+
+    fdf_root, fdf_files, documents = _collect_fdf_files(fdf)
+    pseudos = _resolve_pseudopotentials(
+        fdf_root, _species(documents), pseudo_manifest
+    )
+    root_fdf = fdf.resolve()
+    entries: list[tuple[str, Path, str, ArtifactRole, str]] = [
+        ("fdf", root_fdf, root_fdf.name, ArtifactRole.INPUT, "application/x-siesta-fdf")
+    ]
+    for index, (relative, source) in enumerate(fdf_files.items(), start=1):
+        if source.resolve() != root_fdf:
+            entries.append((
+                f"include-{index:03d}", source, relative,
+                ArtifactRole.INPUT, "application/x-siesta-fdf",
+            ))
+    for index, source in enumerate(sorted(pseudos.values()), start=1):
+        entries.append((
+            f"pseudo-{index:03d}", source, source.name,
+            ArtifactRole.PSEUDOPOTENTIAL, "application/x-siesta-pseudopotential",
+        ))
+    destinations = [item[2] for item in entries]
+    if len(set(destinations)) != len(destinations):
+        raise ValueError("single-FDF canonical input destinations collide")
+    source_root = Path(os.path.commonpath([str(item[1].parent) for item in entries]))
+    artifacts: list[ArtifactReference] = []
+    bindings: list[WorkflowInputBinding] = []
+    for index, (name, source, destination, role, media_type) in enumerate(entries, start=1):
+        artifact_id = f"input-{index:03d}"
+        artifacts.append(ArtifactReference(
+            artifact_id=artifact_id,
+            role=role,
+            relative_path=source.resolve().relative_to(source_root).as_posix(),
+            sha256=_sha_path(source),
+            size_bytes=source.stat().st_size,
+            media_type=media_type,
+        ))
+        bindings.append(WorkflowInputBinding(
+            name=name,
+            destination=destination,
+            media_type=media_type,
+            external_artifact_id=artifact_id,
+        ))
+    definition_sha256 = _canonical_sha({
+        "protocol": "single_fdf",
+        "inputs": [
+            {"destination": item[2], "sha256": _sha_path(item[1])}
+            for item in entries
+        ],
+    })
+    task = WorkflowTaskNode(
+        task_id="run_siesta",
+        kind=WorkflowTaskKind.CALCULATION,
+        capability_id=SIESTA_ENGINE_CAPABILITY,
+        dependencies=(),
+        inputs=tuple(bindings),
+        outputs=(),
+        resources={"max_attempts": 2},
+        settings={"primary_input": "fdf"},
+    )
+    return CompiledWorkflow(
+        workflow_id=f"single-fdf-{definition_sha256[:16]}",
+        project_id="single-fdf",
+        definition_sha256=definition_sha256,
+        tasks=(task,),
+        edges=(),
+        external_artifacts=tuple(artifacts),
+        metadata={"protocol": "single_fdf"},
+    ), source_root
+
+
+def _write_single_fdf_plan_failure(
+    *,
+    fdf: Path,
+    runs_root: Path,
+    events: Path,
+    session_id: str,
+    epoch: int,
+    session_started: str,
+    session_clock: float,
+    command: str,
+    error: Exception,
+) -> None:
+    writer = QraftOutputWriter(runs_root / "qraft.out", campaign_root=runs_root)
+    if not writer.exists:
+        writer.initialize(OutputModel(
+            header={"Version": QRAFT_VERSION, "Campaign": f"single_fdf:{fdf.stem}"},
+            configuration={"engine": "siesta", "input FDF": str(fdf.resolve())},
+            paths={"QRAFT output": str(writer.path), "Evidence": str(events)},
+        ))
+    _event(events, "PLAN_BUILD_FAILED", input_fdf=str(fdf.resolve()), error=f"{type(error).__name__}: {error}")
+    writer.start_session(ExecutionSession(
+        session_id, epoch, "RESUME" if writer.exists else "NEW", session_started,
+        command, None, str(runs_root),
+    ))
+    writer.append("PLANNING FAILURE", OutputModel(messages=(OutputMessage(
+        "BLOCKED", f"{type(error).__name__}: {error}", code="PLAN_BUILD_FAILED",
+        node_id="plan", paths={"input": str(fdf.resolve()), "evidence": str(events)},
+        details={"Technical state": "NOT_STARTED", "DAG action": "EXECUTION BLOCKED BEFORE ATTEMPT"},
+    ),)))
+    writer.finish_session(
+        result="BLOCKED", finished=_utc_now(), elapsed_seconds=time.monotonic() - session_clock
+    )
+    writer.finish({"Campaign status": "BLOCKED", "Nodes total": 0, "Blocked": 1, "QRAFT output": str(writer.path), "Evidence": str(events)})
+
+
+def _single_fdf_public_attempt(attempt: Attempt) -> dict[str, Any]:
+    """Map canonical evidence to the historical single-FDF result surface."""
+
+    payload = attempt.to_dict()
+    technical = payload["result"]["technical_validation"]
+    if technical["status"] != "PASS":
+        technical["status"] = "FAIL"
+        payload["result"]["execution_state"] = "FAILED"
+        if not technical["parser_summary"].get("normal_termination", False):
+            technical["reasons"] = tuple(
+                (*technical["reasons"], "NORMAL_TERMINATION_MISSING")
+            )
+    return payload
+
+
+def execute_fdf_plan(
+    fdf: Path,
+    *,
+    pseudo_manifest: Path | None = None,
+    profile: Path | Mapping[str, Any] | None = None,
+    project_config: Path | None = None,
+    recipe: Path | None = None,
+    overrides: Mapping[str, Any] | None = None,
+    runs_root: Path = Path(".qraft-runs"),
+    force_new_attempt: bool = False,
+    invocation: str | None = None,
+    profile_metadata: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Run single-FDF work through the canonical workflow runtime only."""
+
+    session_clock = time.monotonic()
+    session_started = _utc_now()
+    session_id = uuid.uuid4().hex
+    resolved_runs = runs_root.resolve()
+    events = resolved_runs / "events.jsonl"
+    epoch = _next_session_epoch(events)
+    command = invocation or f"qraft run {shlex.quote(str(fdf))}"
+    try:
+        plan = build_fdf_plan(
+            fdf,
+            pseudo_manifest=pseudo_manifest,
+            profile=profile,
+            project_config=project_config,
+            recipe=recipe,
+            overrides=overrides,
+        )
+        execution = ExecutionSpec(**{
+            key: value
+            for key, value in plan["execution_spec"].items()
+            if key not in {"fingerprint", "ranks_per_node", "allocated_cpus"}
+        })
+        workflow, source_root = _single_fdf_runtime_workflow(
+            fdf, pseudo_manifest=pseudo_manifest
+        )
+    except Exception as exc:
+        _write_single_fdf_plan_failure(
+            fdf=fdf, runs_root=resolved_runs, events=events, session_id=session_id,
+            epoch=epoch, session_started=session_started, session_clock=session_clock,
+            command=command, error=exc,
+        )
+        raise
+
+    registry = CapabilityRegistry()
+    register_siesta_engine(registry)
+    registry.freeze()
+    composition = compose_runtime(execution, max_parallel_steps=1)
+    runtime_key = _canonical_sha({
+        "scientific": plan["scientific_identity"]["fingerprint"],
+        "execution": execution.fingerprint,
+    })[:16]
+    runtime_root = resolved_runs / "runtime" / runtime_key
+    runtime_result = CompiledWorkflowRuntime(
+        workflow=workflow,
+        registry=registry,
+        root=runtime_root,
+        source_root=source_root,
+        scientific_identities={
+            "run_siesta": build_scientific_identity(
+                fdf, pseudo_manifest=pseudo_manifest
+            )
+        },
+        execution_specs=execution,
+        launcher=composition.launcher,
+        allocation=composition.allocation,
+        force_new_attempts=force_new_attempt,
+    ).run()
+
+    attempt = runtime_result.attempts.get("run_siesta")
+    if attempt is None:
+        raise RuntimeError("canonical single-FDF runtime produced no attempt")
+    reused = "run_siesta" in runtime_result.reused_nodes
+    technical = attempt.result.technical_validation
+    public_attempt = _single_fdf_public_attempt(attempt)
+    public_technical = public_attempt["result"]["technical_validation"]
+    public_status = str(public_technical["status"])
+    attempt_root = runtime_root / "work" / attempt.node_id / attempt.attempt_id
+    stdout = attempt_root / attempt.stdout
+    stderr = attempt_root / attempt.stderr
+    manifest = attempt_root / "attempt.json"
+    writer = QraftOutputWriter(resolved_runs / "qraft.out", campaign_root=resolved_runs)
+    output_existed = writer.exists
+    start_model = _single_fdf_start_model(
+        plan, fdf, resolved_runs, profile_metadata=profile_metadata
+    )
+    if not output_existed:
+        writer.initialize(OutputModel(header=start_model.header))
+    mode = "RECOVERY" if reused else "RESUME" if output_existed else "NEW"
+    writer.start_session(ExecutionSession(
+        session_id, epoch, mode, session_started, command, None, str(resolved_runs)
+    ), start_model)
+    writer.append("NODE START", OutputModel(nodes=(NodeEntry(
+        node_id="run_siesta", node_type="run_siesta", attempt_id=attempt.attempt_id,
+        status="RUNNING", workdir=str(attempt_root), input_path=str(fdf.resolve()),
+        stdout_path=str(stdout), stderr_path=str(stderr), evidence_path=str(manifest),
+        resources={"Nodes": execution.nodes, "MPI ranks": execution.mpi_ranks, "CPUs/rank": execution.cpus_per_rank},
+        depends_on=("validate_input",), event="START", started=attempt.started_at,
+        command=_resolved_command(plan["execution_spec"]),
+    ),)))
+    if reused:
+        writer.append_recovery({
+            "Node": "run_siesta", "Attempt": attempt.attempt_id,
+            "Action": "REUSED_VALIDATED_ATTEMPT",
+            "Result": "no SIESTA relaunch required", "Evidence": str(manifest),
+        })
+    messages = tuple(OutputMessage(
+        "ERROR" if public_status == "FAIL" else "REVIEW_REQUIRED", reason,
+        code=reason.split(":", 1)[0], node_id="run_siesta", attempt_id=attempt.attempt_id,
+        paths={"stdout": str(stdout), "stderr": str(stderr), "evidence": str(manifest)},
+        details={"Technical state": public_status, "DAG action": "NODE VALIDATED" if public_status == "PASS" else "CAMPAIGN FAILED; NODE NOT REUSABLE"},
+    ) for reason in public_technical["reasons"])
+    writer.append("NODE RESULT", OutputModel(
+        nodes=(NodeEntry(
+            node_id="run_siesta", node_type="run_siesta", attempt_id=attempt.attempt_id,
+            status=public_status, workdir=str(attempt_root), input_path=str(fdf.resolve()),
+            stdout_path=str(stdout), stderr_path=str(stderr), evidence_path=str(manifest),
+            resources={"MPI ranks": execution.mpi_ranks}, depends_on=("validate_input",),
+            event="RESULT", started=attempt.started_at, finished=attempt.finished_at,
+            command=_resolved_command(plan["execution_spec"]),
+        ),),
+        metrics={"exit_code": attempt.exit_code, "technical status": public_status, "classification": technical.classification},
+        paths={"stdout": str(stdout), "stderr": str(stderr), "attempt manifest": str(manifest)},
+        messages=messages,
+        diagnostic={"Classification": technical.classification, "Exit code": attempt.exit_code, "Reason": "; ".join(public_technical["reasons"])} if public_status != "PASS" else {},
+        relevant_output=_relevant_output((stdout, stderr)) if public_status != "PASS" else (),
+        decisions={"scientific decision": attempt.result.scientific_decision.value},
+    ))
+    completed = public_status == "PASS"
+    writer.finish_session(
+        result="COMPLETED" if completed else "FAILED", finished=_utc_now(),
+        elapsed_seconds=time.monotonic() - session_clock,
+    )
+    writer.finish({
+        "Campaign status": "COMPLETED" if completed else "FAILED",
+        "Nodes total": 1, "Validated": int(completed), "Failed": int(not completed),
+        "Blocked": 0, "Pending": 0, "Root": str(runtime_root),
+        "QRAFT output": str(writer.path), "Evidence": str(events),
+        "Resume": f"qraft run {fdf.resolve()}",
+    })
+    _event(events, "EXECUTION_SESSION_FINISHED", session_id=session_id, status="COMPLETED" if completed else "FAILED")
+    return {
+        "status": "REUSED_VALIDATED_ATTEMPT" if reused else "ATTEMPT_FINISHED",
+        "attempt": public_attempt, "plan": plan, "qraft_output": str(writer.path),
     }

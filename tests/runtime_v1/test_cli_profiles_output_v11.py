@@ -231,7 +231,7 @@ def test_repl_openmpi_functional_run_output_sessions_recovery_and_diagnostic(tmp
         "attempts",
     ):
         assert shell.onecmd(command) is False
-    manifests = tuple(runs.glob("*/*/attempt.json"))
+    manifests = tuple(runs.rglob("attempt.json"))
     assert len(manifests) == 1
     text = (runs / "qraft.out").read_text(encoding="utf-8")
     assert text.count("QRAFT EXECUTION SESSION") == 2

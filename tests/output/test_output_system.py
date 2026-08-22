@@ -175,7 +175,7 @@ def test_single_fdf_functional_output_and_recovery_do_not_mutate_attempt(tmp_pat
         "executable_arguments": [str(fake)],
     }
     first = execute_fdf_plan(fdf, overrides=overrides, runs_root=runs)
-    manifest = next(runs.glob("*/*/attempt.json"))
+    manifest = next(runs.rglob("attempt.json"))
     original = manifest.read_bytes()
     reused = execute_fdf_plan(fdf, overrides=overrides, runs_root=runs)
     assert first["attempt"]["result"]["technical_validation"]["status"] == "PASS"

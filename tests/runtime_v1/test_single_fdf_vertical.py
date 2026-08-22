@@ -49,6 +49,31 @@ def inputs(root: Path) -> Path:
     return fdf
 
 
+def _attempt_manifest(runs: Path, attempt_id: str) -> Path:
+    return next(runs.rglob(f"{attempt_id}/attempt.json"))
+
+
+def _synthetic_overrides(root: Path, *, marker: Path | None = None) -> dict:
+    fake = root / "fake_siesta.py"
+    count = ""
+    if marker is not None:
+        count = (
+            "from pathlib import Path\n"
+            f"marker=Path({str(marker)!r})\n"
+            "marker.write_text(str(int(marker.read_text() or '0') + 1) if marker.exists() else '1')\n"
+        )
+    fake.write_text(
+        "import sys\n" + count + "sys.stdin.read()\n"
+        "print('Siesta started')\nprint('SCF cycle 1')\n"
+        "print('SCF converged')\nprint('Job completed')\n",
+        encoding="utf-8",
+    )
+    return {
+        "launcher": "direct", "partition": "local", "executable": sys.executable,
+        "executable_arguments": [str(fake)],
+    }
+
+
 def test_identity_changes_only_for_scientific_inputs(tmp_path: Path) -> None:
     fdf = inputs(tmp_path)
     first = build_scientific_identity(fdf)
@@ -158,7 +183,7 @@ def test_run_persists_immutable_attempt_and_reuses_valid_result(tmp_path: Path) 
     first = execute_fdf_plan(fdf, overrides=overrides, runs_root=runs)
     assert first["attempt"]["result"]["technical_validation"]["status"] == "PASS"
     attempt_id = first["attempt"]["attempt_id"]
-    manifest = next(runs.glob(f"*/{attempt_id}/attempt.json"))
+    manifest = _attempt_manifest(runs, attempt_id)
     original = manifest.read_bytes()
 
     reused = execute_fdf_plan(fdf, overrides=overrides, runs_root=runs)
@@ -187,14 +212,68 @@ def test_tampered_attempt_manifest_is_never_reused(tmp_path: Path) -> None:
     runs = tmp_path / "runs"
     first = execute_fdf_plan(fdf, overrides=overrides, runs_root=runs)
     first_id = first["attempt"]["attempt_id"]
-    manifest = next(runs.glob(f"*/{first_id}/attempt.json"))
-    data = json.loads(manifest.read_text(encoding="utf-8"))
-    data["exit_code"] = 99
-    manifest.write_text(json.dumps(data), encoding="utf-8")
+    manifest = _attempt_manifest(runs, first_id)
+    manifest.write_text(manifest.read_text(encoding="utf-8") + " ", encoding="utf-8")
 
     recovered = execute_fdf_plan(fdf, overrides=overrides, runs_root=runs)
     assert recovered["status"] == "ATTEMPT_FINISHED"
     assert recovered["attempt"]["attempt_id"] != first_id
+
+
+def test_single_fdf_uses_canonical_runtime_without_legacy_authority(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fdf = inputs(tmp_path)
+    marker = tmp_path / "launch-count.txt"
+    overrides = _synthetic_overrides(tmp_path, marker=marker)
+    for name in (
+        "_execute_fdf_plan_legacy", "_find_reusable_attempt", "_stage_inputs", "_launch"
+    ):
+        monkeypatch.setattr(
+            single_fdf, name,
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError(name)),
+        )
+    runs = tmp_path / "canonical-runs"
+    first = execute_fdf_plan(fdf, overrides=overrides, runs_root=runs)
+    assert first["attempt"]["result"]["technical_validation"]["status"] == "PASS"
+    first_id = first["attempt"]["attempt_id"]
+    manifest = _attempt_manifest(runs, first_id)
+    assert "runtime" in str(manifest)
+    assert json.loads(manifest.read_text(encoding="utf-8"))["payload"]["attempt"]["attempt_id"] == first_id
+
+    reused = execute_fdf_plan(fdf, overrides=overrides, runs_root=runs)
+    assert reused["status"] == "REUSED_VALIDATED_ATTEMPT"
+    assert marker.read_text(encoding="utf-8") == "1"
+    original = manifest.read_bytes()
+
+    forced = execute_fdf_plan(
+        fdf, overrides=overrides, runs_root=runs, force_new_attempt=True
+    )
+    assert forced["attempt"]["attempt_id"] == "attempt-0002"
+    assert manifest.read_bytes() == original
+
+
+def test_execution_context_changes_do_not_reuse_and_do_not_change_science(
+    tmp_path: Path
+) -> None:
+    fdf = inputs(tmp_path)
+    base = _synthetic_overrides(tmp_path)
+    environment = {**base, "environment": {"QRAFT_CONTEXT": "changed"}}
+    resources = {**base, "memory_mb": 256}
+    baseline_plan = build_fdf_plan(fdf, overrides=base)
+    environment_plan = build_fdf_plan(fdf, overrides=environment)
+    resource_plan = build_fdf_plan(fdf, overrides=resources)
+    assert baseline_plan["scientific_identity"] == environment_plan["scientific_identity"]
+    assert baseline_plan["scientific_identity"] == resource_plan["scientific_identity"]
+    assert baseline_plan["execution_spec"]["fingerprint"] != environment_plan["execution_spec"]["fingerprint"]
+    assert baseline_plan["execution_spec"]["fingerprint"] != resource_plan["execution_spec"]["fingerprint"]
+
+    runs = tmp_path / "context-runs"
+    first = execute_fdf_plan(fdf, overrides=base, runs_root=runs)
+    changed_environment = execute_fdf_plan(fdf, overrides=environment, runs_root=runs)
+    changed_resources = execute_fdf_plan(fdf, overrides=resources, runs_root=runs)
+    assert first["status"] == changed_environment["status"] == changed_resources["status"] == "ATTEMPT_FINISHED"
+    assert len(tuple(runs.rglob("attempt-0001/attempt.json"))) == 3
 
 
 def test_practical_cli_plan_and_run(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
