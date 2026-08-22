@@ -1,25 +1,29 @@
 {
   "schema_version": "1.0",
-  "baseline_commit": "fd855268d8439b5070e5d70e7971332bede2c360",
-  "focused_baseline": "38 passed in 6.35s",
-  "m4_functional": "2 passed in 3.07s",
-  "focused_regression": "35 passed in 8.99s",
-  "final_full_pytest": "568 passed",
+  "baseline_commit": "2613159296f75dbb94d0b78806b9009c49d05ae2",
+  "m4_hotfix_functional": "7 passed in 7.71s",
+  "focused_regression": "26 passed in 10.51s",
+  "final_full_pytest": "572 passed",
   "selections": {
     "basis_size": "DZP",
     "mesh_cutoff": {"value": 300, "unit": "Ry"},
     "kpoints": [3, 3, 3]
   },
+  "corrected_defects": {
+    "technical_failure_propagation": "A stage requires COMPLETED, technical PASS, CONVERGED, and a selected point before propagation.",
+    "basis_energy_shift_unit_inheritance": "Downstream parameters use the exact selection artifact value and unit.",
+    "loose_pseudopotential_mismatch": "Scientific identity geometry, species mapping, and pseudopotential hashes are compared before execution.",
+    "blocked_stage_evidence": "Blocked results preserve every executed stage through the blocking stage."
+  },
   "gates": {
-    "M4-01": "PASS",
-    "M4-02": "PASS",
-    "M4-03": "PASS",
-    "M4-04": "PASS",
-    "M4-05": "PASS",
-    "M4-06": "PASS",
-    "M4-07": "PASS",
-    "M4-08": "PASS",
-    "M4-09": "PASS",
-    "M4-10": "PASS"
+    "H4-01": "PASS",
+    "H4-02": "PASS",
+    "H4-03": "PASS",
+    "H4-04": "PASS",
+    "H4-05": "PASS",
+    "H4-06": "PASS",
+    "H4-07": "PASS",
+    "H4-08": "PASS",
+    "H4-09": "PASS"
   }
 }

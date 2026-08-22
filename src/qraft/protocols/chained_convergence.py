@@ -14,6 +14,7 @@ from ..campaign_spec import CampaignSpec, InheritanceSource, ParameterMode, Para
 from ..contracts import ContractEnvelope, SCIENTIFIC_ARTIFACT
 from ..contracts.scientific import NumericalProfileReference, ScientificAuthority
 from .convergence import ConvergenceProtocol
+from .single_fdf import build_scientific_identity
 
 
 _SELECTION_TYPE = "siestaflow.numerical-selection"
@@ -72,7 +73,9 @@ class ChainedConvergenceProtocol:
             overrides, force_new_attempt,
         )
         if not self._converged(basis_result):
-            return self._blocked(root, "basis", basis_result)
+            return self._blocked(
+                root, blocking_stage="basis", stages={"basis": basis_result}
+            )
         basis_artifact = self._selection_artifact(
             handoff / "basis-selection.json", "basis", basis_campaign, basis_result
         )
@@ -85,7 +88,11 @@ class ChainedConvergenceProtocol:
             overrides, force_new_attempt,
         )
         if not self._converged(mesh_result):
-            return self._blocked(root, "mesh", basis_result, mesh_result, basis_artifact)
+            return self._blocked(
+                root,
+                blocking_stage="mesh",
+                stages={"basis": basis_result, "mesh": mesh_result},
+            )
         mesh_artifact = self._selection_artifact(
             handoff / "mesh-selection.json", "mesh", mesh_effective, mesh_result
         )
@@ -99,8 +106,13 @@ class ChainedConvergenceProtocol:
         )
         if not self._converged(kpoint_result):
             return self._blocked(
-                root, "kpoints", basis_result, mesh_result, basis_artifact,
-                mesh_artifact, kpoint_result,
+                root,
+                blocking_stage="kpoints",
+                stages={
+                    "basis": basis_result,
+                    "mesh": mesh_result,
+                    "kpoints": kpoint_result,
+                },
             )
         kpoint_artifact = self._selection_artifact(
             handoff / "kpoints-selection.json", "kpoints", kpoint_effective, kpoint_result
@@ -146,7 +158,9 @@ class ChainedConvergenceProtocol:
     @staticmethod
     def _converged(result: Mapping[str, Any]) -> bool:
         return (
-            result.get("scientific_decision") == "CONVERGED"
+            result.get("status") == "COMPLETED"
+            and result.get("technical_validation") == "PASS"
+            and result.get("scientific_decision") == "CONVERGED"
             and result.get("selected_point") is not None
         )
 
@@ -167,6 +181,23 @@ class ChainedConvergenceProtocol:
                     raise ValueError("chained stages must share the same scientific system")
                 if left is not None and _sha_file(left) != _sha_file(right):
                     raise ValueError("chained stages must share the same scientific system")
+        identities = [
+            build_scientific_identity(
+                campaign.system.fdf,
+                pseudo_manifest=campaign.system.pseudo_manifest,
+            )
+            for campaign in campaigns
+        ]
+        reference = identities[0]
+        for identity in identities[1:]:
+            if (
+                identity.geometry_sha256 != reference.geometry_sha256
+                or identity.species_mapping_sha256 != reference.species_mapping_sha256
+                or identity.pseudopotentials != reference.pseudopotentials
+            ):
+                raise ValueError(
+                    "chained stages must share the same scientific system and pseudopotentials"
+                )
 
     def _selection_artifact(
         self, path: Path, stage: str, campaign: CampaignSpec, result: Mapping[str, Any]
@@ -209,12 +240,10 @@ class ChainedConvergenceProtocol:
         )
         payload = verified["payload"]
         path = Path(str(artifact["_path"])).resolve()
-        existing = campaign.parameters.get(parameter)
-        unit = existing.unit if existing is not None else payload["selection"].get("unit")
         parameters = dict(campaign.parameters)
         parameters[parameter] = ParameterSpec(
             mode=ParameterMode.INHERIT,
-            unit=unit,
+            unit=payload["selection"]["unit"],
             inheritance=InheritanceSource(
                 evidence=str(path),
                 value=self._scientific_value(payload["selection"]["value"]),
@@ -294,15 +323,15 @@ class ChainedConvergenceProtocol:
         } for parameter, downstream in links]
 
     def _blocked(
-        self, root: Path, stage: str, *items: object
+        self,
+        root: Path,
+        *,
+        blocking_stage: str,
+        stages: Mapping[str, Mapping[str, Any]],
     ) -> dict[str, Any]:
-        stages = {
-            name: item for name, item in zip(("basis", "mesh", "kpoints"), items)
-            if isinstance(item, Mapping) and "status" in item
-        }
         result = {
             "schema_version": "1.0", "status": "BLOCKED",
-            "blocking_stage": stage, "stages": stages,
+            "blocking_stage": blocking_stage, "stages": dict(stages),
         }
         _atomic_json(root / "chain-result.json", self._json_result(result))
         result["chain_result"] = str(root / "chain-result.json")

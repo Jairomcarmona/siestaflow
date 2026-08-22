@@ -74,6 +74,27 @@ def _templates(root: Path) -> tuple[CampaignSpec, CampaignSpec, CampaignSpec]:
     return basis, mesh, kpoints
 
 
+def _energy_shift_templates(root: Path) -> tuple[CampaignSpec, CampaignSpec, CampaignSpec]:
+    (root / "system.fdf").write_text(
+        FDF.replace("PAO.BasisSize SZ", "PAO.BasisSize SZ\nPAO.EnergyShift 50 meV"),
+        encoding="utf-8",
+    )
+    (root / "C.psf").write_text("pseudo\n", encoding="utf-8")
+    basis = _campaign(root, "basis-stage", {
+        "basis_energy_shift": {"mode": "scan", "values": [100, 200, 300], "unit": "meV"},
+    })
+    mesh = _campaign(root, "mesh-stage", {
+        "mesh_cutoff": {"mode": "scan", "values": [200, 250, 300], "unit": "Ry"},
+    }, {"basis_energy_shift": {"mode": "fixed", "value": 100, "unit": "eV"}})
+    kpoints = _campaign(root, "kpoints-stage", {
+        "kpoints": {"mode": "scan", "grids": [[1, 1, 1], [2, 2, 2], [3, 3, 3]]},
+    }, {
+        "basis_energy_shift": {"mode": "fixed", "value": 100, "unit": "eV"},
+        "mesh_cutoff": {"mode": "fixed", "value": 200, "unit": "Ry"},
+    })
+    return basis, mesh, kpoints
+
+
 def _overrides(root: Path) -> dict:
     fake = root / "fake_siesta.py"
     fake.write_text(
@@ -90,6 +111,30 @@ def _overrides(root: Path) -> dict:
         encoding="utf-8",
     )
     wrapper = root / ("fake-siesta.cmd" if os.name == "nt" else "fake-siesta")
+    if os.name == "nt":
+        wrapper.write_text(f'@echo off\r\n"{sys.executable}" "{fake}" %1\r\n', encoding="utf-8")
+    else:
+        wrapper.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{fake}" "$1"\n', encoding="utf-8")
+        wrapper.chmod(0o755)
+    return {"partition": "local", "launcher": "direct", "executable": str(wrapper)}
+
+
+def _energy_shift_overrides(root: Path) -> dict:
+    fake = root / "fake_siesta_energy_shift.py"
+    fake.write_text(
+        "import re,sys\ntext=open(sys.argv[1], encoding='utf-8').read()\n"
+        "stage='basis' if 'stages/basis/' in sys.argv[1].replace('\\\\','/') else ('mesh' if 'stages/mesh/' in sys.argv[1].replace('\\\\','/') else 'kpoints')\n"
+        "shift=float(re.search(r'PAO\\.EnergyShift\\s+([0-9.]+)', text, re.I).group(1))\n"
+        "mesh=float(re.search(r'Mesh\\.Cutoff\\s+([0-9.]+)', text, re.I).group(1))\n"
+        "grid=int(re.search(r'%block kgrid\\.MonkhorstPack\\s+([0-9]+)', text, re.I).group(1))\n"
+        "energy=({100.0:-10.0,200.0:-10.0005,300.0:-10.0009}[shift] if stage == 'basis' else "
+        "({200.0:-20.0,250.0:-20.0005,300.0:-20.0009}[mesh] if stage == 'mesh' else "
+        "{1:-30.0,2:-30.0005,3:-30.0009}[grid]))\n"
+        "print('Siesta started')\nprint('SCF cycle 1')\nprint('SCF converged')\n"
+        "print(f'siesta: E_KS(eV) = {energy}')\nprint('Job completed')\n",
+        encoding="utf-8",
+    )
+    wrapper = root / ("fake-siesta-energy-shift.cmd" if os.name == "nt" else "fake-siesta-energy-shift")
     if os.name == "nt":
         wrapper.write_text(f'@echo off\r\n"{sys.executable}" "{fake}" %1\r\n', encoding="utf-8")
     else:
@@ -152,6 +197,80 @@ def test_chained_numerical_convergence_handoff_recovery_and_guards(tmp_path: Pat
         protocol.run(basis, mesh, kpoints, runs_root=root, overrides=_overrides(tmp_path))
 
 
+def test_technical_failure_cannot_propagate_despite_converged_science(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    basis, mesh, kpoints = _templates(tmp_path)
+    protocol = ChainedConvergenceProtocol()
+    stages: list[str] = []
+
+    def failed_basis(stage: str, *_args: object) -> dict:
+        stages.append(stage)
+        return {
+            "status": "FAILED",
+            "technical_validation": "FAIL",
+            "scientific_decision": "CONVERGED",
+            "selected_point": "DZP",
+            "points": [],
+        }
+
+    monkeypatch.setattr(protocol, "_run_stage", failed_basis)
+    root = tmp_path / "technical-failure"
+    result = protocol.run(basis, mesh, kpoints, runs_root=root)
+    assert result["status"] == "BLOCKED" and result["blocking_stage"] == "basis"
+    assert stages == ["basis"] and set(result["stages"]) == {"basis"}
+    assert not (root / "numerical-profile.json").exists()
+
+
+def test_basis_energy_shift_handoff_preserves_upstream_unit(tmp_path: Path) -> None:
+    basis, mesh, kpoints = _energy_shift_templates(tmp_path)
+    root = tmp_path / "energy-shift"
+    protocol = ChainedConvergenceProtocol()
+    result = protocol.run(
+        basis, mesh, kpoints, runs_root=root, overrides=_energy_shift_overrides(tmp_path)
+    )
+    assert result["status"] == "COMPLETED"
+    selection = root / "handoff" / "basis-selection.json"
+    payload = ContractEnvelope.from_dict(
+        json.loads(selection.read_text(encoding="utf-8")), required_contract=SCIENTIFIC_ARTIFACT
+    ).payload
+    assert payload["selection"] == {"value": 300, "unit": "meV"}
+    inherited = protocol._with_inheritance(mesh, "basis_energy_shift", {
+        "payload": payload, "_path": str(selection),
+    }).parameters["basis_energy_shift"]
+    assert inherited.unit == "meV"
+    assert inherited.inheritance is not None
+    assert inherited.inheritance.value == 300
+    assert inherited.inheritance.evidence_sha256 == _sha(selection)
+    for stage in ("mesh", "kpoints"):
+        for fdf in (root / "stages" / stage / "rendered").glob("point_*/input.fdf"):
+            assert "PAO.EnergyShift 300 meV" in fdf.read_text(encoding="utf-8")
+
+
+def test_loose_pseudopotential_mismatch_is_rejected_before_execution(tmp_path: Path) -> None:
+    stage_roots = [tmp_path / stage for stage in ("basis", "mesh", "kpoints")]
+    for root, pseudo in zip(stage_roots, ("pseudo-A\n", "pseudo-B\n", "pseudo-A\n")):
+        root.mkdir()
+        (root / "system.fdf").write_text(FDF, encoding="utf-8")
+        (root / "C.psf").write_text(pseudo, encoding="utf-8")
+    basis = _campaign(stage_roots[0], "basis-stage", {
+        "basis_size": {"mode": "scan", "values": ["SZ", "DZ", "DZP"]},
+    })
+    mesh = _campaign(stage_roots[1], "mesh-stage", {
+        "mesh_cutoff": {"mode": "scan", "values": [200, 250, 300], "unit": "Ry"},
+    }, {"basis_size": {"mode": "fixed", "value": "SZ"}})
+    kpoints = _campaign(stage_roots[2], "kpoints-stage", {
+        "kpoints": {"mode": "scan", "grids": [[1, 1, 1], [2, 2, 2], [3, 3, 3]]},
+    }, {
+        "basis_size": {"mode": "fixed", "value": "SZ"},
+        "mesh_cutoff": {"mode": "fixed", "value": 200, "unit": "Ry"},
+    })
+    root = tmp_path / "pseudo-mismatch"
+    with pytest.raises(ValueError, match="scientific system and pseudopotentials"):
+        ChainedConvergenceProtocol().run(basis, mesh, kpoints, runs_root=root)
+    assert not (root / "stages").exists()
+
+
 def test_nonconverged_basis_blocks_downstream_stages(tmp_path: Path) -> None:
     basis, mesh, kpoints = _templates(tmp_path)
     nonconverged = replace(basis, criterion=replace(basis.criterion, delta=0.00001))
@@ -160,6 +279,31 @@ def test_nonconverged_basis_blocks_downstream_stages(tmp_path: Path) -> None:
         nonconverged, mesh, kpoints, runs_root=root, overrides=_overrides(tmp_path)
     )
     assert result["status"] == "BLOCKED" and result["blocking_stage"] == "basis"
+    assert set(result["stages"]) == {"basis"}
     assert not (root / "stages" / "mesh").exists()
     assert not (root / "stages" / "kpoints").exists()
+    assert not (root / "numerical-profile.json").exists()
+
+
+def test_nonconverged_mesh_preserves_completed_stage_evidence(tmp_path: Path) -> None:
+    basis, mesh, kpoints = _templates(tmp_path)
+    nonconverged = replace(mesh, criterion=replace(mesh.criterion, delta=0.00001))
+    root = tmp_path / "mesh-blocked"
+    result = ChainedConvergenceProtocol().run(
+        basis, nonconverged, kpoints, runs_root=root, overrides=_overrides(tmp_path)
+    )
+    assert result["status"] == "BLOCKED" and result["blocking_stage"] == "mesh"
+    assert set(result["stages"]) == {"basis", "mesh"}
+    assert not (root / "numerical-profile.json").exists()
+
+
+def test_nonconverged_kpoints_preserves_completed_stage_evidence(tmp_path: Path) -> None:
+    basis, mesh, kpoints = _templates(tmp_path)
+    nonconverged = replace(kpoints, criterion=replace(kpoints.criterion, delta=0.00001))
+    root = tmp_path / "kpoints-blocked"
+    result = ChainedConvergenceProtocol().run(
+        basis, mesh, nonconverged, runs_root=root, overrides=_overrides(tmp_path)
+    )
+    assert result["status"] == "BLOCKED" and result["blocking_stage"] == "kpoints"
+    assert set(result["stages"]) == {"basis", "mesh", "kpoints"}
     assert not (root / "numerical-profile.json").exists()
