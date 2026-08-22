@@ -219,8 +219,8 @@ non-goals, acceptance gates, evidence, status y closing commit.
 | Non-goals | Variable-cell y staged relaxation antes de cerrar base. |
 | Acceptance gates | Pasan fixed-cell, final geometry extraction, forces validation y artifact provenance. |
 | Required evidence | `docs/validation/m5_relaxation_capability_v1/`. |
-| Status | `NOT_STARTED` |
-| Closing commit | No aplicable hasta cierre. |
+| Status | `CLOSED` |
+| Closing commit | `feat: add fixed-cell relaxation capability v1`. |
 
 ### M6 — Ground-State Chain
 
