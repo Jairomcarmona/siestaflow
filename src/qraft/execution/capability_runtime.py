@@ -532,6 +532,10 @@ class CompiledWorkflowRuntime:
                 raise ValueError(f"external artifact hash mismatch: {artifact.relative_path}")
 
     def _recover_completed_nodes(self) -> None:
+        persisted_statuses = {
+            task.task_id: self._state["tasks"][task.task_id]["status"]
+            for task in self.workflow.tasks
+        }
         for task in self.workflow.tasks:
             record = self._state["tasks"][task.task_id]
             if record["status"] == "FAILED":
@@ -573,6 +577,41 @@ class CompiledWorkflowRuntime:
                 task_id=task.task_id,
                 attempt_id=attempt.attempt_id,
             )
+        self._recover_dependency_blocked_nodes(persisted_statuses)
+
+    def _recover_dependency_blocked_nodes(
+        self, persisted_statuses: Mapping[str, str]
+    ) -> None:
+        """Reopen only blocks that the prior DAG failure propagation created."""
+
+        candidates = {
+            task.task_id
+            for task in self.workflow.tasks
+            if persisted_statuses[task.task_id] == "BLOCKED"
+            and any(
+                persisted_statuses[dependency] in _TERMINAL_FAILURES
+                for dependency in task.dependencies
+            )
+        }
+        while candidates:
+            reopened = False
+            for task in self.workflow.tasks:
+                if task.task_id not in candidates:
+                    continue
+                if any(
+                    self._state["tasks"][dependency]["status"] in _TERMINAL_FAILURES
+                    for dependency in task.dependencies
+                ):
+                    continue
+                self._set_task(
+                    task.task_id,
+                    "PENDING",
+                    "dependency blockers recoverable on new runtime invocation",
+                )
+                candidates.remove(task.task_id)
+                reopened = True
+            if not reopened:
+                break
 
     def _load_valid_attempt(
         self, task: WorkflowTaskNode, record: Mapping[str, Any]

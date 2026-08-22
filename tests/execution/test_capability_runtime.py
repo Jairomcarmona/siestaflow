@@ -191,6 +191,7 @@ def node(
     capability: str = PASS_CAPABILITY,
     dependencies: tuple[str, ...] = (),
     source_task: str | None = None,
+    max_attempts: int = 2,
 ) -> WorkflowTaskNode:
     binding = (
         WorkflowInputBinding(
@@ -219,29 +220,34 @@ def node(
                 "text/plain",
             ),
         ),
-        resources={"max_attempts": 2},
+        resources={"max_attempts": max_attempts},
     )
 
 
 def workflow(root: Path, tasks: tuple[WorkflowTaskNode, ...]) -> CompiledWorkflow:
     artifact = external(root)
-    edges = tuple(
-        WorkflowEdge(
-            source_task_id=str(task.inputs[0].source_task_id),
-            target_task_id=task.task_id,
-            kind=WorkflowEdgeKind.ARTIFACT,
-            source_output_name="result",
-            target_input_name="input",
+    edges: list[WorkflowEdge] = []
+    for task in tasks:
+        source_task = task.inputs[0].source_task_id
+        if source_task is not None:
+            edges.append(WorkflowEdge(
+                source_task_id=str(source_task),
+                target_task_id=task.task_id,
+                kind=WorkflowEdgeKind.ARTIFACT,
+                source_output_name="result",
+                target_input_name="input",
+            ))
+        edges.extend(
+            WorkflowEdge(dependency, task.task_id, WorkflowEdgeKind.CONTROL)
+            for dependency in task.dependencies
+            if dependency != source_task
         )
-        for task in tasks
-        if task.inputs[0].source_task_id is not None
-    )
     return CompiledWorkflow(
         workflow_id="m1-runtime",
         project_id="m1-project",
         definition_sha256="1" * 64,
         tasks=tasks,
-        edges=edges,
+        edges=tuple(edges),
         external_artifacts=(artifact,),
     )
 
@@ -404,6 +410,87 @@ def test_failed_attempt_retries_only_on_a_new_runtime_invocation(tmp_path: Path)
     assert [item.attempt_id for item in launcher.launches] == [
         "attempt-0001", "attempt-0002"
     ]
+
+
+def test_dependency_blocked_chain_recovers_after_parent_retry(tmp_path: Path):
+    compiled = workflow(
+        tmp_path,
+        (
+            node("A"),
+            node("B", dependencies=("A",), source_task="A"),
+            node("C", dependencies=("B",), source_task="B"),
+        ),
+    )
+    launcher = RecordingLauncher(
+        {"A": [(OPAQUE_FAIL, 0, False, True), (OPAQUE_PASS, 0, False, True)]}
+    )
+    registry = registry_for(SyntheticCapability())
+
+    first = runtime(tmp_path, compiled, registry, launcher).run()
+    first_manifest = tmp_path / "run" / "work" / "A" / "attempt-0001" / "attempt.json"
+    original = first_manifest.read_bytes()
+    assert first.status == "FAILED"
+    assert {
+        task_id: record["status"]
+        for task_id, record in __import__("json").loads(
+            (tmp_path / "run" / "state" / "workflow_runtime.json").read_text()
+        )["payload"]["tasks"].items()
+    } == {"A": "FAILED", "B": "BLOCKED", "C": "BLOCKED"}
+    assert [item.task_id for item in launcher.launches] == ["A"]
+
+    second = runtime(tmp_path, compiled, registry, launcher).run()
+    assert second.status == "COMPLETED"
+    assert second.attempts["A"].attempt_id == "attempt-0002"
+    assert second.attempts["B"].attempt_id == "attempt-0001"
+    assert second.attempts["C"].attempt_id == "attempt-0001"
+    assert first_manifest.read_bytes() == original
+    assert [item.task_id for item in launcher.launches] == ["A", "A", "B", "C"]
+
+
+def test_dependency_block_remains_when_a_second_parent_is_permanent(tmp_path: Path):
+    compiled = workflow(
+        tmp_path,
+        (
+            node("A"),
+            node("D", max_attempts=1),
+            node("C", dependencies=("A", "D"), source_task="A"),
+        ),
+    )
+    launcher = RecordingLauncher(
+        {
+            "A": [(OPAQUE_FAIL, 0, False, True), (OPAQUE_PASS, 0, False, True)],
+            "D": [(OPAQUE_FAIL, 0, False, True)],
+        }
+    )
+    registry = registry_for(SyntheticCapability())
+
+    assert runtime(tmp_path, compiled, registry, launcher).run().status == "FAILED"
+    second = runtime(tmp_path, compiled, registry, launcher).run()
+    assert second.status == "FAILED"
+    assert second.attempts["A"].attempt_id == "attempt-0002"
+    assert "C" not in second.attempts
+    assert [item.task_id for item in launcher.launches].count("A") == 2
+    assert [item.task_id for item in launcher.launches].count("D") == 1
+    assert "C" not in [item.task_id for item in launcher.launches]
+    state = __import__("json").loads(
+        (tmp_path / "run" / "state" / "workflow_runtime.json").read_text()
+    )["payload"]["tasks"]
+    assert state["D"]["status"] == "FAILED"
+    assert state["C"]["status"] == "BLOCKED"
+
+
+def test_intrinsic_block_remains_terminal_across_restart(tmp_path: Path):
+    compiled = workflow(tmp_path, (node("A", capability="org.example.unknown"),))
+    launcher = RecordingLauncher()
+    registry = registry_for(SyntheticCapability())
+
+    assert runtime(tmp_path, compiled, registry, launcher).run().status == "BLOCKED"
+    assert runtime(tmp_path, compiled, registry, launcher).run().status == "BLOCKED"
+    assert launcher.launches == []
+    state = __import__("json").loads(
+        (tmp_path / "run" / "state" / "workflow_runtime.json").read_text()
+    )["payload"]["tasks"]["A"]
+    assert state["status"] == "BLOCKED" and state["attempts"] == 0
 
 
 def test_reserved_attempt_survives_crash_before_workspace_creation(tmp_path: Path):
