@@ -41,6 +41,7 @@ from ..core import (
     TechnicalValidation,
 )
 from ..engines.siesta.fdf_parser import FDFParser
+from ..engines.siesta.input_closure import collect_fdf_files, resolve_pseudopotentials, resolve_scientific_input_closure
 from ..engines.siesta.input_validator import SiestaInputValidator
 from ..engines.siesta.models import FDFBlock, FDFInclude, OutputClassification
 from ..engines.siesta.output_parser import SiestaOutputParser
@@ -211,37 +212,7 @@ def _safe_scientific_path(root: Path, owner: Path, target: str) -> Path:
 
 
 def _collect_fdf_files(root_fdf: Path) -> tuple[Path, dict[str, Path], list[Any]]:
-    root_fdf = root_fdf.resolve()
-    if not root_fdf.is_file():
-        raise FileNotFoundError(f"FDF does not exist: {root_fdf}")
-    root = root_fdf.parent
-    files: dict[str, Path] = {}
-    documents: list[Any] = []
-    visiting: set[Path] = set()
-
-    def visit(path: Path) -> None:
-        resolved = path.resolve()
-        if resolved in visiting:
-            raise ValueError(f"cyclic FDF include detected at {resolved}")
-        relative = resolved.relative_to(root).as_posix()
-        if relative in files:
-            return
-        visiting.add(resolved)
-        document = FDFParser().parse_path(resolved)
-        files[relative] = resolved
-        documents.append(document)
-        targets: list[str] = []
-        for node in document.nodes:
-            if isinstance(node, FDFInclude):
-                targets.append(node.target)
-            elif isinstance(node, FDFBlock) and node.redirected_to:
-                targets.append(node.redirected_to)
-        for target in targets:
-            visit(_safe_scientific_path(root, resolved, target))
-        visiting.remove(resolved)
-
-    visit(root_fdf)
-    return root, dict(sorted(files.items())), documents
+    return collect_fdf_files(root_fdf)
 
 
 def _block_payloads(documents: Sequence[Any], names: set[str]) -> list[str]:
@@ -287,39 +258,7 @@ def _resolve_pseudopotentials(
     species: Sequence[str],
     pseudo_manifest: Path | None,
 ) -> dict[str, Path]:
-    manifest_entries: dict[str, Path] = {}
-    if pseudo_manifest is not None:
-        data = _read_mapping(pseudo_manifest)
-        entries = data.get("entries")
-        if not isinstance(entries, list):
-            raise ValueError("pseudopotential manifest requires an entries list")
-        for item in entries:
-            if not isinstance(item, dict) or not str(item.get("species", "")).strip():
-                raise ValueError("invalid pseudopotential manifest entry")
-            source = item.get("path") or item.get("filename")
-            if not source:
-                raise ValueError(f"pseudopotential path missing for {item.get('species')}")
-            candidate = Path(str(source))
-            if not candidate.is_absolute():
-                candidate = (pseudo_manifest.parent / candidate).resolve()
-            manifest_entries[str(item["species"]).casefold()] = candidate
-    resolved: dict[str, Path] = {}
-    for label in species:
-        if manifest_entries:
-            candidates = [manifest_entries[label.casefold()]] if label.casefold() in manifest_entries else []
-        else:
-            candidates = [
-                candidate
-                for extension in ("psml", "psf")
-                if (candidate := root / f"{label}.{extension}").is_file()
-            ]
-        candidates = [path.resolve() for path in candidates if path.is_file()]
-        if len(candidates) != 1:
-            raise ValueError(
-                f"exactly one psml/psf pseudopotential is required for {label}; found {len(candidates)}"
-            )
-        resolved[label] = candidates[0]
-    return resolved
+    return resolve_pseudopotentials(root, species, pseudo_manifest)
 
 
 def build_scientific_identity(
@@ -1243,32 +1182,13 @@ def _single_fdf_runtime_workflow(
 ) -> tuple[CompiledWorkflow, Path]:
     """Adapt one FDF input set into the canonical runtime's single node."""
 
-    fdf_root, fdf_files, documents = _collect_fdf_files(fdf)
-    pseudos = _resolve_pseudopotentials(
-        fdf_root, _species(documents), pseudo_manifest
-    )
-    root_fdf = fdf.resolve()
-    entries: list[tuple[str, Path, str, ArtifactRole, str]] = [
-        ("fdf", root_fdf, root_fdf.name, ArtifactRole.INPUT, "application/x-siesta-fdf")
-    ]
-    for index, (relative, source) in enumerate(fdf_files.items(), start=1):
-        if source.resolve() != root_fdf:
-            entries.append((
-                f"include-{index:03d}", source, relative,
-                ArtifactRole.INPUT, "application/x-siesta-fdf",
-            ))
-    for index, source in enumerate(sorted(pseudos.values()), start=1):
-        entries.append((
-            f"pseudo-{index:03d}", source, source.name,
-            ArtifactRole.PSEUDOPOTENTIAL, "application/x-siesta-pseudopotential",
-        ))
-    destinations = [item[2] for item in entries]
-    if len(set(destinations)) != len(destinations):
-        raise ValueError("single-FDF canonical input destinations collide")
-    source_root = Path(os.path.commonpath([str(item[1].parent) for item in entries]))
+    closure = resolve_scientific_input_closure(fdf, pseudo_manifest=pseudo_manifest)
+    entries = closure.entries
+    source_root = closure.source_root
     artifacts: list[ArtifactReference] = []
     bindings: list[WorkflowInputBinding] = []
-    for index, (name, source, destination, role, media_type) in enumerate(entries, start=1):
+    for index, entry in enumerate(entries, start=1):
+        name, source, destination, role, media_type = entry.name, entry.source, entry.destination, entry.role, entry.media_type
         artifact_id = f"input-{index:03d}"
         artifacts.append(ArtifactReference(
             artifact_id=artifact_id,
@@ -1287,7 +1207,7 @@ def _single_fdf_runtime_workflow(
     definition_sha256 = _canonical_sha({
         "protocol": "single_fdf",
         "inputs": [
-            {"destination": item[2], "sha256": _sha_path(item[1])}
+            {"destination": item.destination, "sha256": _sha_path(item.source)}
             for item in entries
         ],
     })
