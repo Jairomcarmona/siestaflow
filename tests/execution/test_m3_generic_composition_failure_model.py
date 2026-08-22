@@ -207,7 +207,7 @@ def test_principal_composed_fanout_fanin_failure_isolation(tmp_path: Path) -> No
     assert result.attempts["JOIN"].result.execution_state == "COMPLETED"
 
 
-def test_failed_is_terminal_and_interrupted_retries_immutably(tmp_path: Path) -> None:
+def test_failed_and_interrupted_retry_immutably_on_later_invocation(tmp_path: Path) -> None:
     _, failed_workflow = _compile(tmp_path / "failed", (_fragment("A", [_external()]),))
     failed_root = tmp_path / "failed-run"
     first_failed = _runtime(
@@ -219,9 +219,10 @@ def test_failed_is_terminal_and_interrupted_retries_immutably(tmp_path: Path) ->
     second_failed = _runtime(
         tmp_path / "failed", failed_workflow, second_launcher, root=failed_root,
     ).run()
-    assert second_failed.status == "FAILED" and second_launcher.launches == []
+    assert second_failed.status == "COMPLETED"
+    assert [item.attempt_id for item in second_launcher.launches] == ["attempt-0002"]
     assert (failed_root / "work" / "A" / "attempt-0001" / "attempt.json").is_file()
-    assert not (failed_root / "work" / "A" / "attempt-0002").exists()
+    assert (failed_root / "work" / "A" / "attempt-0002" / "attempt.json").is_file()
 
     _, interrupted_workflow = _compile(tmp_path / "interrupted", (_fragment("B", [_external()]),))
     interrupted_root = tmp_path / "interrupted-run"

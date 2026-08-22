@@ -1322,6 +1322,7 @@ def _write_single_fdf_plan_failure(
     session_started: str,
     session_clock: float,
     command: str,
+    initial_output_exists: bool,
     error: Exception,
 ) -> None:
     writer = QraftOutputWriter(runs_root / "qraft.out", campaign_root=runs_root)
@@ -1333,7 +1334,7 @@ def _write_single_fdf_plan_failure(
         ))
     _event(events, "PLAN_BUILD_FAILED", input_fdf=str(fdf.resolve()), error=f"{type(error).__name__}: {error}")
     writer.start_session(ExecutionSession(
-        session_id, epoch, "RESUME" if writer.exists else "NEW", session_started,
+        session_id, epoch, "RESUME" if initial_output_exists else "NEW", session_started,
         command, None, str(runs_root),
     ))
     writer.append("PLANNING FAILURE", OutputModel(messages=(OutputMessage(
@@ -1345,6 +1346,7 @@ def _write_single_fdf_plan_failure(
         result="BLOCKED", finished=_utc_now(), elapsed_seconds=time.monotonic() - session_clock
     )
     writer.finish({"Campaign status": "BLOCKED", "Nodes total": 0, "Blocked": 1, "QRAFT output": str(writer.path), "Evidence": str(events)})
+    _event(events, "EXECUTION_SESSION_FINISHED", session_id=session_id, status="BLOCKED")
 
 
 def _single_fdf_public_attempt(attempt: Attempt) -> dict[str, Any]:
@@ -1382,8 +1384,20 @@ def execute_fdf_plan(
     session_id = uuid.uuid4().hex
     resolved_runs = runs_root.resolve()
     events = resolved_runs / "events.jsonl"
+    output_writer = QraftOutputWriter(
+        resolved_runs / "qraft.out", campaign_root=resolved_runs
+    )
+    initial_output_exists = output_writer.exists
     epoch = _next_session_epoch(events)
     command = invocation or f"qraft run {shlex.quote(str(fdf))}"
+    _event(
+        events,
+        "EXECUTION_SESSION_STARTED",
+        session_id=session_id,
+        controller_epoch=epoch,
+        mode="RESUME" if initial_output_exists else "NEW",
+        command=command,
+    )
     try:
         plan = build_fdf_plan(
             fdf,
@@ -1405,7 +1419,7 @@ def execute_fdf_plan(
         _write_single_fdf_plan_failure(
             fdf=fdf, runs_root=resolved_runs, events=events, session_id=session_id,
             epoch=epoch, session_started=session_started, session_clock=session_clock,
-            command=command, error=exc,
+            command=command, initial_output_exists=initial_output_exists, error=exc,
         )
         raise
 
@@ -1446,8 +1460,8 @@ def execute_fdf_plan(
     stdout = attempt_root / attempt.stdout
     stderr = attempt_root / attempt.stderr
     manifest = attempt_root / "attempt.json"
-    writer = QraftOutputWriter(resolved_runs / "qraft.out", campaign_root=resolved_runs)
-    output_existed = writer.exists
+    writer = output_writer
+    output_existed = initial_output_exists
     start_model = _single_fdf_start_model(
         plan, fdf, resolved_runs, profile_metadata=profile_metadata
     )

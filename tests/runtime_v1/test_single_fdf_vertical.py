@@ -74,6 +74,16 @@ def _synthetic_overrides(root: Path, *, marker: Path | None = None) -> dict:
     }
 
 
+def _session_events(runs: Path, event: str) -> list[dict]:
+    events = runs / "events.jsonl"
+    return [
+        record for record in (
+            json.loads(line) for line in events.read_text(encoding="utf-8").splitlines()
+        )
+        if record["event"] == event
+    ]
+
+
 def test_identity_changes_only_for_scientific_inputs(tmp_path: Path) -> None:
     fdf = inputs(tmp_path)
     first = build_scientific_identity(fdf)
@@ -218,6 +228,84 @@ def test_tampered_attempt_manifest_is_never_reused(tmp_path: Path) -> None:
     recovered = execute_fdf_plan(fdf, overrides=overrides, runs_root=runs)
     assert recovered["status"] == "ATTEMPT_FINISHED"
     assert recovered["attempt"]["attempt_id"] != first_id
+
+
+def test_single_fdf_retries_failed_attempt_on_next_invocation_only(tmp_path: Path) -> None:
+    fdf = inputs(tmp_path)
+    marker = tmp_path / "launch-count.txt"
+    fake = tmp_path / "fail-then-pass.py"
+    fake.write_text(
+        "import sys\nfrom pathlib import Path\n"
+        f"marker = Path({str(marker)!r})\n"
+        "count = int(marker.read_text() if marker.exists() else '0') + 1\n"
+        "marker.write_text(str(count), encoding='utf-8')\n"
+        "sys.stdin.read()\n"
+        "if count == 1:\n    print('synthetic failure'); sys.exit(1)\n"
+        "print('Siesta started')\nprint('SCF cycle 1')\n"
+        "print('SCF converged')\nprint('Job completed')\n",
+        encoding="utf-8",
+    )
+    overrides = {
+        "launcher": "direct", "partition": "local", "executable": sys.executable,
+        "executable_arguments": [str(fake)],
+    }
+    runs = tmp_path / "failed-attempt-runs"
+
+    first = execute_fdf_plan(fdf, overrides=overrides, runs_root=runs)
+    first_manifest = _attempt_manifest(runs, "attempt-0001")
+    original = first_manifest.read_bytes()
+    assert first["attempt"]["result"]["technical_validation"]["status"] == "FAIL"
+    assert marker.read_text(encoding="utf-8") == "1"
+    assert not tuple(runs.rglob("attempt-0002/attempt.json"))
+
+    second = execute_fdf_plan(fdf, overrides=overrides, runs_root=runs)
+    assert second["status"] == "ATTEMPT_FINISHED"
+    assert second["attempt"]["attempt_id"] == "attempt-0002"
+    assert second["attempt"]["result"]["technical_validation"]["status"] == "PASS"
+    assert first_manifest.read_bytes() == original
+    assert _attempt_manifest(runs, "attempt-0002").is_file()
+    assert marker.read_text(encoding="utf-8") == "2"
+
+
+def test_single_fdf_sessions_advance_for_reused_attempts(tmp_path: Path) -> None:
+    fdf = inputs(tmp_path)
+    marker = tmp_path / "launch-count.txt"
+    overrides = _synthetic_overrides(tmp_path, marker=marker)
+    runs = tmp_path / "session-runs"
+
+    first = execute_fdf_plan(fdf, overrides=overrides, runs_root=runs)
+    second = execute_fdf_plan(fdf, overrides=overrides, runs_root=runs)
+    third = execute_fdf_plan(fdf, overrides=overrides, runs_root=runs)
+
+    assert first["status"] == "ATTEMPT_FINISHED"
+    assert second["status"] == third["status"] == "REUSED_VALIDATED_ATTEMPT"
+    assert second["attempt"]["attempt_id"] == third["attempt"]["attempt_id"]
+    assert marker.read_text(encoding="utf-8") == "1"
+    started = _session_events(runs, "EXECUTION_SESSION_STARTED")
+    finished = _session_events(runs, "EXECUTION_SESSION_FINISHED")
+    assert [item["controller_epoch"] for item in started] == [1, 2, 3]
+    assert len(started) == len(finished) == 3
+
+
+def test_single_fdf_first_planning_failure_starts_new_session(tmp_path: Path) -> None:
+    missing_fdf = tmp_path / "missing.fdf"
+    runs = tmp_path / "planning-failure-runs"
+
+    with pytest.raises(FileNotFoundError):
+        execute_fdf_plan(
+            missing_fdf,
+            overrides={
+                "launcher": "direct", "partition": "local", "executable": sys.executable,
+            },
+            runs_root=runs,
+        )
+
+    started = _session_events(runs, "EXECUTION_SESSION_STARTED")
+    finished = _session_events(runs, "EXECUTION_SESSION_FINISHED")
+    assert [item["controller_epoch"] for item in started] == [1]
+    assert len(finished) == 1
+    assert "Mode             : NEW" in (runs / "qraft.out").read_text(encoding="utf-8")
+    assert not tuple(runs.rglob("attempt-*/attempt.json"))
 
 
 def test_single_fdf_uses_canonical_runtime_without_legacy_authority(

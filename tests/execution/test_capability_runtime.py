@@ -382,6 +382,30 @@ def test_interrupted_attempt_retries_without_overwriting(tmp_path: Path):
     assert (tmp_path / "run" / "work" / "A" / "attempt-0001" / "attempt.json").is_file()
 
 
+def test_failed_attempt_retries_only_on_a_new_runtime_invocation(tmp_path: Path):
+    compiled = workflow(tmp_path, (node("A"),))
+    launcher = RecordingLauncher(
+        {"A": [(OPAQUE_FAIL, 0, False, True), (OPAQUE_PASS, 0, False, True)]}
+    )
+    registry = registry_for(SyntheticCapability())
+
+    first = runtime(tmp_path, compiled, registry, launcher).run()
+    first_manifest = tmp_path / "run" / "work" / "A" / "attempt-0001" / "attempt.json"
+    assert first.status == "FAILED"
+    assert first.attempts["A"].attempt_id == "attempt-0001"
+    assert first_manifest.is_file()
+    original = first_manifest.read_bytes()
+    assert [item.attempt_id for item in launcher.launches] == ["attempt-0001"]
+
+    second = runtime(tmp_path, compiled, registry, launcher).run()
+    assert second.status == "COMPLETED"
+    assert second.attempts["A"].attempt_id == "attempt-0002"
+    assert first_manifest.read_bytes() == original
+    assert [item.attempt_id for item in launcher.launches] == [
+        "attempt-0001", "attempt-0002"
+    ]
+
+
 def test_reserved_attempt_survives_crash_before_workspace_creation(tmp_path: Path):
     compiled = workflow(tmp_path, (node("A"),))
     launcher = RecordingLauncher()

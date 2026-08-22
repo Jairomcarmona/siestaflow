@@ -534,6 +534,15 @@ class CompiledWorkflowRuntime:
     def _recover_completed_nodes(self) -> None:
         for task in self.workflow.tasks:
             record = self._state["tasks"][task.task_id]
+            if record["status"] == "FAILED":
+                max_attempts = int(task.resources.get("max_attempts", 2))
+                if int(record["attempts"]) < max_attempts:
+                    self._set_task(
+                        task.task_id,
+                        "PENDING",
+                        "retrying failed task on new runtime invocation",
+                    )
+                continue
             if record["status"] != "COMPLETED":
                 if record["status"] == "RUNNING":
                     self._set_task(task.task_id, "INTERRUPTED", "crashed RUNNING attempt")
