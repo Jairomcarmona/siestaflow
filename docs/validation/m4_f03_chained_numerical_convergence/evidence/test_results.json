@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "baseline_commit": "fd855268d8439b5070e5d70e7971332bede2c360",
+  "focused_baseline": "38 passed in 6.35s",
+  "m4_functional": "2 passed in 3.07s",
+  "focused_regression": "35 passed in 8.99s",
+  "final_full_pytest": "568 passed",
+  "selections": {
+    "basis_size": "DZP",
+    "mesh_cutoff": {"value": 300, "unit": "Ry"},
+    "kpoints": [3, 3, 3]
+  },
+  "gates": {
+    "M4-01": "PASS",
+    "M4-02": "PASS",
+    "M4-03": "PASS",
+    "M4-04": "PASS",
+    "M4-05": "PASS",
+    "M4-06": "PASS",
+    "M4-07": "PASS",
+    "M4-08": "PASS",
+    "M4-09": "PASS",
+    "M4-10": "PASS"
+  }
+}

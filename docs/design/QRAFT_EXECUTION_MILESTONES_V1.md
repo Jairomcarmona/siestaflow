@@ -206,8 +206,8 @@ non-goals, acceptance gates, evidence, status y closing commit.
 | Non-goals | Relax, propiedades electrónicas, LR-U. |
 | Acceptance gates | Salida seleccionada N es input exacto typed/hash-bound de N+1. |
 | Required evidence | Handoff por etapa y `docs/validation/m4_f03_chained_numerical_convergence/`. |
-| Status | `NOT_STARTED` |
-| Closing commit | No aplicable hasta cierre. |
+| Status | `CLOSED` |
+| Closing commit | `feat: add F03 chained numerical convergence`. |
 
 ### M5 — Relaxation Capability V1
 
@@ -306,7 +306,8 @@ infraestructura de ejecución.
 | M1 | `CLOSED` |
 | M2 | `CLOSED` |
 | M3 | `CLOSED` |
-| M4–M10 | `NOT_STARTED` |
+| M4 | `CLOSED` |
+| M5–M10 | `NOT_STARTED` |
 | DFT+U / LR-U | `DEFERRED` |
 
 Un agente futuro debe construir sólo el siguiente milestone abierto, en la capa
