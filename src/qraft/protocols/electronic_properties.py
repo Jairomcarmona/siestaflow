@@ -1,0 +1,294 @@
+"""M7 electronic-property fan-out protocol.
+
+The protocol verifies an immutable M6 electronic state, prepares three
+independent source closures, and delegates their execution to the already
+accepted generic DAG runtime.  It intentionally owns no execution state.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Mapping
+
+from ..contracts import CapabilityRegistry, ContractEnvelope, SCIENTIFIC_ARTIFACT
+from ..contracts.scientific import ScientificAuthority
+from ..core import ExecutionSpec, ScientificIdentity
+from ..engines.siesta.electronic_properties import (
+    BandPathSpec, DosSpec, PdosSpec, PropertySpec, PROPERTY_CAPABILITIES,
+    PROPERTY_SUFFIXES, property_artifact_envelope, render_property_fdf,
+    sha256_path, validate_property_neutral_parent, validate_property_output,
+)
+from ..engines.siesta.ground_state import system_label
+from ..engines.siesta.input_closure import effective_species, resolve_pseudopotentials, resolve_scientific_input_closure
+from ..engines.siesta.effective_fdf import resolve_effective_fdf
+from ..execution.capability_plugins import register_siesta_electronic_properties
+from ..execution.capability_runtime import CompiledWorkflowRuntime
+from ..execution.runtime_composition import compose_runtime
+from ..protocols.single_fdf import build_scientific_identity, resolve_execution_spec
+from ..workflows import WorkflowCompiler
+
+
+_STATE_TYPE = "qraft.electronic-state"
+
+
+def _canonical_sha(value: object) -> str:
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")).hexdigest()
+
+
+def _immutable_copy(source: Path, destination: Path) -> None:
+    data = source.read_bytes()
+    if destination.exists():
+        if destination.read_bytes() != data:
+            raise ValueError(f"immutable M7 source collision: {destination}")
+        return
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(data)
+
+
+def _immutable_json(path: Path, payload: Mapping[str, Any]) -> None:
+    encoded = json.dumps(payload, sort_keys=True, indent=2, ensure_ascii=False) + "\n"
+    if path.exists():
+        if path.read_text(encoding="utf-8") != encoded:
+            raise ValueError(f"immutable M7 source collision: {path}")
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(encoded, encoding="utf-8", newline="\n")
+
+
+@dataclass(frozen=True)
+class ElectronicStateSource:
+    """Verified protocol-local view of the M6 handoff and its immutable bytes."""
+
+    state_path: Path
+    final_fdf: Path
+    density_matrix: Path
+    pseudo_manifest: Path | None
+    state_file_sha256: str
+    state_content_sha256: str
+    final_fdf_sha256: str
+    density_matrix_sha256: str
+    label: str
+    authority: ScientificAuthority
+    pseudopotentials: Mapping[str, Path]
+
+    @classmethod
+    def load(
+        cls,
+        state_path: Path,
+        *,
+        final_fdf: Path,
+        density_matrix: Path,
+        pseudo_manifest: Path | None = None,
+    ) -> "ElectronicStateSource":
+        state_path, final_fdf, density_matrix = state_path.resolve(), final_fdf.resolve(), density_matrix.resolve()
+        if not state_path.is_file() or not final_fdf.is_file() or not density_matrix.is_file():
+            raise ValueError("M7 electronic-state handoff files are required")
+        raw = json.loads(state_path.read_text(encoding="utf-8"))
+        envelope = ContractEnvelope.from_dict(raw, required_contract=SCIENTIFIC_ARTIFACT)
+        payload = dict(envelope.payload)
+        if payload.get("artifact_type") != _STATE_TYPE:
+            raise ValueError("M7 requires a qraft.electronic-state artifact")
+        try:
+            authority = ScientificAuthority(str(payload.get("authority")))
+        except ValueError as exc:
+            raise ValueError("M7 parent electronic-state authority is invalid") from exc
+        final = payload.get("final_scf")
+        if not isinstance(final, Mapping):
+            raise ValueError("M7 electronic-state final_scf payload is invalid")
+        final_sha = sha256_path(final_fdf)
+        if final_sha != str(final.get("input_fdf_sha256", "")):
+            raise ValueError("M7 final FDF SHA-256 does not match electronic-state evidence")
+        label = system_label(final_fdf)
+        if label != str(final.get("system_label", "")):
+            raise ValueError("M7 SystemLabel does not match electronic-state evidence")
+        dm = final.get("density_matrix")
+        if not isinstance(dm, Mapping) or str(dm.get("filename", "")) != density_matrix.name:
+            raise ValueError("M7 density-matrix filename does not match electronic-state evidence")
+        dm_sha = sha256_path(density_matrix)
+        if dm_sha != str(dm.get("sha256", "")):
+            raise ValueError("M7 density-matrix SHA-256 does not match electronic-state evidence")
+        # Resolving the closure and pseudos here rejects include escapes,
+        # incomplete closure bytes, and pseudo mismatches before compilation.
+        effective = resolve_effective_fdf(final_fdf)
+        pseudos = resolve_pseudopotentials(effective.source_root, effective_species(effective), pseudo_manifest)
+        validate_property_neutral_parent(final_fdf)
+        return cls(
+            state_path, final_fdf, density_matrix, pseudo_manifest.resolve() if pseudo_manifest else None,
+            sha256_path(state_path), envelope.content_sha256, final_sha, dm_sha,
+            label, authority, dict(pseudos),
+        )
+
+    def identity_component(self) -> str:
+        return _canonical_sha({
+            "artifact_type": _STATE_TYPE,
+            "state_file_sha256": self.state_file_sha256,
+            "state_content_sha256": self.state_content_sha256,
+            "density_matrix_sha256": self.density_matrix_sha256,
+        })
+
+    def verify(self) -> "ElectronicStateSource":
+        """Re-read all M6 evidence before source-package preparation."""
+
+        current = ElectronicStateSource.load(
+            self.state_path, final_fdf=self.final_fdf,
+            density_matrix=self.density_matrix, pseudo_manifest=self.pseudo_manifest,
+        )
+        if current.identity_component() != self.identity_component() or current.final_fdf_sha256 != self.final_fdf_sha256:
+            raise ValueError("M7 electronic-state handoff changed after verification")
+        return current
+
+    def provenance(self) -> dict[str, str]:
+        return {
+            "artifact_type": _STATE_TYPE, "authority": self.authority.value,
+            "state_file_sha256": self.state_file_sha256,
+            "state_content_sha256": self.state_content_sha256,
+            "final_fdf_sha256": self.final_fdf_sha256,
+            "density_matrix_filename": self.density_matrix.name,
+            "density_matrix_sha256": self.density_matrix_sha256,
+        }
+
+
+@dataclass(frozen=True)
+class PreparedElectronicProperties:
+    source_root: Path
+    workflow_path: Path
+    compiled: Any
+    identities: Mapping[str, ScientificIdentity]
+    source: ElectronicStateSource
+    specs: Mapping[str, PropertySpec]
+
+
+class ElectronicPropertiesProtocol:
+    """Compile and run independent BANDS, DOS, and PDOS siblings from M6."""
+
+    def prepare(
+        self,
+        source: ElectronicStateSource,
+        *,
+        bands: BandPathSpec,
+        dos: DosSpec,
+        pdos: PdosSpec,
+        runs_root: Path = Path(".qraft-electronic-properties"),
+    ) -> PreparedElectronicProperties:
+        source = source.verify()
+        specs: dict[str, PropertySpec] = {"bands": bands, "dos": dos, "pdos": pdos}
+        root = runs_root.resolve()
+        source_root = root / "source"
+        identities: dict[str, ScientificIdentity] = {}
+        for property_name, spec in specs.items():
+            branch = source_root / property_name
+            rendered = render_property_fdf(source.final_fdf, branch, property_name=property_name, spec=spec)
+            # Pseudos and parent DM are declared independent external inputs.
+            for pseudo in source.pseudopotentials.values():
+                _immutable_copy(pseudo, branch / pseudo.name)
+            _immutable_copy(source.density_matrix, branch / source.density_matrix.name)
+            _immutable_copy(source.state_path, branch / "electronic-state.json")
+            identity = build_scientific_identity(rendered.root_fdf)
+            components = dict(identity.components)
+            components["m7.parent_electronic_state"] = source.identity_component()
+            components["m7.property_kind"] = _canonical_sha(property_name)
+            components["m7.property_spec"] = spec.sha256
+            identities[property_name] = ScientificIdentity(
+                engine=identity.engine, effective_fdf_sha256=identity.effective_fdf_sha256,
+                geometry_sha256=identity.geometry_sha256, species_mapping_sha256=identity.species_mapping_sha256,
+                pseudopotentials=identity.pseudopotentials, components=components,
+                included_scientific_files=identity.included_scientific_files,
+            )
+        workflow_path = source_root / "workflow.json"
+        _immutable_json(workflow_path, self._workflow_definition(source_root, source, specs))
+        compiled_result = WorkflowCompiler().compile(workflow_path)
+        if not compiled_result.valid or compiled_result.compiled is None:
+            raise ValueError("M7 electronic-property workflow compilation failed: " + "; ".join(item.message for item in compiled_result.findings))
+        return PreparedElectronicProperties(source_root, workflow_path, compiled_result.compiled, identities, source, specs)
+
+    @staticmethod
+    def _workflow_definition(source_root: Path, source: ElectronicStateSource, specs: Mapping[str, PropertySpec]) -> dict[str, Any]:
+        tasks: list[dict[str, Any]] = []
+        for property_name in ("bands", "dos", "pdos"):
+            branch = source_root / property_name
+            fdf = branch / "input.fdf"
+            closure = resolve_scientific_input_closure(fdf)
+            inputs = [
+                {"name": entry.name, "source": f"{property_name}/{entry.destination}", "destination": entry.destination,
+                 "media_type": entry.media_type, "sha256": sha256_path(branch / entry.destination)}
+                for entry in closure.entries
+            ]
+            inputs.extend((
+                {"name": "parent-state", "source": f"{property_name}/electronic-state.json", "destination": ".qraft/electronic-state.json", "media_type": "application/json", "sha256": sha256_path(branch / "electronic-state.json")},
+                {"name": "parent-dm", "source": f"{property_name}/{source.density_matrix.name}", "destination": source.density_matrix.name, "media_type": "application/octet-stream", "sha256": sha256_path(branch / source.density_matrix.name)},
+            ))
+            # The closure must not accidentally provide a duplicate DM input.
+            if len({item["destination"] for item in inputs}) != len(inputs):
+                raise ValueError("M7 external input destinations collide")
+            spec = specs[property_name]
+            output_name = f"{source.label}{PROPERTY_SUFFIXES[property_name]}"
+            tasks.append({
+                "task_id": property_name, "kind": "calculation", "capability": PROPERTY_CAPABILITIES[property_name],
+                "depends_on": [], "inputs": inputs,
+                "outputs": [{"name": "property-output", "path": output_name, "artifact_type": {"bands": "qraft.bands.raw", "dos": "qraft.dos.raw", "pdos": "qraft.pdos.raw"}[property_name], "media_type": "text/plain", "required": True}],
+                "resources": {},
+                "settings": {"primary_input": "fdf", "property": property_name, "expected_points": getattr(spec, "energy_points", None)},
+            })
+        return {
+            "schema_version": "1.0", "workflow_id": "m7-electronic-properties", "project_id": "m7-electronic-properties",
+            "metadata": {"protocol": "m7-electronic-property-fanout", "parent_electronic_state": source.identity_component()},
+            "tasks": tasks,
+        }
+
+    def run(
+        self,
+        source: ElectronicStateSource,
+        *,
+        bands: BandPathSpec,
+        dos: DosSpec,
+        pdos: PdosSpec,
+        profile: Mapping[str, Any] | Path | None = None,
+        project_config: Path | None = None,
+        recipe: Path | None = None,
+        overrides: Mapping[str, Any] | None = None,
+        runs_root: Path = Path(".qraft-electronic-properties"),
+        force_new_attempt: bool = False,
+    ) -> dict[str, Any]:
+        prepared = self.prepare(source, bands=bands, dos=dos, pdos=pdos, runs_root=runs_root)
+        execution, _ = resolve_execution_spec(profile=profile, project_config=project_config, recipe=recipe, overrides=overrides)
+        registry = CapabilityRegistry()
+        register_siesta_electronic_properties(registry)
+        registry.freeze()
+        composition = compose_runtime(execution, max_parallel_steps=3)
+        root = Path(runs_root).resolve()
+        runtime = CompiledWorkflowRuntime(
+            workflow=prepared.compiled, registry=registry, root=root / "runtime", source_root=prepared.source_root,
+            scientific_identities=prepared.identities, execution_specs=execution,
+            launcher=composition.launcher, allocation=composition.allocation,
+            force_new_attempts=force_new_attempt,
+        ).run()
+        branches: dict[str, dict[str, Any]] = {}
+        for property_name in ("bands", "dos", "pdos"):
+            attempt = runtime.attempts.get(property_name)
+            branch: dict[str, Any] = {"status": "NOT_STARTED", "reused": property_name in runtime.reused_nodes}
+            if attempt is not None:
+                branch.update({"status": attempt.result.execution_state, "attempt_id": attempt.attempt_id,
+                               "technical_validation": attempt.result.technical_validation.status,
+                               "scientific_identity_sha256": prepared.identities[property_name].fingerprint})
+                if attempt.result.execution_state == "COMPLETED" and attempt.result.technical_validation.status == "PASS":
+                    raw = root / "runtime" / "work" / property_name / attempt.attempt_id / f"{source.label}{PROPERTY_SUFFIXES[property_name]}"
+                    try:
+                        validation = validate_property_output(raw, property_name, expected_points=getattr(prepared.specs[property_name], "energy_points", None))
+                        artifact = property_artifact_envelope(
+                            property_name=property_name, artifact_id=f"m7-{property_name}", parent=source.provenance(),
+                            spec=prepared.specs[property_name], scientific_identity_sha256=prepared.identities[property_name].fingerprint,
+                            rendered_fdf_sha256=sha256_path(prepared.source_root / property_name / "input.fdf"), raw_output=raw,
+                            task_id=property_name, attempt_id=attempt.attempt_id, validation=validation,
+                        )
+                        artifact_path = root / "artifacts" / f"{property_name}.json"
+                        _immutable_json(artifact_path, artifact)
+                        branch["artifact"] = str(artifact_path)
+                        branch["artifact_sha256"] = sha256_path(artifact_path)
+                    except (OSError, ValueError) as exc:
+                        branch.update({"status": "FAILED", "scientific_validation": "FAIL", "reason": str(exc)})
+            branches[property_name] = branch
+        completed = all(branch.get("status") == "COMPLETED" and "artifact" in branch for branch in branches.values())
+        return {"schema_version": "1.0", "status": "COMPLETED" if completed else "FAILED", "workflow": str(prepared.workflow_path), "runtime_status": runtime.status, "branches": branches}
