@@ -10,6 +10,8 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
@@ -72,8 +74,8 @@ class BandPathVertex:
         coords = tuple(_number(item, "band-path coordinate") for item in self.coordinates)
         if len(coords) != 3:
             raise ValueError("band-path vertices require three coordinates")
-        if isinstance(self.points_from_previous, bool) or int(self.points_from_previous) < 0:
-            raise ValueError("points_from_previous must be non-negative")
+        if isinstance(self.points_from_previous, bool) or not isinstance(self.points_from_previous, int) or self.points_from_previous < 1:
+            raise ValueError("points_from_previous must be a positive integer")
         label = str(self.label).strip()
         if not label or any(character.isspace() for character in label):
             raise ValueError("band-path labels must be non-empty single tokens")
@@ -86,7 +88,7 @@ class BandPathVertex:
         coordinates = value.get("coordinates")
         if not isinstance(coordinates, Sequence) or isinstance(coordinates, (str, bytes)):
             raise ValueError("band-path vertex coordinates are required")
-        return cls(tuple(coordinates), int(value.get("points_from_previous", 0)), str(value.get("label", "")))  # type: ignore[arg-type]
+        return cls(tuple(coordinates), value.get("points_from_previous"), str(value.get("label", "")))  # type: ignore[arg-type]
 
     def canonical(self) -> dict[str, object]:
         return {"coordinates": [_render_number(item) for item in self.coordinates], "points_from_previous": self.points_from_previous, "label": self.label}
@@ -103,8 +105,8 @@ class BandPathSpec:
         vertices = tuple(item if isinstance(item, BandPathVertex) else BandPathVertex.from_mapping(item) for item in self.vertices)
         if len(vertices) < 2:
             raise ValueError("band paths require at least two ordered vertices")
-        if vertices[0].points_from_previous != 0 or any(item.points_from_previous <= 0 for item in vertices[1:]):
-            raise ValueError("first band-path vertex requires 0 points; later vertices require positive sampling")
+        if vertices[0].points_from_previous != 1:
+            raise ValueError("the first SIESTA BandLines vertex requires exactly 1 point")
         object.__setattr__(self, "scale", "ReciprocalLatticeVectors")
         object.__setattr__(self, "vertices", vertices)
 
@@ -141,7 +143,7 @@ class DosSpec:
         broadening = _number(self.broadening, "broadening")
         if low >= high or broadening <= 0:
             raise ValueError("DOS window requires min < max and positive broadening")
-        if isinstance(self.energy_points, bool) or int(self.energy_points) < 2:
+        if isinstance(self.energy_points, bool) or not isinstance(self.energy_points, int) or self.energy_points < 2:
             raise ValueError("energy_points must be an integer of at least two")
         unit = str(self.energy_unit).strip()
         if unit.casefold() not in {"ev", "ry"}:
@@ -184,7 +186,11 @@ class DosSpec:
         # This is the native SIESTA projected-DOS input form.  The reference is
         # recorded in provenance; SIESTA's numerical range is rendered verbatim.
         return {
-            "ProjectedDensityOfStates": "  ".join((_render_number(self.energy_min), _render_number(self.energy_max), _render_number(self.broadening), str(self.energy_points), self.energy_unit)),
+            "ProjectedDensityOfStates": "  ".join((
+                *(("EF",) if self.energy_reference == "EF" else ()),
+                _render_number(self.energy_min), _render_number(self.energy_max),
+                _render_number(self.broadening), str(self.energy_points), self.energy_unit,
+            )),
             "PDOS.kgrid_Monkhorst_Pack": "\n".join(f"  {a} {b} {c} {_render_number(shift)}" for a, b, c, shift in self.pdos_kgrid),
         }
 
@@ -265,11 +271,64 @@ def _numeric_rows(path: Path, *, minimum_columns: int) -> list[list[float]]:
     return rows
 
 
+_INTEGER = re.compile(r"^[+-]?\d+$")
+
+
+def _finite_token(value: str, field: str) -> float:
+    try:
+        result = float(value.replace("D", "E").replace("d", "e"))
+    except ValueError as exc:
+        raise ValueError(f"invalid {field}") from exc
+    if not math.isfinite(result):
+        raise ValueError(f"invalid {field}")
+    return result
+
+
+def _integer_token(value: str, field: str, *, positive: bool = False) -> int:
+    if not _INTEGER.fullmatch(value):
+        raise ValueError(f"invalid integer {field}")
+    result = int(value)
+    if positive and result <= 0:
+        raise ValueError(f"{field} must be positive")
+    return result
+
+
 def parse_bands(path: Path) -> dict[str, Any]:
-    rows = _numeric_rows(path, minimum_columns=1)
-    if len(rows) < 2:
+    """Parse the structured native SIESTA ``.bands`` stream, including wraps."""
+
+    lines = [line.strip() for line in path.read_text(encoding="utf-8", errors="replace").splitlines() if line.strip() and not line.lstrip().startswith(("#", "!", ";"))]
+    if len(lines) < 5:
         raise ValueError("bands output is truncated")
-    return {"fermi_energy": rows[0][0], "numeric_rows": len(rows), "finite_eigenvalue_rows": len(rows) - 1}
+    headers = [line.split() for line in lines[:4]]
+    if len(headers[0]) != 1 or len(headers[1]) != 2 or len(headers[2]) != 2 or len(headers[3]) != 3:
+        raise ValueError("invalid SIESTA bands header")
+    fermi = _finite_token(headers[0][0], "bands Fermi energy")
+    kmin, kmax = (_finite_token(value, "bands k range") for value in headers[1])
+    emin, emax = (_finite_token(value, "bands energy range") for value in headers[2])
+    nbands, nspin, nkpoints = (_integer_token(value, name, positive=True) for value, name in zip(headers[3], ("number of bands", "number of spins", "number of k points")))
+    if nspin not in {1, 2}:
+        raise ValueError("M7 supports only one or two SIESTA spin channels")
+    payload_tokens = " ".join(lines[4:]).split()
+    expected = nkpoints * (1 + nbands * nspin)
+    if len(payload_tokens) < expected + 1:
+        raise ValueError("bands k-point/eigenvalue payload is truncated")
+    values = [_finite_token(token, "bands k-point/eigenvalue payload") for token in payload_tokens[:expected]]
+    trailing = payload_tokens[expected:]
+    nk_lines = _integer_token(trailing[0], "number of k lines")
+    if nk_lines < 0 or len(trailing[1:]) != nk_lines * 2:
+        raise ValueError("bands line-label section is truncated or malformed")
+    labels: list[str] = []
+    for index in range(nk_lines):
+        _finite_token(trailing[1 + 2 * index], "bands line abscissa")
+        label = trailing[2 + 2 * index].strip()
+        if not label:
+            raise ValueError("bands line label is missing")
+        labels.append(label)
+    return {
+        "fermi_energy": fermi, "kmin": kmin, "kmax": kmax, "energy_min": emin, "energy_max": emax,
+        "bands": nbands, "spins": nspin, "kpoints": nkpoints, "line_labels": tuple(labels),
+        "finite_eigenvalues": expected - nkpoints,
+    }
 
 
 def parse_dos(path: Path, *, expected_points: int | None = None) -> dict[str, Any]:
@@ -284,11 +343,47 @@ def parse_dos(path: Path, *, expected_points: int | None = None) -> dict[str, An
     return {"rows": len(rows), "energy_min": energies[0], "energy_max": energies[-1]}
 
 
+def _xml_name(element: ET.Element) -> str:
+    return element.tag.rsplit("}", 1)[-1].casefold()
+
+
+def _xml_numbers(text: str | None, field: str) -> list[float]:
+    tokens = (text or "").split()
+    if not tokens:
+        raise ValueError(f"PDOS {field} is missing")
+    return [_finite_token(token, f"PDOS {field}") for token in tokens]
+
+
 def parse_pdos(path: Path, *, expected_points: int | None = None) -> dict[str, Any]:
-    rows = _numeric_rows(path, minimum_columns=2)
-    if expected_points is not None and len(rows) < max(2, int(expected_points * 0.8)):
-        raise ValueError("PDOS output is truncated")
-    return {"rows": len(rows), "columns": max(len(row) for row in rows), "energy_min": rows[0][0], "energy_max": rows[-1][0]}
+    """Validate native SIESTA XML-structured projected density output."""
+
+    try:
+        root = ET.parse(path).getroot()
+    except (ET.ParseError, OSError) as exc:
+        raise ValueError("PDOS XML is malformed or truncated") from exc
+    if "pdos" not in _xml_name(root):
+        raise ValueError("PDOS XML root is invalid")
+    energies: list[float] | None = None
+    projected: list[list[float]] = []
+    for element in root.iter():
+        name = _xml_name(element)
+        if name in {"energy_values", "energy-grid", "energygrid"}:
+            energies = _xml_numbers(element.text, "energy grid")
+        elif name in {"data", "projected", "projection", "orbital"}:
+            text = element.text or ""
+            if text.strip():
+                projected.append(_xml_numbers(text, "orbital payload"))
+    if energies is None or len(energies) < 2:
+        raise ValueError("PDOS energy grid is missing or truncated")
+    if any(right <= left for left, right in zip(energies, energies[1:])):
+        raise ValueError("PDOS energy grid is not strictly monotonic")
+    if expected_points is not None and len(energies) != expected_points:
+        raise ValueError("PDOS energy grid length is inconsistent with the requested sampling")
+    if not projected:
+        raise ValueError("PDOS orbital/projected payload is missing")
+    if any(len(values) % len(energies) for values in projected):
+        raise ValueError("PDOS orbital payload is inconsistent with the energy grid")
+    return {"rows": len(energies), "orbitals": len(projected), "energy_min": energies[0], "energy_max": energies[-1]}
 
 
 def validate_property_output(path: Path, property_name: str, *, expected_points: int | None = None) -> dict[str, Any]:

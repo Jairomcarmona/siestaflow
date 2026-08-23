@@ -70,6 +70,7 @@ class ElectronicStateSource:
     state_content_sha256: str
     final_fdf_sha256: str
     density_matrix_sha256: str
+    parent_scientific_identity_sha256: str
     label: str
     authority: ScientificAuthority
     pseudopotentials: Mapping[str, Path]
@@ -110,15 +111,28 @@ class ElectronicStateSource:
         dm_sha = sha256_path(density_matrix)
         if dm_sha != str(dm.get("sha256", "")):
             raise ValueError("M7 density-matrix SHA-256 does not match electronic-state evidence")
+        parent_identity = str(final.get("scientific_identity_sha256", "")).strip().lower()
+        if len(parent_identity) != 64:
+            raise ValueError("M7 electronic-state lacks final-SCF scientific identity evidence")
+        try:
+            int(parent_identity, 16)
+        except ValueError as exc:
+            raise ValueError("M7 final-SCF scientific identity is invalid") from exc
         # Resolving the closure and pseudos here rejects include escapes,
         # incomplete closure bytes, and pseudo mismatches before compilation.
         effective = resolve_effective_fdf(final_fdf)
         pseudos = resolve_pseudopotentials(effective.source_root, effective_species(effective), pseudo_manifest)
+        recomputed = build_scientific_identity(final_fdf, pseudo_manifest=pseudo_manifest)
+        if recomputed.fingerprint != parent_identity:
+            raise ValueError("M7 final-SCF scientific identity does not match M6 evidence")
         validate_property_neutral_parent(final_fdf)
         return cls(
-            state_path, final_fdf, density_matrix, pseudo_manifest.resolve() if pseudo_manifest else None,
-            sha256_path(state_path), envelope.content_sha256, final_sha, dm_sha,
-            label, authority, dict(pseudos),
+            state_path=state_path, final_fdf=final_fdf, density_matrix=density_matrix,
+            pseudo_manifest=pseudo_manifest.resolve() if pseudo_manifest else None,
+            state_file_sha256=sha256_path(state_path), state_content_sha256=envelope.content_sha256,
+            final_fdf_sha256=final_sha, density_matrix_sha256=dm_sha,
+            parent_scientific_identity_sha256=parent_identity, label=label,
+            authority=authority, pseudopotentials=dict(pseudos),
         )
 
     def identity_component(self) -> str:
@@ -127,6 +141,7 @@ class ElectronicStateSource:
             "state_file_sha256": self.state_file_sha256,
             "state_content_sha256": self.state_content_sha256,
             "density_matrix_sha256": self.density_matrix_sha256,
+            "parent_scientific_identity_sha256": self.parent_scientific_identity_sha256,
         })
 
     def verify(self) -> "ElectronicStateSource":
@@ -148,6 +163,7 @@ class ElectronicStateSource:
             "final_fdf_sha256": self.final_fdf_sha256,
             "density_matrix_filename": self.density_matrix.name,
             "density_matrix_sha256": self.density_matrix_sha256,
+            "scientific_identity_sha256": self.parent_scientific_identity_sha256,
         }
 
 
