@@ -8,7 +8,6 @@ are expanded at their position and the first spelling of a label wins.
 from __future__ import annotations
 
 import hashlib
-import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
@@ -19,11 +18,6 @@ from .models import FDFBlock, FDFDocument, FDFInclude, FDFScalar, normalize_labe
 
 def _sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def _read_text(path: Path) -> str:
-    with path.open("r", encoding="utf-8", errors="surrogateescape", newline="") as handle:
-        return handle.read()
 
 
 def _safe_path(root: Path, owner: Path, target: str) -> Path:
@@ -200,19 +194,19 @@ def materialize_effective_fdf(
     original = resolve_effective_fdf(source)
     destination_root = destination_root.resolve()
     all_files = original.closure_files
+
     def destination_for(source_path: Path) -> Path:
         if source_path.resolve() == original.root_fdf and primary_destination:
-            return destination_root / primary_destination
+            relative = Path(primary_destination)
+            if relative.is_absolute() or ".." in relative.parts:
+                raise ValueError("primary destination must remain within the rendered closure")
+            return destination_root / relative
         return destination_root / source_path.relative_to(original.source_root)
 
-    existing_differences: set[Path] = set()
-    for relative, source_path in all_files.items():
-        destination = destination_for(source_path)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        if destination.exists() and _sha(destination) != _sha(source_path):
-            existing_differences.add(destination)
-        if not destination.exists():
-            shutil.copy2(source_path, destination)
+    destination_map = {source_path.resolve(): destination_for(source_path) for source_path in all_files.values()}
+    destinations = list(destination_map.values())
+    if len({path.resolve() for path in destinations}) != len(destinations):
+        raise ValueError("effective FDF destination collision")
 
     replacements: dict[Path, dict[int, str]] = {}
     appends: list[str] = []
@@ -239,26 +233,37 @@ def materialize_effective_fdf(
         else:
             replacements.setdefault(occurrence.owner, {})[occurrence.node_index] = rendered
 
-    allowed_differences = {destination_for(owner) for owner in replacements}
-    if appends:
-        allowed_differences.add(destination_for(original.root_fdf))
-    collisions = existing_differences - allowed_differences
-    if collisions:
-        raise ValueError(f"immutable effective closure collision: {sorted(map(str, collisions))[0]}")
-
+    expected_bytes = {source_path.resolve(): source_path.read_bytes() for source_path in all_files.values()}
     for owner, owner_replacements in replacements.items():
         document = original.documents[owner]
         expected = "".join(owner_replacements.get(index, node.raw) for index, node in enumerate(document.nodes))
-        target = destination_for(owner)
-        if target.exists() and _read_text(target) != document.render():
-            if _read_text(target) != expected:
-                raise ValueError(f"immutable effective FDF collision: {target}")
-        target.write_text(expected, encoding="utf-8", errors="surrogateescape", newline="")
+        expected_bytes[owner.resolve()] = expected.encode("utf-8", errors="surrogateescape")
     if appends:
-        root_target = destination_for(original.root_fdf)
-        original_text = _read_text(root_target)
-        expected = original_text.rstrip("\r\n") + "\n" + "".join(appends)
-        root_target.write_text(expected, encoding="utf-8", errors="surrogateescape", newline="")
+        root_bytes = expected_bytes[original.root_fdf]
+        root_text = root_bytes.decode("utf-8", errors="surrogateescape")
+        expected_bytes[original.root_fdf] = (
+            root_text.rstrip("\r\n") + "\n" + "".join(appends)
+        ).encode("utf-8", errors="surrogateescape")
+
+    # Preflight the entire destination state before creating directories or
+    # writing bytes.  Modified destinations may contain source or expected
+    # bytes; unmodified files may contain only source bytes.
+    for source_path, destination in destination_map.items():
+        if not destination.exists():
+            continue
+        current = destination.read_bytes()
+        source_bytes = source_path.read_bytes()
+        expected = expected_bytes[source_path]
+        permitted = {source_bytes, expected} if expected != source_bytes else {source_bytes}
+        if current not in permitted:
+            raise ValueError(f"immutable effective closure collision: {destination}")
+
+    for source_path, destination in destination_map.items():
+        expected = expected_bytes[source_path]
+        if destination.exists() and destination.read_bytes() == expected:
+            continue
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(expected)
 
     rendered = resolve_effective_fdf(destination_for(original.root_fdf))
     for label, (value, unit) in expected_scalars.items():
