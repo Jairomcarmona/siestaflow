@@ -111,6 +111,21 @@ def test_siesta_defaults_and_variable_cell_logicals_fail_closed(tmp_path: Path) 
     assert not (tmp_path / "blocked" / "work" / "relax" / "attempt-0001" / "launched").exists()
 
 
+def test_relaxation_uses_effective_included_geometry_and_safety_values(tmp_path: Path) -> None:
+    root = tmp_path / "closure"; root.mkdir()
+    fdf = root / "input.fdf"
+    fdf.write_text("%include settings.fdf\nMD.VariableCell false\n", encoding="utf-8")
+    (root / "settings.fdf").write_text(FDF.replace("SystemLabel relax", "SystemLabel included-label").replace("MD.VariableCell F", "MD.VariableCell .true."), encoding="utf-8")
+    (root / "C.psf").write_text("pseudo\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="variable-cell"):
+        validate_relaxation(fdf)
+
+    safe = (root / "settings.fdf").read_text(encoding="utf-8").replace("MD.VariableCell .true.", "MD.VariableCell false")
+    (root / "settings.fdf").write_text(safe, encoding="utf-8")
+    geometry = geometry_from_fdf(fdf)
+    assert geometry["atoms"][0]["coordinates"] == [1.0, 2.0, 3.0]
+
+
 def test_canonical_closure_stages_includes_pseudos_and_normalized_label(tmp_path: Path) -> None:
     root = tmp_path / "scientific"; subdir = root / "subdir"; subdir.mkdir(parents=True)
     fdf = _input(root, FDF.replace("SystemLabel relax", "System_Label closure") + "%include subdir/settings.fdf\n")

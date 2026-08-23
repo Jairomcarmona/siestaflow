@@ -178,14 +178,25 @@ class ConvergenceProtocol:
         root = output_root.resolve()
         root.mkdir(parents=True, exist_ok=True)
         variants = self._variants(campaign)
+        scan_name, scan = campaign.scanned_parameter
+        fixed = {
+            name: (parameter.resolved_values()[0], parameter.unit)
+            for name, parameter in campaign.parameters.items()
+            if parameter.mode in {ParameterMode.FIXED, ParameterMode.INHERIT}
+        }
         paths: list[dict[str, Any]] = []
         for index, item in enumerate(variants, 1):
             point = root / f"point_{index:03d}"
             point.mkdir(parents=True, exist_ok=True)
-            fdf = point / "input.fdf"
-            _write_if_equal_or_new(fdf, item.text)
+            rendered = self.adapter.materialize_effective(
+                campaign.system.fdf, point,
+                resolved={**fixed, scan_name: (item.value, scan.unit)},
+                engine_options=campaign.engine_options,
+                primary_destination="input.fdf",
+            )
+            fdf = rendered.root_fdf
             generated_manifest = self._copy_dependencies(campaign, point)
-            paths.append({"node_id": f"point_{index:03d}", "value": item.value, "fdf": str(fdf), "sha256": item.sha256, "pseudo_manifest": str(generated_manifest) if generated_manifest else None})
+            paths.append({"node_id": f"point_{index:03d}", "value": item.value, "fdf": str(fdf), "sha256": _sha(fdf), "closure_sha256": rendered.closure_sha256, "closure_files": rendered.file_sha256, "pseudo_manifest": str(generated_manifest) if generated_manifest else None})
         manifest = {"schema_version": "1.0", "campaign_id": campaign.campaign_id, "campaign_fingerprint": campaign.fingerprint, "parameter": campaign.scanned_parameter[0], "points": paths, "dag": _dag(len(paths))}
         _atomic_json(root / "render-manifest.json", manifest)
         return {"status": "RENDERED", "root": str(root), "manifest": str(root / "render-manifest.json"), "points": paths, "executed": False, "submitted": False}
@@ -350,29 +361,6 @@ class ConvergenceProtocol:
                     raise ValueError(f"render dependency collision: {destination}")
                 if not destination.exists():
                     shutil.copy2(path, destination)
-        pending = [campaign.system.fdf]
-        visited: set[Path] = set()
-        while pending:
-            source = pending.pop()
-            if source in visited:
-                continue
-            visited.add(source)
-            document = FDFParser().parse_path(source)
-            for node in document.nodes:
-                relative = node.target if isinstance(node, FDFInclude) else node.redirected_to if isinstance(node, FDFBlock) else None
-                if not relative:
-                    continue
-                dependency = (source_root / relative).resolve()
-                try:
-                    destination = target / dependency.relative_to(source_root.resolve())
-                except ValueError as exc:
-                    raise ValueError(f"FDF dependency escapes campaign root: {relative}") from exc
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                if destination.exists() and _sha(destination) != _sha(dependency):
-                    raise ValueError(f"render dependency collision: {destination}")
-                if not destination.exists():
-                    shutil.copy2(dependency, destination)
-                pending.append(dependency)
         if campaign.system.pseudo_manifest is None:
             return None
         data = _load_structured(campaign.system.pseudo_manifest)

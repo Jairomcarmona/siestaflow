@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from .fdf_parser import FDFParser
+from .effective_fdf import resolve_effective_fdf
 from .models import FDFBlock, FDFDocument, normalize_label
 
 
@@ -58,14 +59,9 @@ def render_geometry(text: str, geometry: Mapping[str, Any]) -> str:
         raise ValueError("invalid qraft.geometry payload")
     if any(not isinstance(row, list) or len(row) != 3 for row in cell):
         raise ValueError("invalid qraft.geometry cell")
-    lattice = "%block LatticeVectors\n" + "".join(" ".join(_number(item) for item in row) + "\n" for row in cell) + "%endblock LatticeVectors\n"
-    rows = []
-    for atom in atoms:
-        coordinates = atom.get("coordinates") if isinstance(atom, Mapping) else None
-        if not isinstance(coordinates, list) or len(coordinates) != 3:
-            raise ValueError("invalid qraft.geometry atom coordinates")
-        rows.append(" ".join(_number(item) for item in coordinates) + f" {int(atom['species_index'])}\n")
-    coordinates_block = "%block AtomicCoordinatesAndAtomicSpecies\n" + "".join(rows) + "%endblock AtomicCoordinatesAndAtomicSpecies\n"
+    updates = geometry_updates(geometry)
+    lattice = "%block LatticeVectors\n" + str(updates["blocks"]["LatticeVectors"]) + "\n%endblock LatticeVectors\n"
+    coordinates_block = "%block AtomicCoordinatesAndAtomicSpecies\n" + str(updates["blocks"]["AtomicCoordinatesAndAtomicSpecies"]) + "\n%endblock AtomicCoordinatesAndAtomicSpecies\n"
     rendered = _replace_scalar(text, "LatticeConstant", "LatticeConstant 1 Ang")
     rendered = _replace_block(rendered, "LatticeVectors", lattice)
     rendered = _replace_scalar(rendered, "AtomicCoordinatesFormat", "AtomicCoordinatesFormat Ang")
@@ -74,9 +70,33 @@ def render_geometry(text: str, geometry: Mapping[str, Any]) -> str:
     return rendered.rstrip("\r\n") + "\n"
 
 
+def geometry_updates(geometry: Mapping[str, Any]) -> dict[str, Mapping[str, object]]:
+    """Canonical FDF values for a verified cartesian-Ang geometry."""
+
+    cell = geometry.get("cell")
+    atoms = geometry.get("atoms")
+    if not isinstance(cell, list) or len(cell) != 3 or not isinstance(atoms, list) or not atoms:
+        raise ValueError("invalid qraft.geometry payload")
+    if any(not isinstance(row, list) or len(row) != 3 for row in cell):
+        raise ValueError("invalid qraft.geometry cell")
+    lattice = "".join(" ".join(_number(item) for item in row) + "\n" for row in cell).rstrip("\n")
+    rows = []
+    for atom in atoms:
+        coordinates = atom.get("coordinates") if isinstance(atom, Mapping) else None
+        if not isinstance(coordinates, list) or len(coordinates) != 3:
+            raise ValueError("invalid qraft.geometry atom coordinates")
+        rows.append(" ".join(_number(item) for item in coordinates) + f" {int(atom['species_index'])}")
+    return {
+        "scalars": {
+            "LatticeConstant": (1, "Ang"), "AtomicCoordinatesFormat": ("Ang", None), "NumberOfAtoms": (len(atoms), None),
+        },
+        "blocks": {"LatticeVectors": lattice, "AtomicCoordinatesAndAtomicSpecies": "\n".join(rows)},
+    }
+
+
 def validate_final_scf(path: Path) -> None:
-    document = FDFParser().parse_path(path)
-    steps = _scalar(document, "MD.Steps")
+    effective = resolve_effective_fdf(path)
+    steps = effective.scalar("MD.Steps")
     if steps is not None:
         try:
             if int(steps.value) != 0:
@@ -86,12 +106,11 @@ def validate_final_scf(path: Path) -> None:
                 raise
             raise ValueError("invalid MD.Steps") from exc
     for name in ("MD.VariableCell", "Harris.Functional", "UseStructFile"):
-        scalar = _scalar(document, name)
+        scalar = effective.scalar(name)
         if scalar is not None and _logical(scalar.value):
             raise ValueError(f"M6 final SCF rejects {name}=true")
 
 
 def system_label(path: Path) -> str:
-    document = FDFParser().parse_path(path)
-    scalar = _scalar(document, "SystemLabel")
+    scalar = resolve_effective_fdf(path).scalar("SystemLabel")
     return scalar.value.strip() if scalar is not None and scalar.value.strip() else "siesta"

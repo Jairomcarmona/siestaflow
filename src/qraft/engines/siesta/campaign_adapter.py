@@ -10,6 +10,7 @@ from typing import Mapping
 
 from ...campaign_spec import EngineOption, ScientificValue
 from .fdf_parser import FDFParser
+from .effective_fdf import MaterializedEffectiveFDF, materialize_effective_fdf
 from .fdf_registry import FDFRegistry
 from .models import normalize_label
 
@@ -103,6 +104,46 @@ class SiestaCampaignAdapter:
             text = self._replace_scalar(text, option.name, option.value, option.unit)
         text = text.rstrip("\r\n") + "\n"
         return text
+
+    def materialize_effective(
+        self,
+        base: Path,
+        destination_root: Path,
+        *,
+        resolved: Mapping[str, tuple[ScientificValue, str | None]],
+        engine_options: tuple[EngineOption, ...] = (),
+        block_updates: Mapping[str, str] = {},
+        scalar_updates: Mapping[str, tuple[object, str | None]] = {},
+        primary_destination: str | None = None,
+    ) -> MaterializedEffectiveFDF:
+        """Apply the adapter's governed values to the effective FDF closure."""
+
+        scalars = dict(scalar_updates)
+        blocks = dict(block_updates)
+        for name, (value, unit) in sorted(resolved.items()):
+            self.validate_parameter(name, unit)
+            if name == "kpoints":
+                if not (isinstance(value, tuple) and len(value) == 3 and all(isinstance(item, int) and item > 0 for item in value)):
+                    raise ValueError("kpoints values must be positive [kx, ky, kz] grids")
+                blocks["kgrid.MonkhorstPack"] = "".join((
+                    f"  {value[0]} 0 0 0.0\n", f"  0 {value[1]} 0 0.0\n", f"  0 0 {value[2]} 0.0",
+                ))
+                continue
+            if name in {"mesh_cutoff", "basis_energy_shift"} and (not isinstance(value, (int, float)) or isinstance(value, bool) or value <= 0):
+                raise ValueError(f"{name} must be a positive number")
+            scalars[self._SCALARS[name][0]] = (value, unit)
+        for option in engine_options:
+            if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_.-]*", option.name):
+                raise ValueError(f"invalid SIESTA engine option: {option.name}")
+            reserved = {normalize_label(item[0]) for item in self._SCALARS.values()}
+            reserved.add(normalize_label("kgrid.MonkhorstPack"))
+            if normalize_label(option.name) in reserved:
+                raise ValueError(f"engine option conflicts with governed campaign parameter: {option.name}")
+            entry = self.registry.get(option.name)
+            if entry is None or entry.kind != "scalar":
+                raise ValueError(f"SIESTA engine option is not a registered scalar: {option.name}")
+            scalars[option.name] = (option.value, option.unit)
+        return materialize_effective_fdf(base, destination_root, scalar_updates=scalars, block_updates=blocks, primary_destination=primary_destination)
 
     def _apply(
         self, text: str, name: str, value: ScientificValue, unit: str | None

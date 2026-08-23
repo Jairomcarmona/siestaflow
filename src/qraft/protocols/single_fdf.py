@@ -41,7 +41,8 @@ from ..core import (
     TechnicalValidation,
 )
 from ..engines.siesta.fdf_parser import FDFParser
-from ..engines.siesta.input_closure import collect_fdf_files, resolve_pseudopotentials, resolve_scientific_input_closure
+from ..engines.siesta.effective_fdf import resolve_effective_fdf
+from ..engines.siesta.input_closure import collect_fdf_files, effective_species, resolve_pseudopotentials, resolve_scientific_input_closure
 from ..engines.siesta.input_validator import SiestaInputValidator
 from ..engines.siesta.models import FDFBlock, FDFInclude, OutputClassification
 from ..engines.siesta.output_parser import SiestaOutputParser
@@ -266,25 +267,24 @@ def build_scientific_identity(
     *,
     pseudo_manifest: Path | None = None,
 ) -> ScientificIdentity:
-    root, files, documents = _collect_fdf_files(fdf)
-    species = _species(documents)
-    pseudos = _resolve_pseudopotentials(root, species, pseudo_manifest)
-    included_hashes = {name: _sha_path(path) for name, path in files.items()}
+    view = resolve_effective_fdf(fdf)
+    species = effective_species(view)
+    pseudos = _resolve_pseudopotentials(view.source_root, species, pseudo_manifest)
+    included_hashes = {name: _sha_path(path) for name, path in view.closure_files.items()}
     effective = _canonical_sha(included_hashes)
+
+    def payloads(labels: set[str]) -> list[str]:
+        normalized = {"".join(c.lower() for c in name if c not in ".-_ ") for name in labels}
+        return [
+            occurrence.raw
+            for key, occurrence in sorted(view.occurrences.items())
+            if key in normalized
+        ]
+
     geometry = _canonical_sha(
-        _block_payloads(
-            documents,
-            {"LatticeVectors", "AtomicCoordinatesAndAtomicSpecies", "AtomicCoordinates"},
-        )
-        + _scalar_payloads(
-            documents,
-            {"LatticeConstant", "AtomicCoordinatesFormat", "NumberOfAtoms"},
-        )
+        payloads({"LatticeVectors", "AtomicCoordinatesAndAtomicSpecies", "AtomicCoordinates", "LatticeConstant", "AtomicCoordinatesFormat", "NumberOfAtoms"})
     )
-    species_mapping = _canonical_sha(
-        _block_payloads(documents, {"ChemicalSpeciesLabel"})
-        + _scalar_payloads(documents, {"NumberOfSpecies"})
-    )
+    species_mapping = _canonical_sha(payloads({"ChemicalSpeciesLabel", "NumberOfSpecies"}))
     component_groups = {
         "charge_spin": {"NetCharge", "Spin", "SpinPolarized", "TotalSpin"},
         "basis": {"PAO.BasisSize", "PAO.Basis", "PAO.EnergyShift", "PAO.SplitNorm"},
@@ -294,9 +294,7 @@ def build_scientific_identity(
         "dft_u_projectors": {"LDAU.ProjectorGenerationMethod", "LDAU.Proj", "DM.Projectors"},
     }
     components = {
-        name: _canonical_sha(
-            _scalar_payloads(documents, labels) + _block_payloads(documents, labels)
-        )
+        name: _canonical_sha(payloads(labels))
         for name, labels in component_groups.items()
     }
     return ScientificIdentity(

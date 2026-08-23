@@ -99,6 +99,18 @@ def test_identity_changes_only_for_scientific_inputs(tmp_path: Path) -> None:
     assert fdf_changed.fingerprint != first.fingerprint
 
 
+def test_identity_uses_first_effective_included_scientific_values(tmp_path: Path) -> None:
+    fdf = inputs(tmp_path)
+    (tmp_path / "defaults.fdf").write_text(
+        "Mesh.Cutoff 100 Ry\n%block ChemicalSpeciesLabel\n1 6 C\n%endblock ChemicalSpeciesLabel\n",
+        encoding="utf-8",
+    )
+    fdf.write_text("%include defaults.fdf\n" + FDF.replace("MeshCutoff 200 Ry\n", "").replace("%block ChemicalSpeciesLabel\n1 6 C\n%endblock ChemicalSpeciesLabel\n", ""), encoding="utf-8")
+    first = build_scientific_identity(fdf)
+    (tmp_path / "defaults.fdf").write_text((tmp_path / "defaults.fdf").read_text(encoding="utf-8").replace("100 Ry", "250 Ry"), encoding="utf-8")
+    assert build_scientific_identity(fdf).components["mesh_cutoff"] != first.components["mesh_cutoff"]
+
+
 def test_execution_overrides_do_not_change_identity_or_dag(tmp_path: Path) -> None:
     fdf = inputs(tmp_path)
     first = build_fdf_plan(

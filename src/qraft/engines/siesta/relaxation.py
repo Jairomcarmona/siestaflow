@@ -14,6 +14,7 @@ from ...contracts import ContractEnvelope, SCIENTIFIC_ARTIFACT
 from ...core import TechnicalValidation
 from ...models import DecisionStatus
 from .adapter import SiestaEngineAdapter
+from .effective_fdf import EffectiveFDF, resolve_effective_fdf
 from .input_closure import resolve_scientific_input_closure
 from .models import ArtifactDescriptor, FDFBlock, FDFDocument, FDFInclude, FDFScalar, InputValidationResult, normalize_label
 
@@ -32,6 +33,23 @@ def _scalar(document: FDFDocument, name: str) -> FDFScalar | None:
 
 def _block(document: FDFDocument, name: str) -> FDFBlock | None:
     return next((item for item in document.blocks() if normalize_label(item.name) == normalize_label(name)), None)
+
+
+def _effective(value: FDFDocument | Path) -> EffectiveFDF | None:
+    if isinstance(value, Path):
+        return resolve_effective_fdf(value)
+    source = Path(value.source)
+    return resolve_effective_fdf(source) if source.is_file() else None
+
+
+def _effective_scalar(value: FDFDocument | Path, name: str) -> FDFScalar | None:
+    effective = _effective(value)
+    return effective.scalar(name) if effective is not None else _scalar(value, name)  # type: ignore[arg-type]
+
+
+def _effective_block(value: FDFDocument | Path, name: str) -> FDFBlock | None:
+    effective = _effective(value)
+    return effective.block(name) if effective is not None else _block(value, name)  # type: ignore[arg-type]
 
 
 def _float(value: str, field: str) -> float:
@@ -60,20 +78,19 @@ def _matvec(cell: list[list[float]], vector: list[float]) -> list[float]:
 
 
 def geometry_from_fdf(path: Path) -> dict[str, Any]:
-    from .fdf_parser import FDFParser
-
-    document = FDFParser().parse_path(path)
-    lattice = _block(document, "LatticeVectors")
-    coordinates = _block(document, "AtomicCoordinatesAndAtomicSpecies")
+    effective = resolve_effective_fdf(path)
+    lattice = effective.block("LatticeVectors")
+    coordinates = effective.block("AtomicCoordinatesAndAtomicSpecies")
     if lattice is None or coordinates is None or not lattice.closed or not coordinates.closed:
         raise ValueError("M5 requires LatticeVectors and AtomicCoordinatesAndAtomicSpecies")
-    constant = _scalar(document, "LatticeConstant")
+    constant = effective.scalar("LatticeConstant")
     scale = _unit_factor(constant.unit if constant else "Ang") * (_float(constant.value, "LatticeConstant") if constant else 1.0)
     rows = [line.split() for line in lattice.body_lines if line.strip()]
     if len(rows) != 3 or any(len(row) < 3 for row in rows):
         raise ValueError("LatticeVectors must contain three vectors")
     cell = [[_float(row[index], "lattice vector") * scale for index in range(3)] for row in rows]
-    fmt = (_scalar(document, "AtomicCoordinatesFormat").value if _scalar(document, "AtomicCoordinatesFormat") else "Bohr").casefold()
+    coordinates_format = effective.scalar("AtomicCoordinatesFormat")
+    fmt = (coordinates_format.value if coordinates_format else "Bohr").casefold()
     atoms = []
     for position, line in enumerate(coordinates.body_lines, 1):
         fields = line.split()
@@ -93,10 +110,10 @@ def geometry_from_fdf(path: Path) -> dict[str, Any]:
         else:
             raise ValueError(f"unsupported AtomicCoordinatesFormat for M5: {fmt}")
         atoms.append({"index": position, "species_index": int(fields[3]), "coordinates": cartesian})
-    declared = _scalar(document, "NumberOfAtoms")
+    declared = effective.scalar("NumberOfAtoms")
     if declared is not None and int(declared.value) != len(atoms):
         raise ValueError("NumberOfAtoms does not match coordinate count")
-    return {"cell": cell, "atoms": atoms, "source_fdf_sha256": document.original_sha256}
+    return {"cell": cell, "atoms": atoms, "source_fdf_sha256": effective.closure_sha256}
 
 
 def geometry_envelope(*, artifact_id: str, geometry: Mapping[str, Any], provenance: Mapping[str, Any]) -> dict[str, Any]:
@@ -161,17 +178,17 @@ def _fdf_logical(value: str) -> bool:
     raise ValueError(f"invalid FDF logical value: {value}")
 
 
-def validate_relaxation(document: FDFDocument) -> float:
-    run_type = _scalar(document, "MD.TypeOfRun")
+def validate_relaxation(document: FDFDocument | Path) -> float:
+    run_type = _effective_scalar(document, "MD.TypeOfRun")
     if run_type is None or run_type.value.strip().upper() not in {"CG", "BROYDEN", "FIRE"}:
         raise ValueError("M5 requires MD.TypeOfRun CG, Broyden, or FIRE")
-    variable = _scalar(document, "MD.VariableCell")
+    variable = _effective_scalar(document, "MD.VariableCell")
     if variable is not None and _fdf_logical(variable.value):
         raise ValueError("M5 V1 rejects variable-cell relaxation")
-    steps = _scalar(document, "MD.Steps")
+    steps = _effective_scalar(document, "MD.Steps")
     if steps is None or int(steps.value) <= 0:
         raise ValueError("M5 requires positive MD.Steps")
-    tolerance = _scalar(document, "MD.MaxForceTol")
+    tolerance = _effective_scalar(document, "MD.MaxForceTol")
     if tolerance is None or _float(tolerance.value, "MD.MaxForceTol") <= 0:
         raise ValueError("M5 requires explicit positive MD.MaxForceTol")
     return _float(tolerance.value, "MD.MaxForceTol") * _unit_factor(tolerance.unit, force=True)
@@ -226,7 +243,7 @@ class SiestaRelaxationCapability:
     def discover_artifacts(self, workspace: Path, **kwargs: Any):
         settings = dict(kwargs.get("settings", {}))
         document = self.base.inspect_input(workspace / "input.fdf")
-        label = _scalar(document, "SystemLabel")
+        label = _effective_scalar(workspace / "input.fdf", "SystemLabel")
         struct = workspace / f"{label.value.strip() if label else 'siesta'}.STRUCT_OUT"
         found = list(self.base.discover_artifacts(workspace, **kwargs))
         if not struct.is_file():

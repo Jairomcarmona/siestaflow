@@ -12,7 +12,7 @@ from ..campaign_spec import CampaignSpec
 from ..contracts import CapabilityRegistry, ContractEnvelope, SCIENTIFIC_ARTIFACT
 from ..contracts.scientific import ScientificArtifactReference, ScientificAuthority
 from ..engines.siesta.campaign_adapter import SiestaCampaignAdapter
-from ..engines.siesta.ground_state import render_geometry, system_label, validate_final_scf
+from ..engines.siesta.ground_state import geometry_updates, system_label, validate_final_scf
 from ..engines.siesta.input_closure import resolve_scientific_input_closure
 from ..engines.siesta.relaxation import geometry_from_fdf
 from ..execution.capability_plugins import SIESTA_ENGINE_CAPABILITY, register_siesta_engine
@@ -122,11 +122,10 @@ class GroundStateProtocol:
         except (OSError, ValueError, KeyError, json.JSONDecodeError) as exc:
             return self._blocked("handoff-validation", convergence=convergence, reason=str(exc))
         relaxation_template_sha = _sha(relaxation_fdf)
-        relaxation_text = self.adapter.render_resolved(relaxation_fdf, resolved=resolved)
         relaxation_input = root / "handoff" / "relaxation" / "input.fdf"
-        _write_text_immutable(relaxation_input, relaxation_text)
-        _stage_template_closure(relaxation_fdf, relaxation_input, authoritative_manifest)
-        _json(root / "handoff" / "relaxation" / "input-evidence.json", {"template_sha256": relaxation_template_sha, "numerical_profile_file_sha256": profile_sha, "numerical_profile_content_sha256": profile_raw["content_sha256"], "rendered_fdf_sha256": _sha(relaxation_input)}, immutable=True)
+        relaxation_render = self.adapter.materialize_effective(relaxation_fdf, relaxation_input.parent, resolved=resolved, primary_destination="input.fdf")
+        _stage_template_pseudos(relaxation_fdf, relaxation_input, authoritative_manifest)
+        _json(root / "handoff" / "relaxation" / "input-evidence.json", {"template_sha256": relaxation_template_sha, "numerical_profile_file_sha256": profile_sha, "numerical_profile_content_sha256": profile_raw["content_sha256"], "rendered_fdf_sha256": _sha(relaxation_input), "rendered_closure_sha256": relaxation_render.closure_sha256, "rendered_closure_files": relaxation_render.file_sha256}, immutable=True)
         relaxation = self.relaxation.run(relaxation_input, pseudo_manifest=authoritative_manifest, profile=profile, project_config=project_config, recipe=recipe, overrides=overrides, runs_root=root / "stages" / "relaxation", force_new_attempt=force_new_attempt)
         if relaxation.get("technical_validation") != "PASS" or relaxation.get("scientific_decision") != "CONVERGED" or relaxation.get("geometry_reference") is None:
             return self._blocked("relaxation", convergence=convergence, relaxation=relaxation)
@@ -140,15 +139,15 @@ class GroundStateProtocol:
         except (OSError, ValueError, KeyError, json.JSONDecodeError) as exc:
             return self._blocked("handoff-validation", convergence=convergence, relaxation=relaxation, reason=str(exc))
         final_template_sha = _sha(final_scf_fdf)
-        final_text = render_geometry(self.adapter.render_resolved(final_scf_fdf, resolved=resolved), geometry)
         final_input = root / "handoff" / "final-scf" / "input.fdf"
-        _write_text_immutable(final_input, final_text)
-        _stage_template_closure(final_scf_fdf, final_input, authoritative_manifest)
+        geometry_render = geometry_updates(geometry)
+        final_render = self.adapter.materialize_effective(final_scf_fdf, final_input.parent, resolved=resolved, scalar_updates=geometry_render["scalars"], block_updates=geometry_render["blocks"], primary_destination="input.fdf")
+        _stage_template_pseudos(final_scf_fdf, final_input, authoritative_manifest)
         try:
             validate_final_scf(final_input)
         except ValueError as exc:
             return self._blocked("final-scf", convergence=convergence, relaxation=relaxation, reason=str(exc))
-        _json(root / "handoff" / "final-scf" / "input-evidence.json", {"template_sha256": final_template_sha, "numerical_profile_file_sha256": profile_sha, "numerical_profile_content_sha256": profile_raw["content_sha256"], "geometry_file_sha256": geometry_sha, "geometry_content_sha256": geometry_raw["content_sha256"], "rendered_fdf_sha256": _sha(final_input)}, immutable=True)
+        _json(root / "handoff" / "final-scf" / "input-evidence.json", {"template_sha256": final_template_sha, "numerical_profile_file_sha256": profile_sha, "numerical_profile_content_sha256": profile_raw["content_sha256"], "geometry_file_sha256": geometry_sha, "geometry_content_sha256": geometry_raw["content_sha256"], "rendered_fdf_sha256": _sha(final_input), "rendered_closure_sha256": final_render.closure_sha256, "rendered_closure_files": final_render.file_sha256}, immutable=True)
         final = self._run_final_scf(final_input, pseudo_manifest=authoritative_manifest, profile=profile, project_config=project_config, recipe=recipe, overrides=overrides, root=root / "stages" / "final-scf", force_new_attempt=force_new_attempt)
         if final.get("technical_validation") != "PASS" or not final.get("scf_started") or not final.get("scf_converged") or not final.get("density_matrix"):
             return self._blocked("final-scf", convergence=convergence, relaxation=relaxation, final_scf=final)
@@ -202,6 +201,21 @@ def _stage_template_closure(template: Path, rendered: Path, pseudo_manifest: Pat
     closure = resolve_scientific_input_closure(template, pseudo_manifest=pseudo_manifest)
     for entry in closure.entries:
         if entry.name == "fdf":
+            continue
+        target = rendered.parent / entry.destination
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if target.exists() and _sha(target) != _sha(entry.source):
+            raise ValueError(f"rendered input closure collision: {target}")
+        if not target.exists():
+            shutil.copy2(entry.source, target)
+
+
+def _stage_template_pseudos(template: Path, rendered: Path, pseudo_manifest: Path | None) -> None:
+    """Keep pseudo bytes with a rendered closure without re-copying FDF files."""
+
+    closure = resolve_scientific_input_closure(template, pseudo_manifest=pseudo_manifest, include_pseudo_manifest=True)
+    for entry in closure.entries:
+        if not (entry.name.startswith("pseudo-")):
             continue
         target = rendered.parent / entry.destination
         target.parent.mkdir(parents=True, exist_ok=True)

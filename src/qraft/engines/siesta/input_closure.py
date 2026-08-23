@@ -10,8 +10,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from ...contracts import ArtifactRole
-from .fdf_parser import FDFParser
-from .models import FDFBlock, FDFInclude
+from .effective_fdf import EffectiveFDF, resolve_effective_fdf
 
 
 def sha_path(path: Path) -> str:
@@ -34,38 +33,10 @@ def _safe_scientific_path(root: Path, owner: Path, target: str) -> Path:
 
 
 def collect_fdf_files(root_fdf: Path) -> tuple[Path, dict[str, Path], list[Any]]:
-    """Resolve the primary FDF plus its recursive includes/redirections."""
+    """Compatibility view of FDF files, now resolved with lexical semantics."""
 
-    root_fdf = root_fdf.resolve()
-    if not root_fdf.is_file():
-        raise FileNotFoundError(f"FDF does not exist: {root_fdf}")
-    root = root_fdf.parent
-    files: dict[str, Path] = {}
-    documents: list[Any] = []
-    visiting: set[Path] = set()
-
-    def visit(path: Path) -> None:
-        resolved = path.resolve()
-        if resolved in visiting:
-            raise ValueError(f"cyclic FDF include detected at {resolved}")
-        relative = resolved.relative_to(root).as_posix()
-        if relative in files:
-            return
-        visiting.add(resolved)
-        document = FDFParser().parse_path(resolved)
-        files[relative] = resolved
-        documents.append(document)
-        targets = [
-            node.target if isinstance(node, FDFInclude) else node.redirected_to
-            for node in document.nodes
-            if isinstance(node, FDFInclude) or (isinstance(node, FDFBlock) and node.redirected_to)
-        ]
-        for target in targets:
-            visit(_safe_scientific_path(root, resolved, str(target)))
-        visiting.remove(resolved)
-
-    visit(root_fdf)
-    return root, dict(sorted(files.items())), documents
+    effective = resolve_effective_fdf(root_fdf)
+    return effective.source_root, effective.fdf_files, list(effective.documents.values())
 
 
 def _block_payloads(documents: Sequence[Any], names: set[str]) -> list[str]:
@@ -85,6 +56,24 @@ def species(documents: Sequence[Any]) -> tuple[str, ...]:
             tokens = line.split("#", 1)[0].strip().split()
             if len(tokens) >= 3:
                 labels.append(tokens[2])
+    if not labels:
+        raise ValueError("ChemicalSpeciesLabel must declare at least one species")
+    if len({label.casefold() for label in labels}) != len(labels):
+        raise ValueError("ChemicalSpeciesLabel contains duplicate species labels")
+    return tuple(labels)
+
+
+def effective_species(effective: EffectiveFDF) -> tuple[str, ...]:
+    """Species are defined exclusively by the first effective FDF block."""
+
+    block = effective.block("ChemicalSpeciesLabel")
+    if block is None or not block.closed:
+        raise ValueError("ChemicalSpeciesLabel must declare at least one species")
+    labels: list[str] = []
+    for line in block.body_lines:
+        tokens = line.split("#", 1)[0].strip().split()
+        if len(tokens) >= 3:
+            labels.append(tokens[2])
     if not labels:
         raise ValueError("ChemicalSpeciesLabel must declare at least one species")
     if len({label.casefold() for label in labels}) != len(labels):
@@ -146,14 +135,19 @@ def resolve_scientific_input_closure(
 ) -> ScientificInputClosure:
     """Return canonical, non-executing source/destination bindings for SIESTA."""
 
-    root, files, documents = collect_fdf_files(fdf)
-    root_fdf = fdf.resolve()
-    pseudos = resolve_pseudopotentials(root, species(documents), pseudo_manifest)
+    effective = resolve_effective_fdf(fdf)
+    root, files = effective.source_root, effective.fdf_files
+    root_fdf = effective.root_fdf
+    pseudos = resolve_pseudopotentials(root, effective_species(effective), pseudo_manifest)
     entries = [ScientificInputEntry("fdf", root_fdf, primary_destination or root_fdf.name, ArtifactRole.INPUT, "application/x-siesta-fdf")]
     entries.extend(
         ScientificInputEntry(f"include-{index:03d}", source, relative, ArtifactRole.INPUT, "application/x-siesta-fdf")
         for index, (relative, source) in enumerate(files.items(), start=1)
         if source.resolve() != root_fdf
+    )
+    entries.extend(
+        ScientificInputEntry(f"redirect-{index:03d}", source, relative, ArtifactRole.INPUT, "application/octet-stream")
+        for index, (relative, source) in enumerate(effective.raw_dependencies.items(), start=1)
     )
     entries.extend(
         ScientificInputEntry(f"pseudo-{index:03d}", source, source.name, ArtifactRole.PSEUDOPOTENTIAL, "application/x-siesta-pseudopotential")

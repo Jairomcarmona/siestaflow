@@ -121,6 +121,18 @@ def test_render_geometry_and_static_final_scf_validation(tmp_path: Path) -> None
             validate_final_scf(path)
 
 
+def test_final_scf_rejects_effective_included_static_hazards(tmp_path: Path) -> None:
+    root = tmp_path / "effective"; root.mkdir()
+    template = root / "final.fdf"
+    template.write_text("%include defaults.fdf\nMD.Steps 0\n", encoding="utf-8")
+    (root / "defaults.fdf").write_text(BASE + "MD.Steps 4\nMD.VariableCell false\nHarris.Functional false\nUseStructFile false\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="MD.Steps"):
+        validate_final_scf(template)
+    (root / "defaults.fdf").write_text((root / "defaults.fdf").read_text(encoding="utf-8").replace("MD.Steps 4", "MD.Steps 0").replace("UseStructFile false", "UseStructFile .true."), encoding="utf-8")
+    with pytest.raises(ValueError, match="UseStructFile"):
+        validate_final_scf(template)
+
+
 def test_ground_state_final_scf_artifact_reuse_and_blocking(tmp_path: Path) -> None:
     basis, mesh, kpoints = _campaigns(tmp_path); relax, final = _templates(tmp_path)
     convergence = _Convergence(); relaxation = _Relaxation()
