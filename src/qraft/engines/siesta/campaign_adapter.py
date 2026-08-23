@@ -57,6 +57,25 @@ class SiestaCampaignAdapter:
         resolved: Mapping[str, tuple[ScientificValue, str | None]],
         engine_options: tuple[EngineOption, ...] = (),
     ) -> MaterializedFDF:
+        text = self.render_resolved(base, resolved=resolved, engine_options=engine_options)
+        digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        return MaterializedFDF(
+            scanned_name,
+            scanned_value,
+            text,
+            digest,
+            f"point-{self._slug(scanned_value)}.fdf",
+        )
+
+    def render_resolved(
+        self,
+        base: Path,
+        *,
+        resolved: Mapping[str, tuple[ScientificValue, str | None]],
+        engine_options: tuple[EngineOption, ...] = (),
+    ) -> str:
+        """Purely apply already-selected campaign values to an FDF template."""
+
         text = base.read_text(encoding="utf-8")
         for name, (value, unit) in sorted(resolved.items()):
             self.validate_parameter(name, unit)
@@ -83,14 +102,7 @@ class SiestaCampaignAdapter:
                 raise ValueError(f"SIESTA engine option is dimensionless: {option.name}")
             text = self._replace_scalar(text, option.name, option.value, option.unit)
         text = text.rstrip("\r\n") + "\n"
-        digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
-        return MaterializedFDF(
-            scanned_name,
-            scanned_value,
-            text,
-            digest,
-            f"point-{self._slug(scanned_value)}.fdf",
-        )
+        return text
 
     def _apply(
         self, text: str, name: str, value: ScientificValue, unit: str | None

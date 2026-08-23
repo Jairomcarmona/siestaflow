@@ -232,8 +232,8 @@ non-goals, acceptance gates, evidence, status y closing commit.
 | Non-goals | Fan-out de propiedades. |
 | Acceptance gates | Input renderizado de cada hijo deriva de output typed/hash-bound padre + settings declarados. |
 | Required evidence | `docs/validation/m6_ground_state_chain/`. |
-| Status | `NOT_STARTED` |
-| Closing commit | No aplicable hasta cierre. |
+| Status | `CLOSED` |
+| Closing commit | `feat: add reproducible ground-state chain`. |
 
 ### M7 — Electronic Property Fan-out
 
@@ -307,7 +307,9 @@ infraestructura de ejecución.
 | M2 | `CLOSED` |
 | M3 | `CLOSED` |
 | M4 | `CLOSED` |
-| M5–M10 | `NOT_STARTED` |
+| M5 | `CLOSED` |
+| M6 | `CLOSED` |
+| M7–M10 | `NOT_STARTED` |
 | DFT+U / LR-U | `DEFERRED` |
 
 Un agente futuro debe construir sólo el siguiente milestone abierto, en la capa

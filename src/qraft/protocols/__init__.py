@@ -8,6 +8,7 @@ from .single_fdf import (
     validate_technical_result,
 )
 from .relaxation import RelaxationProtocol
+from .ground_state import GroundStateProtocol
 
 __all__ = [
     "build_fdf_plan",
@@ -16,4 +17,5 @@ __all__ = [
     "resolve_execution_spec",
     "validate_technical_result",
     "RelaxationProtocol",
+    "GroundStateProtocol",
 ]
