@@ -245,8 +245,8 @@ non-goals, acceptance gates, evidence, status y closing commit.
 | Non-goals | Autoridad nueva o ramas especiales en runtime. |
 | Acceptance gates | Añadir DOS/PDOS/BANDS requiere cero nueva execution authority y cero special-case branch; el fallo de una rama no mata hermanas. |
 | Required evidence | `docs/validation/m7_electronic_property_fanout/`. |
-| Status | `NOT_STARTED` |
-| Closing commit | No aplicable hasta cierre. |
+| Status | `CLOSED` |
+| Closing commit | `docs: close M7 electronic property fanout`. |
 
 ### M8 — Magnetic / Noncollinear / SOC Workflows
 
@@ -309,7 +309,8 @@ infraestructura de ejecución.
 | M4 | `CLOSED` |
 | M5 | `CLOSED` |
 | M6 | `CLOSED` |
-| M7–M10 | `NOT_STARTED` |
+| M7 | `CLOSED` |
+| M8–M10 | `NOT_STARTED` |
 | DFT+U / LR-U | `DEFERRED` |
 
 Un agente futuro debe construir sólo el siguiente milestone abierto, en la capa
