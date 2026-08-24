@@ -61,7 +61,8 @@ def _number(value: object, field: str) -> float:
 
 
 def _render_number(value: object) -> str:
-    return format(_number(value, "numeric value"), ".16g")
+    rendered = format(_number(value, "numeric value"), ".16g")
+    return f"{rendered}.0" if "." not in rendered and "e" not in rendered.casefold() else rendered
 
 
 @dataclass(frozen=True)

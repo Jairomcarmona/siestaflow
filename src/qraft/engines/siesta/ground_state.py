@@ -47,7 +47,8 @@ def _replace_block(text: str, name: str, rendered: str) -> str:
 
 
 def _number(value: object) -> str:
-    return format(float(value), ".16g")
+    number = float(value)
+    return "0.0" if number == 0.0 else format(number, ".16g")
 
 
 def render_geometry(text: str, geometry: Mapping[str, Any]) -> str:

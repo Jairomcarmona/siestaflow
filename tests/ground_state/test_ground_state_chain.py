@@ -110,6 +110,7 @@ def test_render_geometry_and_static_final_scf_validation(tmp_path: Path) -> None
     path = tmp_path / "rendered.fdf"; path.write_text(rendered, encoding="utf-8")
     validate_final_scf(path)
     assert "AtomicCoordinatesFormat Ang" in rendered and "1 2 3 1" in rendered
+    assert "10 0.0 0.0" in rendered
     path.write_text(rendered.replace("MD.Steps 0", "MD.Steps 1"), encoding="utf-8")
     with pytest.raises(ValueError, match="MD.Steps"):
         validate_final_scf(path)

@@ -112,6 +112,7 @@ def test_m7_requires_integral_sampling_and_renders_ef_physically(tmp_path: Path)
     ef_text = (first.source_root / "dos" / "input.fdf").read_text(encoding="utf-8")
     absolute_text = (second.source_root / "dos" / "input.fdf").read_text(encoding="utf-8")
     assert "ProjectedDensityOfStates\nEF  -2" in ef_text
+    assert "EF  -2.0  2.0  0.1  4  eV" in ef_text
     assert "ProjectedDensityOfStates\n-2" in absolute_text
     assert ef_text != absolute_text
     assert first.identities["dos"].fingerprint != second.identities["dos"].fingerprint
