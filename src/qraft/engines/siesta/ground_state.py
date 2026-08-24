@@ -7,7 +7,7 @@ from typing import Any, Mapping
 
 from .fdf_parser import FDFParser
 from .effective_fdf import resolve_effective_fdf
-from .magnetism import collinear_spin_from_fdf
+from .magnetism import magnetic_spin_from_fdf
 from .models import FDFBlock, FDFDocument, normalize_label
 
 
@@ -111,9 +111,9 @@ def validate_final_scf(path: Path) -> None:
         scalar = effective.scalar(name)
         if scalar is not None and _logical(scalar.value):
             raise ValueError(f"M6 final SCF rejects {name}=true")
-    # M8-A supports only a complete modern collinear declaration.  The helper
-    # is a no-op for legacy non-magnetic FDFs, preserving their M6 behavior.
-    collinear_spin_from_fdf(path)
+    # M8-A/B accept only complete supported magnetic declarations.  The helper
+    # is a no-op for legacy non-magnetic FDFs, preserving historical M6 input.
+    magnetic_spin_from_fdf(path)
 
 
 def system_label(path: Path) -> str:

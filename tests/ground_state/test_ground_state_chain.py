@@ -90,14 +90,17 @@ def _templates(root: Path) -> tuple[Path, Path]:
     return relax, final
 
 
-def _overrides(root: Path, *, dm: bool = True, converged: bool = True, magnetic: bool = False) -> dict:
+def _overrides(root: Path, *, dm: bool = True, converged: bool = True, magnetic: bool = False, noncollinear: bool = False) -> dict:
     script = root / "final_fake.py"
     script.write_text(
         "from pathlib import Path\nimport sys\ntext=Path('input.fdf').read_text()\n"
         "assert '1 2 3 1' in text and 'PAO.EnergyShift 300 meV' in text and 'Mesh.Cutoff 350 Ry' in text\n"
         + ("Path('ground.DM').write_bytes(b'dm')\n" if dm else "")
         + "print('Siesta started')\nprint('SCF cycle 1')\n"
-        + ("print('redata: Spin configuration = polarized')\nprint('redata: Number of spin components = 2')\nprint('Mulliken Atomic Populations:')\nprint('  1 Total 4.0 2.0')\nprint(' Total 4.0 2.0')\n" if magnetic else "")
+        + (
+            "print('redata: Spin configuration = non-collinear')\nprint('redata: Number of spin components = 4')\nprint('Mulliken Atomic Populations:')\nprint('Atom # charge [q] valence [e] S [e] Sx [e] Sy [e] Sz [e] Species')\nprint('  1 0.0 4.0 2.0 2.0 0.0 0.0 C')\nprint(' Total 0.0 4.0 2.0 2.0 0.0 0.0')\n"
+            if noncollinear else "print('redata: Spin configuration = polarized')\nprint('redata: Number of spin components = 2')\nprint('Mulliken Atomic Populations:')\nprint('  1 Total 4.0 2.0')\nprint(' Total 4.0 2.0')\n" if magnetic else ""
+        )
         + ("print('SCF converged')\n" if converged else "print('SCF not converged')\n")
         + "print('Job completed')\n",
         encoding="utf-8",
@@ -187,3 +190,27 @@ def test_ground_state_publishes_collinear_magnetic_evidence(tmp_path: Path) -> N
     assert state["magnetic"]["artifact"]["artifact_type"] == "qraft.magnetic-state"
     assert "Charge.Mulliken end" in (tmp_path / "magnetic-runs" / "handoff" / "final-scf" / "input.fdf").read_text(encoding="utf-8")
     assert state["magnetic"]["artifact"]["relative_path"].startswith("stages/final-scf/work/")
+
+
+def test_ground_state_publishes_noncollinear_magnetic_evidence(tmp_path: Path) -> None:
+    basis, mesh, kpoints = _campaigns(tmp_path); relax, final = _templates(tmp_path)
+    spin = "Spin non-colinear\n%block DM.InitSpin\n  1 + 90.0 0.0\n%endblock DM.InitSpin\n"
+    for path in (basis.system.fdf, relax, final):
+        path.write_text(path.read_text(encoding="utf-8") + spin, encoding="utf-8")
+    protocol = GroundStateProtocol(convergence=_Convergence(), relaxation=_Relaxation())
+    root = tmp_path / "noncollinear-runs"
+    result = protocol.run(
+        basis, mesh, kpoints, relaxation_fdf=relax, final_scf_fdf=final,
+        runs_root=root, overrides=_overrides(tmp_path, noncollinear=True),
+    )
+    assert result["status"] == "COMPLETED"
+    state = ContractEnvelope.from_dict(
+        json.loads(Path(result["electronic_state"]).read_text(encoding="utf-8")),
+        required_contract=SCIENTIFIC_ARTIFACT,
+    ).payload["final_scf"]
+    assert state["spin_mode"] == "non-collinear"
+    assert state["magnetic"]["requested"]["initialization"]["moments"][0]["theta_deg"] == "90.0"
+    assert state["magnetic"]["observed"]["quantity"]["representation"] == "cartesian"
+    assert state["magnetic"]["artifact"]["artifact_type"] == "qraft.magnetic-state"
+    retried = protocol.run(basis, mesh, kpoints, relaxation_fdf=relax, final_scf_fdf=final, runs_root=root, overrides=_overrides(tmp_path, noncollinear=True))
+    assert retried["final_scf"]["reused"] is True

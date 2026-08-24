@@ -1,0 +1,43 @@
+SystemName QRAFT M8-B fcc Fe nonparallel initialization
+SystemLabel m8b_fcc_nonparallel
+NumberOfAtoms 2
+NumberOfSpecies 1
+LatticeConstant 1 Ang
+%block LatticeVectors
+0.000000000 3.590000000 3.590000000
+1.795000000 0.000000000 1.795000000
+1.795000000 1.795000000 0.000000000
+%endblock LatticeVectors
+%block ChemicalSpeciesLabel
+ 1 26 Fe
+%endblock ChemicalSpeciesLabel
+AtomicCoordinatesFormat Ang
+%block AtomicCoordinatesAndAtomicSpecies
+ 0.000000000 0.000000000 0.000000000 1
+ 0.000000000 1.795000000 1.795000000 1
+%endblock AtomicCoordinatesAndAtomicSpecies
+XC.Functional GGA
+XC.Authors PBE
+PAO.BasisSize SZ
+PAO.EnergyShift 50 meV
+Mesh.Cutoff 150 Ry
+ElectronicTemperature 300 K
+MaxSCFIterations 160
+DM.MixingWeight 0.05
+DM.NumberPulay 8
+DM.Tolerance 0.0001
+DM.UseSaveDM true
+Spin non-colinear
+%block DM.InitSpin
+ 1 + 90.0 0.0
+ 2 + 90.0 90.0
+%endblock DM.InitSpin
+Charge.Mulliken end
+%block kgrid.MonkhorstPack
+ 3 0 0 0.0
+ 0 3 0 0.0
+ 0 0 3 0.0
+%endblock kgrid.MonkhorstPack
+MD.TypeOfRun CG
+MD.VariableCell false
+MD.Steps 0

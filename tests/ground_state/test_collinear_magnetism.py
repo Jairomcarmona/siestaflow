@@ -117,8 +117,10 @@ def test_collinear_renderer_is_exact_and_validates_indices_and_moments(tmp_path:
 def test_collinear_rejects_parent_conflicts_and_out_of_scope_directives(tmp_path: Path) -> None:
     parent = _base(tmp_path / "conflict")
     parent.write_text(BASE + "Spin non-colinear\n", encoding="utf-8")
+    # M8-B permits the global final-SCF validator to accept non-collinear
+    # input, while the M8-A-only adapter must still refuse to reinterpret it.
     with pytest.raises(ValueError, match="only Spin polarized"):
-        validate_final_scf(parent)
+        collinear_spin_from_fdf(parent)
     soc = _base(tmp_path / "soc")
     soc.write_text(BASE + "Spin polarized\nSpin.Orbit true\n", encoding="utf-8")
     with pytest.raises(ValueError, match="out-of-scope"):

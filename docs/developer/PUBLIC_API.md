@@ -15,6 +15,11 @@ represent only `Spin polarized`, `DM.InitSpin`, and optional `Spin.Fix` /
 `Spin.Total`; non-collinear angles, SOC, spirals, and Hubbard parameters are
 not representable by this API.
 
+M8-B additionally exposes `NonCollinearSpinSpec` and
+`NonCollinearSpinMoment`.  They model only `Spin non-colinear` and
+`DM.InitSpin` polarization with optional explicit theta/phi directions.  SOC,
+Spin.Spiral, DFT+U/Hubbard, and execution controls remain outside this API.
+
 Public CLI stability is documented in `docs/user/cli.md`. Persistent schema
 stability is independent from Python import stability.
 

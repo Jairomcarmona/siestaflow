@@ -14,10 +14,10 @@ from ..contracts.scientific import ScientificArtifactReference, ScientificAuthor
 from ..engines.siesta.campaign_adapter import SiestaCampaignAdapter
 from ..engines.siesta.ground_state import geometry_updates, system_label, validate_final_scf
 from ..engines.siesta.magnetism import (
-    collinear_spin_from_fdf,
+    magnetic_spin_from_fdf,
     magnetic_artifact_envelope,
-    materialize_collinear_magnetic_evidence_fdf,
-    parse_collinear_magnetic_output,
+    magnetic_evidence_scalar_updates,
+    parse_magnetic_output,
 )
 from ..engines.siesta.input_closure import resolve_scientific_input_closure
 from ..engines.siesta.relaxation import geometry_from_fdf
@@ -103,18 +103,18 @@ def _same_system(left: Path, right: Path, *, pseudo_manifest: Path | None, geome
         raise ValueError("M6 templates do not share the required scientific system")
 
 
-def _same_collinear_magnetism(*templates: Path) -> None:
-    """Require one immutable M8-A intent across numerical, relax, and final SCF."""
+def _same_magnetic_intent(*templates: Path) -> None:
+    """Require one immutable supported M8 intent across all M6 templates."""
 
-    specs = [collinear_spin_from_fdf(path) for path in templates]
+    specs = [magnetic_spin_from_fdf(path) for path in templates]
     if all(spec is None for spec in specs):
         return
     if any(spec is None for spec in specs):
-        raise ValueError("M6 templates must either all declare the same M8-A collinear spin or all remain non-magnetic")
+        raise ValueError("M6 templates must either all declare the same M8 magnetic spin or all remain non-magnetic")
     reference = specs[0]
     assert reference is not None
     if any(spec is None or spec.canonical() != reference.canonical() for spec in specs[1:]):
-        raise ValueError("M6 templates do not share the same M8-A collinear spin configuration")
+        raise ValueError("M6 templates do not share the same M8 magnetic spin configuration")
 
 
 class GroundStateProtocol:
@@ -128,7 +128,7 @@ class GroundStateProtocol:
     def run(self, basis_campaign: CampaignSpec, mesh_campaign: CampaignSpec, kpoint_campaign: CampaignSpec, *, relaxation_fdf: Path, final_scf_fdf: Path, profile: Mapping[str, Any] | None = None, project_config: Path | None = None, recipe: Path | None = None, overrides: Mapping[str, Any] | None = None, runs_root: Path = Path(".qraft-ground-state"), force_new_attempt: bool = False) -> dict[str, Any]:
         root = runs_root.resolve()
         authoritative_manifest = basis_campaign.system.pseudo_manifest
-        _same_collinear_magnetism(basis_campaign.system.fdf, relaxation_fdf, final_scf_fdf)
+        _same_magnetic_intent(basis_campaign.system.fdf, relaxation_fdf, final_scf_fdf)
         _same_system(basis_campaign.system.fdf, relaxation_fdf, pseudo_manifest=authoritative_manifest, geometry=True)
         _same_system(basis_campaign.system.fdf, final_scf_fdf, pseudo_manifest=authoritative_manifest, geometry=False)
         source_atoms = geometry_from_fdf(basis_campaign.system.fdf)["atoms"]
@@ -162,13 +162,9 @@ class GroundStateProtocol:
         final_template_sha = _sha(final_scf_fdf)
         final_input = root / "handoff" / "final-scf" / "input.fdf"
         geometry_render = geometry_updates(geometry)
-        final_render = self.adapter.materialize_effective(final_scf_fdf, final_input.parent, resolved=resolved, scalar_updates=geometry_render["scalars"], block_updates=geometry_render["blocks"], primary_destination="input.fdf")
+        final_scalars = {**geometry_render["scalars"], **magnetic_evidence_scalar_updates(final_scf_fdf)}
+        final_render = self.adapter.materialize_effective(final_scf_fdf, final_input.parent, resolved=resolved, scalar_updates=final_scalars, block_updates=geometry_render["blocks"], primary_destination="input.fdf")
         _stage_template_pseudos(final_scf_fdf, final_input, authoritative_manifest)
-        magnetic_render = materialize_collinear_magnetic_evidence_fdf(
-            final_input, final_input.parent, primary_destination="input.fdf"
-        )
-        if magnetic_render is not None:
-            final_render = magnetic_render
         try:
             validate_final_scf(final_input)
         except ValueError as exc:
@@ -180,7 +176,7 @@ class GroundStateProtocol:
         state_path = root / "electronic-state.json"
         final_state = {"scientific_identity_sha256": final["scientific_identity_sha256"], "input_fdf_sha256": _sha(final_input), "system_label": final["system_label"], "scf_converged": True, "scf_iterations": final["scf_iterations"], "density_matrix": final["density_matrix"]}
         if final.get("magnetic") is not None:
-            final_state["spin_mode"] = "polarized"
+            final_state["spin_mode"] = final["magnetic"]["spin_mode"]
             final_state["magnetic"] = final["magnetic"]
         state = ContractEnvelope.create(SCIENTIFIC_ARTIFACT, producer="qraft.ground-state", payload={"schema_version": "1.0", "artifact_id": "ground-state", "artifact_type": _STATE_TYPE, "authority": "PROVISIONAL", "engine": "siesta", "numerical_profile": {"artifact_id": profile_raw["payload"]["artifact_id"], "artifact_type": _PROFILE_TYPE, "file_sha256": profile_sha, "content_sha256": profile_raw["content_sha256"]}, "geometry": {"artifact_id": geometry_raw["payload"]["artifact_id"], "artifact_type": _GEOMETRY_TYPE, "file_sha256": geometry_sha, "content_sha256": geometry_raw["content_sha256"]}, "final_scf": final_state, "provenance": {"final_scf_task_id": "final-scf", "final_scf_attempt_id": final["attempt_id"]}}).to_dict()
         _json(state_path, state, immutable=True)
@@ -203,7 +199,7 @@ class GroundStateProtocol:
         registry = CapabilityRegistry(); register_siesta_engine(registry); registry.freeze()
         composition = compose_runtime(execution, max_parallel_steps=1)
         identity = build_scientific_identity(fdf, pseudo_manifest=pseudo_manifest)
-        requested_spin = collinear_spin_from_fdf(fdf)
+        requested_spin = magnetic_spin_from_fdf(fdf)
         runtime = CompiledWorkflowRuntime(workflow=compiled.compiled, registry=registry, root=root, source_root=root, scientific_identities={"final-scf": identity}, execution_specs=execution, launcher=composition.launcher, allocation=composition.allocation, force_new_attempts=force_new_attempt).run()
         attempt = runtime.attempts.get("final-scf")
         if attempt is None:
@@ -215,8 +211,9 @@ class GroundStateProtocol:
             try:
                 attempt_root = root / "work" / "final-scf" / attempt.attempt_id
                 stdout = attempt_root / attempt.stdout
-                observed = parse_collinear_magnetic_output(
+                observed = parse_magnetic_output(
                     stdout.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True),
+                    requested=requested_spin,
                     scf_converged=True,
                     required_atom_count=len(geometry_from_fdf(fdf)["atoms"]),
                 )
@@ -233,7 +230,7 @@ class GroundStateProtocol:
                 magnetic_path = attempt_root / "magnetic-state.json"
                 _json(magnetic_path, magnetic_raw, immutable=True)
                 magnetic = {
-                    "spin_mode": "polarized",
+                    "spin_mode": requested_spin.spin_mode,
                     "requested": requested_spin.canonical(),
                     "observed": observed.canonical(),
                     "artifact": {
