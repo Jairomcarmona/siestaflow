@@ -9,6 +9,12 @@ protocols, and M7.1 neutral band-path planning models. The latter comprise
 `SymmetryPathProvider`. All other modules are internal unless a specific
 contract document declares otherwise.
 
+M8-A additionally exposes the neutral collinear-spin models
+`CollinearSpinSpec`, `CollinearSpinMoment`, and `CollinearMomentToken`.  They
+represent only `Spin polarized`, `DM.InitSpin`, and optional `Spin.Fix` /
+`Spin.Total`; non-collinear angles, SOC, spirals, and Hubbard parameters are
+not representable by this API.
+
 Public CLI stability is documented in `docs/user/cli.md`. Persistent schema
 stability is independent from Python import stability.
 

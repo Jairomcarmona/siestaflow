@@ -90,13 +90,14 @@ def _templates(root: Path) -> tuple[Path, Path]:
     return relax, final
 
 
-def _overrides(root: Path, *, dm: bool = True, converged: bool = True) -> dict:
+def _overrides(root: Path, *, dm: bool = True, converged: bool = True, magnetic: bool = False) -> dict:
     script = root / "final_fake.py"
     script.write_text(
         "from pathlib import Path\nimport sys\ntext=Path('input.fdf').read_text()\n"
         "assert '1 2 3 1' in text and 'PAO.EnergyShift 300 meV' in text and 'Mesh.Cutoff 350 Ry' in text\n"
         + ("Path('ground.DM').write_bytes(b'dm')\n" if dm else "")
         + "print('Siesta started')\nprint('SCF cycle 1')\n"
+        + ("print('redata: Spin configuration = polarized')\nprint('redata: Number of spin components = 2')\nprint('Mulliken Atomic Populations:')\nprint('  1 Total 4.0 2.0')\nprint(' Total 4.0 2.0')\n" if magnetic else "")
         + ("print('SCF converged')\n" if converged else "print('SCF not converged')\n")
         + "print('Job completed')\n",
         encoding="utf-8",
@@ -165,3 +166,24 @@ def test_ground_state_final_scf_artifact_reuse_and_blocking(tmp_path: Path) -> N
     blocked_relaxation = _Relaxation()
     blocked = GroundStateProtocol(convergence=FailedConvergence(), relaxation=blocked_relaxation).run(basis, mesh, kpoints, relaxation_fdf=relax, final_scf_fdf=final, runs_root=tmp_path / "f03-blocked", overrides=_overrides(tmp_path))
     assert blocked["blocking_stage"] == "numerical-convergence" and blocked_relaxation.calls == 0
+
+
+def test_ground_state_publishes_collinear_magnetic_evidence(tmp_path: Path) -> None:
+    basis, mesh, kpoints = _campaigns(tmp_path); relax, final = _templates(tmp_path)
+    for path in (basis.system.fdf, relax, final):
+        path.write_text(path.read_text(encoding="utf-8") + "Spin polarized\n", encoding="utf-8")
+    result = GroundStateProtocol(convergence=_Convergence(), relaxation=_Relaxation()).run(
+        basis, mesh, kpoints, relaxation_fdf=relax, final_scf_fdf=final,
+        runs_root=tmp_path / "magnetic-runs", overrides=_overrides(tmp_path, magnetic=True),
+    )
+    assert result["status"] == "COMPLETED"
+    state = ContractEnvelope.from_dict(
+        json.loads(Path(result["electronic_state"]).read_text(encoding="utf-8")),
+        required_contract=SCIENTIFIC_ARTIFACT,
+    ).payload["final_scf"]
+    assert state["spin_mode"] == "polarized"
+    assert state["magnetic"]["requested"]["initialization"] == {"kind": "absent"}
+    assert state["magnetic"]["observed"]["spin_mode"] == "polarized"
+    assert state["magnetic"]["artifact"]["artifact_type"] == "qraft.magnetic-state"
+    assert "Charge.Mulliken end" in (tmp_path / "magnetic-runs" / "handoff" / "final-scf" / "input.fdf").read_text(encoding="utf-8")
+    assert state["magnetic"]["artifact"]["relative_path"].startswith("stages/final-scf/work/")

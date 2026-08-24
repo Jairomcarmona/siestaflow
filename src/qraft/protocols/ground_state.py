@@ -13,6 +13,12 @@ from ..contracts import CapabilityRegistry, ContractEnvelope, SCIENTIFIC_ARTIFAC
 from ..contracts.scientific import ScientificArtifactReference, ScientificAuthority
 from ..engines.siesta.campaign_adapter import SiestaCampaignAdapter
 from ..engines.siesta.ground_state import geometry_updates, system_label, validate_final_scf
+from ..engines.siesta.magnetism import (
+    collinear_spin_from_fdf,
+    magnetic_artifact_envelope,
+    materialize_collinear_magnetic_evidence_fdf,
+    parse_collinear_magnetic_output,
+)
 from ..engines.siesta.input_closure import resolve_scientific_input_closure
 from ..engines.siesta.relaxation import geometry_from_fdf
 from ..execution.capability_plugins import SIESTA_ENGINE_CAPABILITY, register_siesta_engine
@@ -97,6 +103,20 @@ def _same_system(left: Path, right: Path, *, pseudo_manifest: Path | None, geome
         raise ValueError("M6 templates do not share the required scientific system")
 
 
+def _same_collinear_magnetism(*templates: Path) -> None:
+    """Require one immutable M8-A intent across numerical, relax, and final SCF."""
+
+    specs = [collinear_spin_from_fdf(path) for path in templates]
+    if all(spec is None for spec in specs):
+        return
+    if any(spec is None for spec in specs):
+        raise ValueError("M6 templates must either all declare the same M8-A collinear spin or all remain non-magnetic")
+    reference = specs[0]
+    assert reference is not None
+    if any(spec is None or spec.canonical() != reference.canonical() for spec in specs[1:]):
+        raise ValueError("M6 templates do not share the same M8-A collinear spin configuration")
+
+
 class GroundStateProtocol:
     """Decides scientific stage progression but delegates every calculation."""
 
@@ -108,6 +128,7 @@ class GroundStateProtocol:
     def run(self, basis_campaign: CampaignSpec, mesh_campaign: CampaignSpec, kpoint_campaign: CampaignSpec, *, relaxation_fdf: Path, final_scf_fdf: Path, profile: Mapping[str, Any] | None = None, project_config: Path | None = None, recipe: Path | None = None, overrides: Mapping[str, Any] | None = None, runs_root: Path = Path(".qraft-ground-state"), force_new_attempt: bool = False) -> dict[str, Any]:
         root = runs_root.resolve()
         authoritative_manifest = basis_campaign.system.pseudo_manifest
+        _same_collinear_magnetism(basis_campaign.system.fdf, relaxation_fdf, final_scf_fdf)
         _same_system(basis_campaign.system.fdf, relaxation_fdf, pseudo_manifest=authoritative_manifest, geometry=True)
         _same_system(basis_campaign.system.fdf, final_scf_fdf, pseudo_manifest=authoritative_manifest, geometry=False)
         source_atoms = geometry_from_fdf(basis_campaign.system.fdf)["atoms"]
@@ -143,21 +164,30 @@ class GroundStateProtocol:
         geometry_render = geometry_updates(geometry)
         final_render = self.adapter.materialize_effective(final_scf_fdf, final_input.parent, resolved=resolved, scalar_updates=geometry_render["scalars"], block_updates=geometry_render["blocks"], primary_destination="input.fdf")
         _stage_template_pseudos(final_scf_fdf, final_input, authoritative_manifest)
+        magnetic_render = materialize_collinear_magnetic_evidence_fdf(
+            final_input, final_input.parent, primary_destination="input.fdf"
+        )
+        if magnetic_render is not None:
+            final_render = magnetic_render
         try:
             validate_final_scf(final_input)
         except ValueError as exc:
             return self._blocked("final-scf", convergence=convergence, relaxation=relaxation, reason=str(exc))
         _json(root / "handoff" / "final-scf" / "input-evidence.json", {"template_sha256": final_template_sha, "numerical_profile_file_sha256": profile_sha, "numerical_profile_content_sha256": profile_raw["content_sha256"], "geometry_file_sha256": geometry_sha, "geometry_content_sha256": geometry_raw["content_sha256"], "rendered_fdf_sha256": _sha(final_input), "rendered_closure_sha256": final_render.closure_sha256, "rendered_closure_files": final_render.file_sha256}, immutable=True)
-        final = self._run_final_scf(final_input, pseudo_manifest=authoritative_manifest, profile=profile, project_config=project_config, recipe=recipe, overrides=overrides, root=root / "stages" / "final-scf", force_new_attempt=force_new_attempt)
+        final = self._run_final_scf(final_input, pseudo_manifest=authoritative_manifest, profile=profile, project_config=project_config, recipe=recipe, overrides=overrides, root=root / "stages" / "final-scf", state_root=root, force_new_attempt=force_new_attempt)
         if final.get("technical_validation") != "PASS" or not final.get("scf_started") or not final.get("scf_converged") or not final.get("density_matrix"):
             return self._blocked("final-scf", convergence=convergence, relaxation=relaxation, final_scf=final)
         state_path = root / "electronic-state.json"
-        state = ContractEnvelope.create(SCIENTIFIC_ARTIFACT, producer="qraft.ground-state", payload={"schema_version": "1.0", "artifact_id": "ground-state", "artifact_type": _STATE_TYPE, "authority": "PROVISIONAL", "engine": "siesta", "numerical_profile": {"artifact_id": profile_raw["payload"]["artifact_id"], "artifact_type": _PROFILE_TYPE, "file_sha256": profile_sha, "content_sha256": profile_raw["content_sha256"]}, "geometry": {"artifact_id": geometry_raw["payload"]["artifact_id"], "artifact_type": _GEOMETRY_TYPE, "file_sha256": geometry_sha, "content_sha256": geometry_raw["content_sha256"]}, "final_scf": {"scientific_identity_sha256": final["scientific_identity_sha256"], "input_fdf_sha256": _sha(final_input), "system_label": final["system_label"], "scf_converged": True, "scf_iterations": final["scf_iterations"], "density_matrix": final["density_matrix"]}, "provenance": {"final_scf_task_id": "final-scf", "final_scf_attempt_id": final["attempt_id"]}}).to_dict()
+        final_state = {"scientific_identity_sha256": final["scientific_identity_sha256"], "input_fdf_sha256": _sha(final_input), "system_label": final["system_label"], "scf_converged": True, "scf_iterations": final["scf_iterations"], "density_matrix": final["density_matrix"]}
+        if final.get("magnetic") is not None:
+            final_state["spin_mode"] = "polarized"
+            final_state["magnetic"] = final["magnetic"]
+        state = ContractEnvelope.create(SCIENTIFIC_ARTIFACT, producer="qraft.ground-state", payload={"schema_version": "1.0", "artifact_id": "ground-state", "artifact_type": _STATE_TYPE, "authority": "PROVISIONAL", "engine": "siesta", "numerical_profile": {"artifact_id": profile_raw["payload"]["artifact_id"], "artifact_type": _PROFILE_TYPE, "file_sha256": profile_sha, "content_sha256": profile_raw["content_sha256"]}, "geometry": {"artifact_id": geometry_raw["payload"]["artifact_id"], "artifact_type": _GEOMETRY_TYPE, "file_sha256": geometry_sha, "content_sha256": geometry_raw["content_sha256"]}, "final_scf": final_state, "provenance": {"final_scf_task_id": "final-scf", "final_scf_attempt_id": final["attempt_id"]}}).to_dict()
         _json(state_path, state, immutable=True)
         state_ref = ScientificArtifactReference("ground-state", _STATE_TYPE, _sha(state_path), state["content_sha256"], ScientificAuthority.PROVISIONAL)
         return {"schema_version": "1.0", "status": "COMPLETED", "numerical_convergence": convergence, "relaxation": relaxation, "final_scf": final, "electronic_state": str(state_path), "electronic_state_reference": state_ref}
 
-    def _run_final_scf(self, fdf: Path, *, pseudo_manifest: Path | None, profile: Mapping[str, Any] | None, project_config: Path | None, recipe: Path | None, overrides: Mapping[str, Any] | None, root: Path, force_new_attempt: bool) -> dict[str, Any]:
+    def _run_final_scf(self, fdf: Path, *, pseudo_manifest: Path | None, profile: Mapping[str, Any] | None, project_config: Path | None, recipe: Path | None, overrides: Mapping[str, Any] | None, root: Path, state_root: Path, force_new_attempt: bool) -> dict[str, Any]:
         closure = resolve_scientific_input_closure(fdf, pseudo_manifest=pseudo_manifest, primary_destination="input.fdf", include_pseudo_manifest=True)
         inputs = root / "inputs"; inputs.mkdir(parents=True, exist_ok=True)
         for entry in closure.entries:
@@ -173,13 +203,49 @@ class GroundStateProtocol:
         registry = CapabilityRegistry(); register_siesta_engine(registry); registry.freeze()
         composition = compose_runtime(execution, max_parallel_steps=1)
         identity = build_scientific_identity(fdf, pseudo_manifest=pseudo_manifest)
+        requested_spin = collinear_spin_from_fdf(fdf)
         runtime = CompiledWorkflowRuntime(workflow=compiled.compiled, registry=registry, root=root, source_root=root, scientific_identities={"final-scf": identity}, execution_specs=execution, launcher=composition.launcher, allocation=composition.allocation, force_new_attempts=force_new_attempt).run()
         attempt = runtime.attempts.get("final-scf")
         if attempt is None:
             return {"status": runtime.status, "technical_validation": "FAIL"}
         parsed = attempt.result.technical_validation.parser_summary
         dm_name = f"{label}.DM"; dm_sha = attempt.artifacts.get(dm_name)
-        return {"status": "COMPLETED" if attempt.result.technical_validation.status == "PASS" else "FAILED", "technical_validation": attempt.result.technical_validation.status, "attempt_id": attempt.attempt_id, "reused": "final-scf" in runtime.reused_nodes, "scientific_identity_sha256": identity.fingerprint, "system_label": label, "scf_started": bool(parsed.get("scf_started")), "scf_converged": bool(parsed.get("scf_converged")), "scf_iterations": int(parsed.get("scf_iterations") or 0), "density_matrix": {"filename": dm_name, "sha256": dm_sha} if dm_sha else None}
+        magnetic = None
+        if requested_spin is not None and attempt.result.technical_validation.status == "PASS" and bool(parsed.get("scf_converged")):
+            try:
+                attempt_root = root / "work" / "final-scf" / attempt.attempt_id
+                stdout = attempt_root / attempt.stdout
+                observed = parse_collinear_magnetic_output(
+                    stdout.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True),
+                    scf_converged=True,
+                    required_atom_count=len(geometry_from_fdf(fdf)["atoms"]),
+                )
+                magnetic_raw = magnetic_artifact_envelope(
+                    parent_scientific_identity_sha256=identity.fingerprint,
+                    requested=requested_spin,
+                    observed=observed,
+                    final_fdf=fdf,
+                    stdout=stdout,
+                    scf_converged=True,
+                    siesta_version=(str(parsed["version"]) if parsed.get("version") else None),
+                    stdout_relative_path=stdout.resolve().relative_to(state_root.resolve()).as_posix(),
+                )
+                magnetic_path = attempt_root / "magnetic-state.json"
+                _json(magnetic_path, magnetic_raw, immutable=True)
+                magnetic = {
+                    "spin_mode": "polarized",
+                    "requested": requested_spin.canonical(),
+                    "observed": observed.canonical(),
+                    "artifact": {
+                        "artifact_type": "qraft.magnetic-state",
+                        "relative_path": magnetic_path.resolve().relative_to(state_root.resolve()).as_posix(),
+                        "sha256": _sha(magnetic_path),
+                        "content_sha256": magnetic_raw["content_sha256"],
+                    },
+                }
+            except (OSError, ValueError) as exc:
+                return {"status": "FAILED", "technical_validation": "FAIL", "attempt_id": attempt.attempt_id, "reused": "final-scf" in runtime.reused_nodes, "scientific_identity_sha256": identity.fingerprint, "system_label": label, "scf_started": bool(parsed.get("scf_started")), "scf_converged": bool(parsed.get("scf_converged")), "scf_iterations": int(parsed.get("scf_iterations") or 0), "density_matrix": {"filename": dm_name, "sha256": dm_sha} if dm_sha else None, "magnetic": None, "magnetic_error": str(exc)}
+        return {"status": "COMPLETED" if attempt.result.technical_validation.status == "PASS" else "FAILED", "technical_validation": attempt.result.technical_validation.status, "attempt_id": attempt.attempt_id, "reused": "final-scf" in runtime.reused_nodes, "scientific_identity_sha256": identity.fingerprint, "system_label": label, "scf_started": bool(parsed.get("scf_started")), "scf_converged": bool(parsed.get("scf_converged")), "scf_iterations": int(parsed.get("scf_iterations") or 0), "density_matrix": {"filename": dm_name, "sha256": dm_sha} if dm_sha else None, "magnetic": magnetic}
 
     @staticmethod
     def _blocked(stage: str, **stages: Any) -> dict[str, Any]:

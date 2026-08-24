@@ -54,6 +54,7 @@ class ControllerPackageBuilder:
 
     RUNTIME_FILES = (
         "src/qraft/version.py",
+        "src/qraft/magnetism.py",
         "src/qraft/models.py",
         "src/qraft/project_packages.py",
         "src/qraft/execution/allocation_controller.py",

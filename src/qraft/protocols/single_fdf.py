@@ -286,7 +286,10 @@ def build_scientific_identity(
     )
     species_mapping = _canonical_sha(payloads({"ChemicalSpeciesLabel", "NumberOfSpecies"}))
     component_groups = {
-        "charge_spin": {"NetCharge", "Spin", "SpinPolarized", "TotalSpin"},
+        # M8-A magnetic intent is scientific input.  The raw effective block
+        # bytes deliberately distinguish an absent DM.InitSpin block from an
+        # explicit empty one without changing the central identity contract.
+        "charge_spin": {"NetCharge", "Spin", "SpinPolarized", "TotalSpin", "DM.InitSpin", "Spin.Fix", "Spin.Total"},
         "basis": {"PAO.BasisSize", "PAO.Basis", "PAO.EnergyShift", "PAO.SplitNorm"},
         "xc": {"XC.Functional", "XC.Authors"},
         "k_grid": {"kgrid_Monkhorst_Pack", "BandLines", "BandPoints"},

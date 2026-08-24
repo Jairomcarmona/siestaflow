@@ -33,6 +33,7 @@ def test_m4_package_is_complete_hash_bound_and_deterministic(tmp_path: Path):
     assert manifest["system_id"] == "SURF_Gr5x5_clean_v01"
     assert manifest["login_node_persistent_process_required"] is False
     assert manifest["scientific_interpretation_allowed"] is False
+    assert (root / "runtime/qraft/magnetism.py").is_file()
     for name, expected in manifest["immutable_files"].items():
         assert hashlib.sha256((root / name).read_bytes()).hexdigest() == expected
     config = load_controller_config(root / "campaign.yaml")

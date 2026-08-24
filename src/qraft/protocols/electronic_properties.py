@@ -61,6 +61,31 @@ def _immutable_json(path: Path, payload: Mapping[str, Any]) -> None:
     path.write_text(encoded, encoding="utf-8", newline="\n")
 
 
+def _state_relative_file(state_path: Path, value: object, *, field: str) -> Path:
+    relative = Path(str(value))
+    if not str(relative) or relative.is_absolute() or ".." in relative.parts:
+        raise ValueError(f"M7 magnetic {field} path must be relative to electronic-state")
+    candidate = (state_path.parent / relative).resolve()
+    try:
+        candidate.relative_to(state_path.parent)
+    except ValueError as exc:
+        raise ValueError(f"M7 magnetic {field} path escapes electronic-state root") from exc
+    if not candidate.is_file():
+        raise ValueError(f"M7 magnetic {field} is missing")
+    return candidate
+
+
+def _sha256_hex(value: object, *, field: str) -> str:
+    result = str(value).strip().lower()
+    if len(result) != 64:
+        raise ValueError(f"M7 magnetic {field} must be a SHA-256")
+    try:
+        int(result, 16)
+    except ValueError as exc:
+        raise ValueError(f"M7 magnetic {field} must be a SHA-256") from exc
+    return result
+
+
 @dataclass(frozen=True)
 class ElectronicStateSource:
     """Verified protocol-local view of the M6 handoff and its immutable bytes."""
@@ -77,6 +102,9 @@ class ElectronicStateSource:
     label: str
     authority: ScientificAuthority
     pseudopotentials: Mapping[str, Path]
+    spin_mode: str
+    magnetic_state_content_sha256: str | None
+    magnetic_state_file_sha256: str | None
 
     @classmethod
     def load(
@@ -121,6 +149,43 @@ class ElectronicStateSource:
             int(parent_identity, 16)
         except ValueError as exc:
             raise ValueError("M7 final-SCF scientific identity is invalid") from exc
+        spin_mode = str(final.get("spin_mode", "non-polarized")).strip().casefold()
+        if spin_mode not in {"non-polarized", "polarized"}:
+            raise ValueError("M7 parent electronic-state spin_mode is invalid")
+        magnetic_content_sha = None
+        magnetic_file_sha = None
+        if spin_mode == "polarized":
+            magnetic = final.get("magnetic")
+            if not isinstance(magnetic, Mapping) or magnetic.get("spin_mode") != "polarized":
+                raise ValueError("M7 polarized parent lacks M8-A magnetic evidence")
+            artifact = magnetic.get("artifact")
+            if not isinstance(artifact, Mapping) or artifact.get("artifact_type") != "qraft.magnetic-state":
+                raise ValueError("M7 polarized parent magnetic artifact is invalid")
+            magnetic_path = _state_relative_file(state_path, artifact.get("relative_path"), field="artifact")
+            magnetic_file_sha = _sha256_hex(artifact.get("sha256"), field="artifact file hash")
+            if sha256_path(magnetic_path) != magnetic_file_sha:
+                raise ValueError("M7 polarized parent magnetic artifact file SHA-256 mismatch")
+            magnetic_content_sha = _sha256_hex(artifact.get("content_sha256"), field="artifact content hash")
+            magnetic_raw = json.loads(magnetic_path.read_text(encoding="utf-8"))
+            magnetic_envelope = ContractEnvelope.from_dict(magnetic_raw, required_contract=SCIENTIFIC_ARTIFACT)
+            magnetic_payload = dict(magnetic_envelope.payload)
+            if magnetic_envelope.content_sha256 != magnetic_content_sha:
+                raise ValueError("M7 polarized parent magnetic artifact content SHA-256 mismatch")
+            if magnetic_payload.get("artifact_type") != "qraft.magnetic-state" or magnetic_payload.get("converged") is not True:
+                raise ValueError("M7 polarized parent magnetic artifact is not converged M8-A evidence")
+            if str(magnetic_payload.get("parent_scientific_identity_sha256", "")).strip().lower() != parent_identity:
+                raise ValueError("M7 polarized parent magnetic artifact identity mismatch")
+            source = magnetic_payload.get("source")
+            if not isinstance(source, Mapping) or str(source.get("final_fdf_sha256", "")) != final_sha:
+                raise ValueError("M7 polarized parent magnetic artifact final-FDF evidence mismatch")
+            stdout_path = _state_relative_file(state_path, source.get("stdout_relative_path"), field="stdout evidence")
+            if sha256_path(stdout_path) != _sha256_hex(source.get("stdout_sha256"), field="stdout hash"):
+                raise ValueError("M7 polarized parent magnetic artifact stdout SHA-256 mismatch")
+            observed = magnetic_payload.get("observed")
+            if not isinstance(observed, Mapping) or observed.get("spin_mode") != "polarized":
+                raise ValueError("M7 polarized parent magnetic artifact observed state is invalid")
+            if magnetic.get("requested") != magnetic_payload.get("requested") or magnetic.get("observed") != observed:
+                raise ValueError("M7 polarized parent magnetic summary disagrees with artifact")
         # Resolving the closure and pseudos here rejects include escapes,
         # incomplete closure bytes, and pseudo mismatches before compilation.
         effective = resolve_effective_fdf(final_fdf)
@@ -135,7 +200,9 @@ class ElectronicStateSource:
             state_file_sha256=sha256_path(state_path), state_content_sha256=envelope.content_sha256,
             final_fdf_sha256=final_sha, density_matrix_sha256=dm_sha,
             parent_scientific_identity_sha256=parent_identity, label=label,
-            authority=authority, pseudopotentials=dict(pseudos),
+            authority=authority, pseudopotentials=dict(pseudos), spin_mode=spin_mode,
+            magnetic_state_content_sha256=magnetic_content_sha,
+            magnetic_state_file_sha256=magnetic_file_sha,
         )
 
     def identity_component(self) -> str:
@@ -145,6 +212,9 @@ class ElectronicStateSource:
             "state_content_sha256": self.state_content_sha256,
             "density_matrix_sha256": self.density_matrix_sha256,
             "parent_scientific_identity_sha256": self.parent_scientific_identity_sha256,
+            "spin_mode": self.spin_mode,
+            "magnetic_state_content_sha256": self.magnetic_state_content_sha256,
+            "magnetic_state_file_sha256": self.magnetic_state_file_sha256,
         })
 
     def verify(self) -> "ElectronicStateSource":
@@ -167,6 +237,9 @@ class ElectronicStateSource:
             "density_matrix_filename": self.density_matrix.name,
             "density_matrix_sha256": self.density_matrix_sha256,
             "scientific_identity_sha256": self.parent_scientific_identity_sha256,
+            "spin_mode": self.spin_mode,
+            "magnetic_state_content_sha256": self.magnetic_state_content_sha256,
+            "magnetic_state_file_sha256": self.magnetic_state_file_sha256,
         }
 
 

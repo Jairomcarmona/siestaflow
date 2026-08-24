@@ -801,6 +801,7 @@ def test_new_package_worker_targets_canonical_runtime(tmp_path: Path):
     manifest = (package / "manifest.json").read_text(encoding="utf-8")
     assert "CanonicalController.from_file" in worker
     assert "AllocationController.from_file" not in worker
+    assert (package / "runtime/qraft/magnetism.py").is_file()
     assert '"execution_authority": "CompiledWorkflowRuntime"' in manifest
     assert '"legacy_scheduler_default": false' in manifest
     imported = subprocess.run(
