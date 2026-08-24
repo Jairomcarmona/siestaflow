@@ -98,21 +98,45 @@ class BandPathVertex:
 @dataclass(frozen=True)
 class BandPathSpec:
     scale: str
-    vertices: tuple[BandPathVertex, ...]
+    vertices: tuple[BandPathVertex, ...] = ()
+    # ``segments`` is deliberately not flattened: a flattened U, K pair
+    # would silently turn a discontinuity into an unrequested U--K line.
+    # The legacy ``vertices`` form remains the manual V1 representation.
+    segments: tuple[tuple[BandPathVertex, ...], ...] = ()
 
     def __post_init__(self) -> None:
         if str(self.scale).strip() != "ReciprocalLatticeVectors":
             raise ValueError("M7 V1 supports only ReciprocalLatticeVectors band paths")
         vertices = tuple(item if isinstance(item, BandPathVertex) else BandPathVertex.from_mapping(item) for item in self.vertices)
-        if len(vertices) < 2:
-            raise ValueError("band paths require at least two ordered vertices")
-        if vertices[0].points_from_previous != 1:
-            raise ValueError("the first SIESTA BandLines vertex requires exactly 1 point")
+        raw_segments = tuple(tuple(segment) for segment in self.segments)
+        segments = tuple(
+            tuple(item if isinstance(item, BandPathVertex) else BandPathVertex.from_mapping(item) for item in segment)
+            for segment in raw_segments
+        )
+        if vertices and segments:
+            raise ValueError("band paths must use either legacy vertices or explicit segments")
+        paths = segments or ((vertices,) if vertices else ())
+        if not paths or any(len(path) < 2 for path in paths):
+            raise ValueError("band paths require at least two ordered vertices per segment")
+        if any(path[0].points_from_previous != 1 for path in paths):
+            raise ValueError("the first SIESTA BandLines vertex of every segment requires exactly 1 point")
         object.__setattr__(self, "scale", "ReciprocalLatticeVectors")
         object.__setattr__(self, "vertices", vertices)
+        object.__setattr__(self, "segments", segments)
+
+    @property
+    def ordered_segments(self) -> tuple[tuple[BandPathVertex, ...], ...]:
+        """Ordered, disconnected path groups used by the SIESTA renderer."""
+
+        return self.segments or (self.vertices,)
 
     def canonical(self) -> dict[str, object]:
-        return {"scale": self.scale, "vertices": [item.canonical() for item in self.vertices]}
+        if not self.segments:
+            return {"scale": self.scale, "vertices": [item.canonical() for item in self.vertices]}
+        return {
+            "scale": self.scale,
+            "segments": [[item.canonical() for item in segment] for segment in self.segments],
+        }
 
     @property
     def sha256(self) -> str:
@@ -121,7 +145,8 @@ class BandPathSpec:
     def render_block(self) -> str:
         return "\n".join(
             f"  {vertex.points_from_previous} {' '.join(_render_number(item) for item in vertex.coordinates)} {vertex.label}"
-            for vertex in self.vertices
+            for segment in self.ordered_segments
+            for vertex in segment
         )
 
 

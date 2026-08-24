@@ -25,6 +25,7 @@ classifiers = [
 test = ["pytest>=8"]
 release = ["build>=1.2"]
 dev = ["pytest>=8", "build>=1.2"]
+symmetry = ["seekpath>=2.1"]
 
 [project.urls]
 Repository = "https://github.com/Jairomcarmona/siestaflow"

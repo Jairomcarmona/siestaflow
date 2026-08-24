@@ -2,9 +2,12 @@
 
 For package version 0.2, only names in `qraft.__all__` are intentional public
 Python API: application/configuration, ScientificIdentity, ExecutionSpec,
-ExecutionProfile/ProfileStore, OutputModel, and engine/launcher/scheduler
-adapter protocols. All other modules are internal unless a specific contract
-document declares otherwise.
+ExecutionProfile/ProfileStore, OutputModel, engine/launcher/scheduler adapter
+protocols, and M7.1 neutral band-path planning models. The latter comprise
+`CrystalStructure`, `BandPathMode`, `BandPathRequest`, `BandPathSegment`,
+`BandPathProposal`, `BandPathPlanner`, `SymmetryAnalysis`, `ProviderPath`, and
+`SymmetryPathProvider`. All other modules are internal unless a specific
+contract document declares otherwise.
 
 Public CLI stability is documented in `docs/user/cli.md`. Persistent schema
 stability is independent from Python import stability.
@@ -20,6 +23,10 @@ stability is independent from Python import stability.
 - Protocol: register a `ProtocolAdapter` with planner, runner, engine and
   accepted parameters. Planning must not authorize execution.
 - Output: implement `OutputContributor`; machine evidence remains authoritative.
+- Symmetry path: implement `SymmetryPathProvider` using only neutral
+  `CrystalStructure`, `SymmetryAnalysis`, and `ProviderPath` values. A provider
+  must never introduce an execution authority or transform an M6 parent
+  structure silently.
 
 Tests for a new adapter must cover missing executable, resource validation,
 command rendering and registry extension. Never add cluster-specific defaults

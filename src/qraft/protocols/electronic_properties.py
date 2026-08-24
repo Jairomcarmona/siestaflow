@@ -9,13 +9,16 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Mapping
 
 from ..contracts import CapabilityRegistry, ContractEnvelope, SCIENTIFIC_ARTIFACT
 from ..contracts.scientific import ScientificAuthority
 from ..core import ExecutionSpec, ScientificIdentity
+from ..band_paths import BandPathPlanner, BandPathRequest, BandPathResolution, SymmetryPathProvider, SymmetryProviderUnavailable
+from ..engines.siesta.band_paths import compile_band_path_proposal, structure_from_final_fdf, time_reversal_evidence_from_final_fdf
+from ..symmetry import SeekPathProvider
 from ..engines.siesta.electronic_properties import (
     BandPathSpec, DosSpec, PdosSpec, PropertySpec, PROPERTY_CAPABILITIES,
     PROPERTY_SUFFIXES, property_artifact_envelope, render_property_fdf,
@@ -175,6 +178,7 @@ class PreparedElectronicProperties:
     identities: Mapping[str, ScientificIdentity]
     source: ElectronicStateSource
     specs: Mapping[str, PropertySpec]
+    band_path_resolution: BandPathResolution | None = None
 
 
 class ElectronicPropertiesProtocol:
@@ -184,13 +188,15 @@ class ElectronicPropertiesProtocol:
         self,
         source: ElectronicStateSource,
         *,
-        bands: BandPathSpec,
+        bands: BandPathSpec | BandPathRequest,
         dos: DosSpec,
         pdos: PdosSpec,
         runs_root: Path = Path(".qraft-electronic-properties"),
+        band_path_provider: SymmetryPathProvider | None = None,
     ) -> PreparedElectronicProperties:
         source = source.verify()
-        specs: dict[str, PropertySpec] = {"bands": bands, "dos": dos, "pdos": pdos}
+        resolved_bands, path_resolution = self._resolve_bands(source, bands, band_path_provider)
+        specs: dict[str, PropertySpec] = {"bands": resolved_bands, "dos": dos, "pdos": pdos}
         root = runs_root.resolve()
         source_root = root / "source"
         identities: dict[str, ScientificIdentity] = {}
@@ -213,12 +219,51 @@ class ElectronicPropertiesProtocol:
                 pseudopotentials=identity.pseudopotentials, components=components,
                 included_scientific_files=identity.included_scientific_files,
             )
+        if path_resolution is not None:
+            _immutable_json(source_root / "bands" / "band-path-proposal.json", {
+                **path_resolution.proposal.canonical(),
+                "proposal_sha256": path_resolution.proposal.sha256,
+                "band_path_spec": resolved_bands.canonical(),
+                "band_path_spec_sha256": resolved_bands.sha256,
+            })
         workflow_path = source_root / "workflow.json"
         _immutable_json(workflow_path, self._workflow_definition(source_root, source, specs))
         compiled_result = WorkflowCompiler().compile(workflow_path)
         if not compiled_result.valid or compiled_result.compiled is None:
             raise ValueError("M7 electronic-property workflow compilation failed: " + "; ".join(item.message for item in compiled_result.findings))
-        return PreparedElectronicProperties(source_root, workflow_path, compiled_result.compiled, identities, source, specs)
+        return PreparedElectronicProperties(source_root, workflow_path, compiled_result.compiled, identities, source, specs, path_resolution)
+
+    @staticmethod
+    def _resolve_bands(
+        source: ElectronicStateSource,
+        bands: BandPathSpec | BandPathRequest,
+        provider: SymmetryPathProvider | None,
+    ) -> tuple[BandPathSpec, BandPathResolution | None]:
+        if isinstance(bands, BandPathSpec):
+            return bands, None
+        authoritative_structure = structure_from_final_fdf(source.final_fdf)
+        if bands.structure is not None and bands.structure.sha256 != authoritative_structure.sha256:
+            raise ValueError("M7.1 requested geometry does not match the verified M6 final geometry")
+        request = replace(bands, structure=authoritative_structure)
+        if request.time_reversal == "auto":
+            request = replace(request, time_reversal_evidence=time_reversal_evidence_from_final_fdf(source.final_fdf))
+        resolved_provider = provider
+        if request.mode.value != "manual" and resolved_provider is None:
+            try:
+                resolved_provider = SeekPathProvider()
+            except SymmetryProviderUnavailable:
+                # The planner turns absent optional dependencies into a stable,
+                # explicit BLOCKED proposal rather than a raw ImportError.
+                resolved_provider = None
+        resolution = BandPathPlanner(resolved_provider).resolve(request, compile_band_path_proposal)
+        if resolution.band_path_spec is None:
+            raise ValueError(
+                f"M7.1 {request.mode.value} band path is {resolution.proposal.status.value}: "
+                f"{resolution.proposal.reason or 'scientific review is required'}"
+            )
+        if not isinstance(resolution.band_path_spec, BandPathSpec):
+            raise ValueError("M7.1 band-path compiler returned an invalid SIESTA spec")
+        return resolution.band_path_spec, resolution
 
     @staticmethod
     def _workflow_definition(source_root: Path, source: ElectronicStateSource, specs: Mapping[str, PropertySpec]) -> dict[str, Any]:
@@ -258,7 +303,7 @@ class ElectronicPropertiesProtocol:
         self,
         source: ElectronicStateSource,
         *,
-        bands: BandPathSpec,
+        bands: BandPathSpec | BandPathRequest,
         dos: DosSpec,
         pdos: PdosSpec,
         profile: Mapping[str, Any] | Path | None = None,
@@ -267,8 +312,12 @@ class ElectronicPropertiesProtocol:
         overrides: Mapping[str, Any] | None = None,
         runs_root: Path = Path(".qraft-electronic-properties"),
         force_new_attempt: bool = False,
+        band_path_provider: SymmetryPathProvider | None = None,
     ) -> dict[str, Any]:
-        prepared = self.prepare(source, bands=bands, dos=dos, pdos=pdos, runs_root=runs_root)
+        prepared = self.prepare(
+            source, bands=bands, dos=dos, pdos=pdos, runs_root=runs_root,
+            band_path_provider=band_path_provider,
+        )
         execution, _ = resolve_execution_spec(profile=profile, project_config=project_config, recipe=recipe, overrides=overrides)
         registry = CapabilityRegistry()
         register_siesta_electronic_properties(registry)

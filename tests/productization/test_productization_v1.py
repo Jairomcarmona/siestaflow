@@ -66,9 +66,13 @@ def profile(root: Path, python: str, script: Path) -> Path:
 
 def test_public_api_is_intentional() -> None:
     expected = {
-        "ApplicationConfiguration", "EngineAdapter", "ExecutionProfile",
+        "ApplicationConfiguration", "BandPathMode", "BandPathPlanner",
+        "BandPathProposal", "BandPathRequest", "BandPathSegment",
+        "CrystalStructure", "EngineAdapter", "ExecutionProfile",
         "ExecutionSpec", "LauncherAdapter", "OutputModel", "ProfileStore",
-        "QraftApplication", "SchedulerAdapter", "ScientificIdentity", "__version__",
+        "ProviderPath", "QraftApplication", "SchedulerAdapter",
+        "ScientificIdentity", "SymmetryAnalysis", "SymmetryPathProvider",
+        "__version__",
     }
     assert set(qraft.__all__) == expected
     assert qraft.__version__ == "0.2.0"

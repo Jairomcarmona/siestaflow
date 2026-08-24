@@ -13,6 +13,15 @@ from .version import __version__
 
 __all__ = [
     "ApplicationConfiguration",
+    "BandPathMode",
+    "BandPathProposal",
+    "BandPathPlanner",
+    "BandPathRequest",
+    "BandPathSegment",
+    "CrystalStructure",
+    "ProviderPath",
+    "SymmetryAnalysis",
+    "SymmetryPathProvider",
     "EngineAdapter",
     "ExecutionProfile",
     "ExecutionSpec",
@@ -27,6 +36,15 @@ __all__ = [
 
 _PUBLIC_MODULES = {
     "ApplicationConfiguration": "qraft.application",
+    "BandPathMode": "qraft.band_paths",
+    "BandPathProposal": "qraft.band_paths",
+    "BandPathPlanner": "qraft.band_paths",
+    "BandPathRequest": "qraft.band_paths",
+    "BandPathSegment": "qraft.band_paths",
+    "CrystalStructure": "qraft.band_paths",
+    "ProviderPath": "qraft.band_paths",
+    "SymmetryAnalysis": "qraft.band_paths",
+    "SymmetryPathProvider": "qraft.band_paths",
     "QraftApplication": "qraft.application",
     "ExecutionSpec": "qraft.core",
     "ScientificIdentity": "qraft.core",
