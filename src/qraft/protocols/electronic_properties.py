@@ -105,6 +105,7 @@ class ElectronicStateSource:
     spin_mode: str
     magnetic_state_content_sha256: str | None
     magnetic_state_file_sha256: str | None
+    magnetic_stdout_sha256: str | None
 
     @classmethod
     def load(
@@ -154,6 +155,7 @@ class ElectronicStateSource:
             raise ValueError("M7 parent electronic-state spin_mode is invalid")
         magnetic_content_sha = None
         magnetic_file_sha = None
+        magnetic_stdout_sha = None
         soc_pseudos: Mapping[str, object] | None = None
         if spin_mode in {"polarized", "non-collinear", "spin-orbit"}:
             magnetic = final.get("magnetic")
@@ -182,6 +184,7 @@ class ElectronicStateSource:
             stdout_path = _state_relative_file(state_path, source.get("stdout_relative_path"), field="stdout evidence")
             if sha256_path(stdout_path) != _sha256_hex(source.get("stdout_sha256"), field="stdout hash"):
                 raise ValueError("M7 magnetic parent artifact stdout SHA-256 mismatch")
+            magnetic_stdout_sha = _sha256_hex(source.get("stdout_sha256"), field="stdout hash")
             observed = magnetic_payload.get("observed")
             if not isinstance(observed, Mapping) or observed.get("spin_mode") != spin_mode:
                 raise ValueError("M7 magnetic parent artifact observed state is invalid")
@@ -221,6 +224,7 @@ class ElectronicStateSource:
             authority=authority, pseudopotentials=dict(pseudos), spin_mode=spin_mode,
             magnetic_state_content_sha256=magnetic_content_sha,
             magnetic_state_file_sha256=magnetic_file_sha,
+            magnetic_stdout_sha256=magnetic_stdout_sha,
         )
 
     def identity_component(self) -> str:
@@ -233,6 +237,7 @@ class ElectronicStateSource:
             "spin_mode": self.spin_mode,
             "magnetic_state_content_sha256": self.magnetic_state_content_sha256,
             "magnetic_state_file_sha256": self.magnetic_state_file_sha256,
+            "magnetic_stdout_sha256": self.magnetic_stdout_sha256,
         })
 
     def verify(self) -> "ElectronicStateSource":
@@ -258,6 +263,7 @@ class ElectronicStateSource:
             "spin_mode": self.spin_mode,
             "magnetic_state_content_sha256": self.magnetic_state_content_sha256,
             "magnetic_state_file_sha256": self.magnetic_state_file_sha256,
+            "magnetic_stdout_sha256": self.magnetic_stdout_sha256,
         }
 
 

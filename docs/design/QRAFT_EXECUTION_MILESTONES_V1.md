@@ -258,8 +258,8 @@ non-goals, acceptance gates, evidence, status y closing commit.
 | Non-goals | Infraestructura de ejecución magnética. |
 | Acceptance gates | Mismos contratos, attempts/recovery y aislamiento. |
 | Required evidence | `docs/validation/m8_magnetic_noncollinear_soc/`. |
-| Status | `NOT_STARTED` |
-| Closing commit | No aplicable hasta cierre. |
+| Status | `CLOSED` |
+| Closing commit | `feat: close M8 integrated magnetic workflow` (integrated M8-D closure). |
 
 ### M9 — Mass Screening Scale Acceptance
 
@@ -310,7 +310,8 @@ infraestructura de ejecución.
 | M5 | `CLOSED` |
 | M6 | `CLOSED` |
 | M7 | `CLOSED` |
-| M8–M10 | `NOT_STARTED` |
+| M8 | `CLOSED` |
+| M9–M10 | `NOT_STARTED` |
 | DFT+U / LR-U | `DEFERRED` |
 
 Un agente futuro debe construir sólo el siguiente milestone abierto, en la capa

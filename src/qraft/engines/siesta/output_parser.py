@@ -2,14 +2,116 @@
 
 from __future__ import annotations
 
+import hashlib
+import math
 import re
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Iterable
 
+from ...contracts import ContractEnvelope, SCIENTIFIC_ARTIFACT
 from ...models import DecisionStatus, GateDecision
 from .models import OutputClassification, SiestaOutputRecord
 
 
 _FLOAT = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][-+]?\d+)?"
+
+
+@dataclass(frozen=True)
+class FinalScfEnergyEvidence:
+    """Verified final total energy from a completed native SIESTA SCF output.
+
+    This deliberately does not reuse the provisional ``energies`` list: that
+    list contains iterative E_KS/Etot values and is not selection evidence.
+    """
+
+    value_ev: float
+    stdout_sha256: str
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": "1.0",
+            "quantity": "siesta.final_total_energy",
+            "value_ev": self.value_ev,
+            "unit": "eV",
+            "parser": "qraft.siesta.final-total-energy.v1",
+            "source_stdout_sha256": self.stdout_sha256,
+            "scf_converged": True,
+        }
+
+
+def final_scf_energy_artifact_envelope(
+    *,
+    evidence: FinalScfEnergyEvidence,
+    final_fdf_sha256: str,
+    electronic_state_file_sha256: str,
+    electronic_state_content_sha256: str,
+    magnetic_state_file_sha256: str,
+    magnetic_state_content_sha256: str,
+    scientific_identity_sha256: str,
+) -> dict[str, object]:
+    """Wrap re-parsed historic energy evidence in the existing artifact contract.
+
+    M8-D can therefore consume old M6 states without treating a caller-supplied
+    numeric value as evidence.  The selector verifies this envelope and every
+    parent hash, but never reads or parses SIESTA stdout itself.
+    """
+
+    energy = evidence.to_dict()
+    energy["source_final_fdf_sha256"] = final_fdf_sha256
+    payload = {
+        "schema_version": "1.0",
+        "artifact_id": "final-scf-energy",
+        "artifact_type": "qraft.final-scf-energy",
+        "authority": "PROVISIONAL",
+        "energy": energy,
+        "parent_electronic_state": {
+            "file_sha256": electronic_state_file_sha256,
+            "content_sha256": electronic_state_content_sha256,
+            "scientific_identity_sha256": scientific_identity_sha256,
+            "magnetic_state_file_sha256": magnetic_state_file_sha256,
+            "magnetic_state_content_sha256": magnetic_state_content_sha256,
+        },
+    }
+    return ContractEnvelope.create(
+        SCIENTIFIC_ARTIFACT,
+        producer="qraft.siesta-final-scf-energy",
+        payload=payload,
+    ).to_dict()
+
+
+def parse_final_scf_energy_evidence(stdout: Path) -> FinalScfEnergyEvidence:
+    """Return only the post-convergence ``Final energy`` total from SIESTA.
+
+    The native 5.4 output contains many intermediate energies.  A result is
+    accepted only when normal termination and SCF convergence are independently
+    visible and exactly one final-energy section follows the DM_out final pass.
+    """
+
+    data = stdout.read_bytes()
+    lines = data.decode("utf-8", errors="replace").splitlines()
+    record = SiestaOutputParser().parse((line + "\n" for line in lines))
+    if not record.normal_termination or not record.scf_converged:
+        raise ValueError("final SIESTA energy requires normal converged SCF output")
+    dm_markers = [index for index, line in enumerate(lines) if "using dm_out to compute the final energy" in line.casefold()]
+    if len(dm_markers) != 1:
+        raise ValueError("final SIESTA energy requires one DM_out final-energy pass")
+    final_headers = [
+        index for index, line in enumerate(lines)
+        if index > dm_markers[0] and re.search(r"^\s*siesta:\s*final\s+energy\s*\(\s*ev\s*\)\s*:\s*$", line, re.I)
+    ]
+    if len(final_headers) != 1:
+        raise ValueError("final SIESTA energy section is missing or ambiguous")
+    totals: list[float] = []
+    for line in lines[final_headers[0] + 1:]:
+        if re.search(r"^\s*siesta:\s*final\s+energy\s*\(", line, re.I):
+            break
+        match = re.search(r"^\s*siesta:\s*total\s*=\s*(" + _FLOAT + r")\s*$", line, re.I)
+        if match:
+            totals.append(float(match.group(1)))
+    if len(totals) != 1 or not math.isfinite(totals[0]):
+        raise ValueError("final SIESTA total energy is missing, ambiguous, or non-finite")
+    return FinalScfEnergyEvidence(totals[0], hashlib.sha256(data).hexdigest())
 
 
 class SiestaOutputParser:

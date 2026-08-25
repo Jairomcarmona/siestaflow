@@ -90,7 +90,7 @@ def _templates(root: Path) -> tuple[Path, Path]:
     return relax, final
 
 
-def _overrides(root: Path, *, dm: bool = True, converged: bool = True, magnetic: bool = False, noncollinear: bool = False) -> dict:
+def _overrides(root: Path, *, dm: bool = True, converged: bool = True, magnetic: bool = False, noncollinear: bool = False, final_energy: bool = False) -> dict:
     script = root / "final_fake.py"
     script.write_text(
         "from pathlib import Path\nimport sys\ntext=Path('input.fdf').read_text()\n"
@@ -102,6 +102,7 @@ def _overrides(root: Path, *, dm: bool = True, converged: bool = True, magnetic:
             if noncollinear else "print('redata: Spin configuration = polarized')\nprint('redata: Number of spin components = 2')\nprint('Mulliken Atomic Populations:')\nprint('  1 Total 4.0 2.0')\nprint(' Total 4.0 2.0')\n" if magnetic else ""
         )
         + ("print('SCF converged')\n" if converged else "print('SCF not converged')\n")
+        + ("print('Using DM_out to compute the final energy and forces')\nprint('siesta: Final energy (eV):')\nprint('siesta: Total = -12.500000')\n" if final_energy else "")
         + "print('Job completed')\n",
         encoding="utf-8",
     )
@@ -169,6 +170,21 @@ def test_ground_state_final_scf_artifact_reuse_and_blocking(tmp_path: Path) -> N
     blocked_relaxation = _Relaxation()
     blocked = GroundStateProtocol(convergence=FailedConvergence(), relaxation=blocked_relaxation).run(basis, mesh, kpoints, relaxation_fdf=relax, final_scf_fdf=final, runs_root=tmp_path / "f03-blocked", overrides=_overrides(tmp_path))
     assert blocked["blocking_stage"] == "numerical-convergence" and blocked_relaxation.calls == 0
+
+
+def test_ground_state_publishes_optional_verified_final_energy(tmp_path: Path) -> None:
+    basis, mesh, kpoints = _campaigns(tmp_path); relax, final = _templates(tmp_path)
+    result = GroundStateProtocol(convergence=_Convergence(), relaxation=_Relaxation()).run(
+        basis, mesh, kpoints, relaxation_fdf=relax, final_scf_fdf=final,
+        runs_root=tmp_path / "energy-runs", overrides=_overrides(tmp_path, final_energy=True),
+    )
+    state = ContractEnvelope.from_dict(
+        json.loads(Path(result["electronic_state"]).read_text(encoding="utf-8")),
+        required_contract=SCIENTIFIC_ARTIFACT,
+    ).payload["final_scf"]
+    assert state["final_energy"]["quantity"] == "siesta.final_total_energy"
+    assert state["final_energy"]["value_ev"] == -12.5
+    assert state["final_energy"]["source_final_fdf_sha256"] == state["input_fdf_sha256"]
 
 
 def test_ground_state_publishes_collinear_magnetic_evidence(tmp_path: Path) -> None:

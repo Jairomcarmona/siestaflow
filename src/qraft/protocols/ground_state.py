@@ -20,6 +20,7 @@ from ..engines.siesta.magnetism import (
     parse_magnetic_output,
     soc_pseudopotential_evidence,
 )
+from ..engines.siesta.output_parser import parse_final_scf_energy_evidence
 from ..engines.siesta.input_closure import resolve_scientific_input_closure
 from ..engines.siesta.relaxation import geometry_from_fdf
 from ..execution.capability_plugins import SIESTA_ENGINE_CAPABILITY, register_siesta_engine
@@ -182,6 +183,8 @@ class GroundStateProtocol:
             return self._blocked("final-scf", convergence=convergence, relaxation=relaxation, final_scf=final)
         state_path = root / "electronic-state.json"
         final_state = {"scientific_identity_sha256": final["scientific_identity_sha256"], "input_fdf_sha256": _sha(final_input), "system_label": final["system_label"], "scf_converged": True, "scf_iterations": final["scf_iterations"], "density_matrix": final["density_matrix"]}
+        if final.get("final_energy") is not None:
+            final_state["final_energy"] = final["final_energy"]
         if final.get("magnetic") is not None:
             final_state["spin_mode"] = final["magnetic"]["spin_mode"]
             final_state["magnetic"] = final["magnetic"]
@@ -219,6 +222,18 @@ class GroundStateProtocol:
         parsed = attempt.result.technical_validation.parser_summary
         dm_name = f"{label}.DM"; dm_sha = attempt.artifacts.get(dm_name)
         magnetic = None
+        final_energy = None
+        if attempt.result.technical_validation.status == "PASS" and bool(parsed.get("scf_converged")):
+            try:
+                attempt_root = root / "work" / "final-scf" / attempt.attempt_id
+                stdout = attempt_root / attempt.stdout
+                final_energy = parse_final_scf_energy_evidence(stdout).to_dict()
+                final_energy["source_final_fdf_sha256"] = _sha(fdf)
+            except (OSError, ValueError):
+                # Final-energy evidence is additive.  Historic and synthetic M6
+                # states remain valid even when their output lacks this native
+                # SIESTA-specific final-energy dialect.
+                final_energy = None
         if requested_spin is not None and attempt.result.technical_validation.status == "PASS" and bool(parsed.get("scf_converged")):
             try:
                 attempt_root = root / "work" / "final-scf" / attempt.attempt_id
@@ -255,7 +270,7 @@ class GroundStateProtocol:
                 }
             except (OSError, ValueError) as exc:
                 return {"status": "FAILED", "technical_validation": "FAIL", "attempt_id": attempt.attempt_id, "reused": "final-scf" in runtime.reused_nodes, "scientific_identity_sha256": identity.fingerprint, "system_label": label, "scf_started": bool(parsed.get("scf_started")), "scf_converged": bool(parsed.get("scf_converged")), "scf_iterations": int(parsed.get("scf_iterations") or 0), "density_matrix": {"filename": dm_name, "sha256": dm_sha} if dm_sha else None, "magnetic": None, "magnetic_error": str(exc)}
-        return {"status": "COMPLETED" if attempt.result.technical_validation.status == "PASS" else "FAILED", "technical_validation": attempt.result.technical_validation.status, "attempt_id": attempt.attempt_id, "reused": "final-scf" in runtime.reused_nodes, "scientific_identity_sha256": identity.fingerprint, "system_label": label, "scf_started": bool(parsed.get("scf_started")), "scf_converged": bool(parsed.get("scf_converged")), "scf_iterations": int(parsed.get("scf_iterations") or 0), "density_matrix": {"filename": dm_name, "sha256": dm_sha} if dm_sha else None, "magnetic": magnetic}
+        return {"status": "COMPLETED" if attempt.result.technical_validation.status == "PASS" else "FAILED", "technical_validation": attempt.result.technical_validation.status, "attempt_id": attempt.attempt_id, "reused": "final-scf" in runtime.reused_nodes, "scientific_identity_sha256": identity.fingerprint, "system_label": label, "scf_started": bool(parsed.get("scf_started")), "scf_converged": bool(parsed.get("scf_converged")), "scf_iterations": int(parsed.get("scf_iterations") or 0), "density_matrix": {"filename": dm_name, "sha256": dm_sha} if dm_sha else None, "magnetic": magnetic, "final_energy": final_energy}
 
     @staticmethod
     def _blocked(stage: str, **stages: Any) -> dict[str, Any]:
