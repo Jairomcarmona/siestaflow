@@ -1,0 +1,32 @@
+SystemName M8-C isolated Fe SOC Z fixture
+SystemLabel fe_soc_z
+NumberOfAtoms 1
+NumberOfSpecies 1
+LatticeConstant 1 Ang
+%block ChemicalSpeciesLabel
+1 26 Fe
+%endblock ChemicalSpeciesLabel
+%block LatticeVectors
+20.0 0.0 0.0
+0.0 20.0 0.0
+0.0 0.0 20.0
+%endblock LatticeVectors
+AtomicCoordinatesFormat Ang
+%block AtomicCoordinatesAndAtomicSpecies
+0.0 0.0 0.0 1
+%endblock AtomicCoordinatesAndAtomicSpecies
+%block kgrid.MonkhorstPack
+1 0 0 0.0
+0 1 0 0.0
+0 0 1 0.0
+%endblock kgrid.MonkhorstPack
+Mesh.Cutoff 100 Ry
+PAO.EnergyShift 50 meV
+XC.functional GGA
+XC.authors PBE
+Spin spin-orbit
+Charge.Mulliken end
+%block DM.InitSpin
+  1 + 0.0 0.0
+%endblock DM.InitSpin
+MD.Steps 0

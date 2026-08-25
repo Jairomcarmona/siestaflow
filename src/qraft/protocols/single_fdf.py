@@ -44,6 +44,7 @@ from ..engines.siesta.fdf_parser import FDFParser
 from ..engines.siesta.effective_fdf import resolve_effective_fdf
 from ..engines.siesta.input_closure import collect_fdf_files, effective_species, resolve_pseudopotentials, resolve_scientific_input_closure
 from ..engines.siesta.input_validator import SiestaInputValidator
+from ..engines.siesta.magnetism import validate_magnetic_input
 from ..engines.siesta.models import FDFBlock, FDFInclude, OutputClassification
 from ..engines.siesta.output_parser import SiestaOutputParser
 from ..execution.adapters import launcher_registry
@@ -321,6 +322,10 @@ def build_fdf_plan(
     overrides: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     identity = build_scientific_identity(fdf, pseudo_manifest=pseudo_manifest)
+    # SOC pseudo compatibility is a scientific-input preflight, not a
+    # runtime concern.  Running it here ensures the canonical Single-FDF
+    # route blocks scalar/unknown inputs before any SIESTA launch.
+    validate_magnetic_input(fdf, pseudo_manifest=pseudo_manifest)
     execution, provenance = resolve_execution_spec(
         profile=profile,
         project_config=project_config,

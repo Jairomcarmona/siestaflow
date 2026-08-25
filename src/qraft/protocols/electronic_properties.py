@@ -150,11 +150,12 @@ class ElectronicStateSource:
         except ValueError as exc:
             raise ValueError("M7 final-SCF scientific identity is invalid") from exc
         spin_mode = str(final.get("spin_mode", "non-polarized")).strip().casefold()
-        if spin_mode not in {"non-polarized", "polarized", "non-collinear"}:
+        if spin_mode not in {"non-polarized", "polarized", "non-collinear", "spin-orbit"}:
             raise ValueError("M7 parent electronic-state spin_mode is invalid")
         magnetic_content_sha = None
         magnetic_file_sha = None
-        if spin_mode in {"polarized", "non-collinear"}:
+        soc_pseudos: Mapping[str, object] | None = None
+        if spin_mode in {"polarized", "non-collinear", "spin-orbit"}:
             magnetic = final.get("magnetic")
             if not isinstance(magnetic, Mapping) or magnetic.get("spin_mode") != spin_mode:
                 raise ValueError("M7 magnetic parent lacks evidence agreeing with its spin_mode")
@@ -186,10 +187,27 @@ class ElectronicStateSource:
                 raise ValueError("M7 magnetic parent artifact observed state is invalid")
             if magnetic.get("requested") != magnetic_payload.get("requested") or magnetic.get("observed") != observed:
                 raise ValueError("M7 magnetic parent summary disagrees with artifact")
+            if spin_mode == "spin-orbit":
+                soc = magnetic_payload.get("soc")
+                if not isinstance(soc, Mapping) or soc.get("enabled") is not True or soc.get("implementation") != "full":
+                    raise ValueError("M7 spin-orbit parent lacks full-SOC evidence")
+                soc_pseudos = soc.get("pseudopotentials") if isinstance(soc.get("pseudopotentials"), Mapping) else None
+                if not soc_pseudos:
+                    raise ValueError("M7 spin-orbit parent lacks pseudopotential provenance")
         # Resolving the closure and pseudos here rejects include escapes,
         # incomplete closure bytes, and pseudo mismatches before compilation.
         effective = resolve_effective_fdf(final_fdf)
         pseudos = resolve_pseudopotentials(effective.source_root, effective_species(effective), pseudo_manifest)
+        if spin_mode == "spin-orbit":
+            assert soc_pseudos is not None
+            if set(soc_pseudos) != set(pseudos):
+                raise ValueError("M7 spin-orbit pseudopotential provenance does not match final-SCF inputs")
+            for species, pseudo in pseudos.items():
+                entry = soc_pseudos[species]
+                if not isinstance(entry, Mapping) or entry.get("compatibility") != "FULLY_RELATIVISTIC":
+                    raise ValueError("M7 spin-orbit pseudopotential provenance is not fully relativistic")
+                if sha256_path(pseudo) != _sha256_hex(entry.get("sha256"), field="SOC pseudopotential hash"):
+                    raise ValueError("M7 spin-orbit pseudopotential SHA-256 mismatch")
         recomputed = build_scientific_identity(final_fdf, pseudo_manifest=pseudo_manifest)
         if recomputed.fingerprint != parent_identity:
             raise ValueError("M7 final-SCF scientific identity does not match M6 evidence")

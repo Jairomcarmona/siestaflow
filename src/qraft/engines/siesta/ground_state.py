@@ -7,7 +7,7 @@ from typing import Any, Mapping
 
 from .fdf_parser import FDFParser
 from .effective_fdf import resolve_effective_fdf
-from .magnetism import magnetic_spin_from_fdf
+from .magnetism import validate_magnetic_input
 from .models import FDFBlock, FDFDocument, normalize_label
 
 
@@ -96,7 +96,7 @@ def geometry_updates(geometry: Mapping[str, Any]) -> dict[str, Mapping[str, obje
     }
 
 
-def validate_final_scf(path: Path) -> None:
+def validate_final_scf(path: Path, *, pseudo_manifest: Path | None = None) -> None:
     effective = resolve_effective_fdf(path)
     steps = effective.scalar("MD.Steps")
     if steps is not None:
@@ -113,7 +113,7 @@ def validate_final_scf(path: Path) -> None:
             raise ValueError(f"M6 final SCF rejects {name}=true")
     # M8-A/B accept only complete supported magnetic declarations.  The helper
     # is a no-op for legacy non-magnetic FDFs, preserving historical M6 input.
-    magnetic_spin_from_fdf(path)
+    validate_magnetic_input(path, pseudo_manifest=pseudo_manifest)
 
 
 def system_label(path: Path) -> str:

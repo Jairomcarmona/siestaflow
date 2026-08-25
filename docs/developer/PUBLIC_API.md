@@ -20,6 +20,12 @@ M8-B additionally exposes `NonCollinearSpinSpec` and
 `DM.InitSpin` polarization with optional explicit theta/phi directions.  SOC,
 Spin.Spiral, DFT+U/Hubbard, and execution controls remain outside this API.
 
+M8-C additionally exposes `SpinOrbitSpec`.  It intentionally reuses
+`NonCollinearSpinMoment` for `Spin spin-orbit` directional `DM.InitSpin`
+rows; full SOC requires engine-verified fully-relativistic PSML inputs.
+Onsite SOC, `Spin.OrbitStrength`, spin spirals, Hubbard controls, orbital
+moments, and execution controls are not representable.
+
 Public CLI stability is documented in `docs/user/cli.md`. Persistent schema
 stability is independent from Python import stability.
 

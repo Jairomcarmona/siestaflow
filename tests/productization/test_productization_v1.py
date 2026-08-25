@@ -70,6 +70,7 @@ def test_public_api_is_intentional() -> None:
         "BandPathProposal", "BandPathRequest", "BandPathSegment",
         "CollinearMomentToken", "CollinearSpinMoment", "CollinearSpinSpec",
         "NonCollinearSpinMoment", "NonCollinearSpinSpec",
+        "SpinOrbitSpec",
         "CrystalStructure", "EngineAdapter", "ExecutionProfile",
         "ExecutionSpec", "LauncherAdapter", "OutputModel", "ProfileStore",
         "ProviderPath", "QraftApplication", "SchedulerAdapter",

@@ -18,6 +18,7 @@ from ..engines.siesta.magnetism import (
     magnetic_artifact_envelope,
     magnetic_evidence_scalar_updates,
     parse_magnetic_output,
+    soc_pseudopotential_evidence,
 )
 from ..engines.siesta.input_closure import resolve_scientific_input_closure
 from ..engines.siesta.relaxation import geometry_from_fdf
@@ -129,6 +130,12 @@ class GroundStateProtocol:
         root = runs_root.resolve()
         authoritative_manifest = basis_campaign.system.pseudo_manifest
         _same_magnetic_intent(basis_campaign.system.fdf, relaxation_fdf, final_scf_fdf)
+        # SOC is accepted only after each scientific template independently
+        # proves fully-relativistic PSML compatibility.  This stays protocol/
+        # engine local and creates no execution authority.
+        if getattr(magnetic_spin_from_fdf(basis_campaign.system.fdf), "spin_mode", None) == "spin-orbit":
+            for template in (basis_campaign.system.fdf, relaxation_fdf, final_scf_fdf):
+                soc_pseudopotential_evidence(template, pseudo_manifest=authoritative_manifest)
         _same_system(basis_campaign.system.fdf, relaxation_fdf, pseudo_manifest=authoritative_manifest, geometry=True)
         _same_system(basis_campaign.system.fdf, final_scf_fdf, pseudo_manifest=authoritative_manifest, geometry=False)
         source_atoms = geometry_from_fdf(basis_campaign.system.fdf)["atoms"]
@@ -166,7 +173,7 @@ class GroundStateProtocol:
         final_render = self.adapter.materialize_effective(final_scf_fdf, final_input.parent, resolved=resolved, scalar_updates=final_scalars, block_updates=geometry_render["blocks"], primary_destination="input.fdf")
         _stage_template_pseudos(final_scf_fdf, final_input, authoritative_manifest)
         try:
-            validate_final_scf(final_input)
+            validate_final_scf(final_input, pseudo_manifest=authoritative_manifest)
         except ValueError as exc:
             return self._blocked("final-scf", convergence=convergence, relaxation=relaxation, reason=str(exc))
         _json(root / "handoff" / "final-scf" / "input-evidence.json", {"template_sha256": final_template_sha, "numerical_profile_file_sha256": profile_sha, "numerical_profile_content_sha256": profile_raw["content_sha256"], "geometry_file_sha256": geometry_sha, "geometry_content_sha256": geometry_raw["content_sha256"], "rendered_fdf_sha256": _sha(final_input), "rendered_closure_sha256": final_render.closure_sha256, "rendered_closure_files": final_render.file_sha256}, immutable=True)
@@ -200,6 +207,11 @@ class GroundStateProtocol:
         composition = compose_runtime(execution, max_parallel_steps=1)
         identity = build_scientific_identity(fdf, pseudo_manifest=pseudo_manifest)
         requested_spin = magnetic_spin_from_fdf(fdf)
+        soc_evidence = (
+            soc_pseudopotential_evidence(fdf, pseudo_manifest=pseudo_manifest)
+            if getattr(requested_spin, "spin_mode", None) == "spin-orbit"
+            else None
+        )
         runtime = CompiledWorkflowRuntime(workflow=compiled.compiled, registry=registry, root=root, source_root=root, scientific_identities={"final-scf": identity}, execution_specs=execution, launcher=composition.launcher, allocation=composition.allocation, force_new_attempts=force_new_attempt).run()
         attempt = runtime.attempts.get("final-scf")
         if attempt is None:
@@ -226,6 +238,7 @@ class GroundStateProtocol:
                     scf_converged=True,
                     siesta_version=(str(parsed["version"]) if parsed.get("version") else None),
                     stdout_relative_path=stdout.resolve().relative_to(state_root.resolve()).as_posix(),
+                    soc_pseudo_evidence=soc_evidence,
                 )
                 magnetic_path = attempt_root / "magnetic-state.json"
                 _json(magnetic_path, magnetic_raw, immutable=True)

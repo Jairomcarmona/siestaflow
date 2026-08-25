@@ -1,8 +1,7 @@
-"""Engine-neutral magnetic intent for the supported M8-A/B spin channels.
+"""Engine-neutral magnetic intent for the supported M8 spin channels.
 
-The module contains collinear M8-A and non-collinear M8-B input intent only.
-SOC, spirals, Hubbard physics, and execution mechanics deliberately have no
-representation here.
+The module deliberately models only input intent.  SIESTA spelling, pseudo
+classification, output parsing, and execution remain engine-layer concerns.
 """
 
 from __future__ import annotations
@@ -256,6 +255,71 @@ class NonCollinearSpinSpec:
         unknown = sorted(set(value) - allowed)
         if unknown:
             raise ValueError("M8-B does not support magnetic fields: " + ", ".join(unknown))
+        raw = value.get("initial_moments")
+        if raw is not None and not isinstance(raw, (list, tuple)):
+            raise ValueError("initial_moments must be absent or a list")
+        return cls(None if raw is None else tuple(
+            item if isinstance(item, NonCollinearSpinMoment) else NonCollinearSpinMoment(**item)
+            for item in raw
+        ))
+
+
+@dataclass(frozen=True)
+class SpinOrbitSpec:
+    """Immutable full-SOC intent using the established directional rows.
+
+    ``NonCollinearSpinMoment`` is intentionally reused: SIESTA's SOC
+    ``DM.InitSpin`` has the same ``atom polarization [theta phi]`` grammar.
+    Keeping it shared preserves absent-versus-empty and exact-angle identity
+    semantics without normalizing physically equivalent directions.
+    """
+
+    initial_moments: tuple[NonCollinearSpinMoment, ...] | None = None
+
+    def __post_init__(self) -> None:
+        moments = None if self.initial_moments is None else tuple(self.initial_moments)
+        if moments is not None:
+            normalized = tuple(
+                item if isinstance(item, NonCollinearSpinMoment) else NonCollinearSpinMoment(**item)  # type: ignore[arg-type]
+                for item in moments
+            )
+            indices = [item.atom_index for item in normalized]
+            if len(indices) != len(set(indices)):
+                raise ValueError("DM.InitSpin atom indices must be unique")
+            moments = normalized
+        object.__setattr__(self, "initial_moments", moments)
+
+    @property
+    def spin_mode(self) -> str:
+        return "spin-orbit"
+
+    def validate_atom_count(self, atom_count: int) -> None:
+        if isinstance(atom_count, bool) or not isinstance(atom_count, int) or atom_count <= 0:
+            raise ValueError("NumberOfAtoms must be a positive integer for spin-orbit")
+        if self.initial_moments is not None and any(item.atom_index > atom_count for item in self.initial_moments):
+            raise ValueError("DM.InitSpin atom_index exceeds NumberOfAtoms")
+
+    def canonical(self) -> dict[str, object]:
+        return {
+            "spin_mode": self.spin_mode,
+            "initialization": (
+                {"kind": "absent"}
+                if self.initial_moments is None
+                else {"kind": "explicit", "moments": [item.canonical() for item in self.initial_moments]}
+            ),
+        }
+
+    @property
+    def sha256(self) -> str:
+        encoded = json.dumps(self.canonical(), sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()
+
+    @classmethod
+    def from_mapping(cls, value: Mapping[str, Any]) -> "SpinOrbitSpec":
+        allowed = {"initial_moments"}
+        unknown = sorted(set(value) - allowed)
+        if unknown:
+            raise ValueError("M8-C supports only initial_moments: " + ", ".join(unknown))
         raw = value.get("initial_moments")
         if raw is not None and not isinstance(raw, (list, tuple)):
             raise ValueError("initial_moments must be absent or a list")
