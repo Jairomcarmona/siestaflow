@@ -1,0 +1,7 @@
+Environment: PYTHONDONTWRITEBYTECODE=1; PYTHONPATH=src
+Command:
+python -m tests.characterization.m9_root_cause_harness --workspace C:\Users\Jairo\Downloads\SIESTAFLOW_CONTEXT\m9-r1-concurrency-workspace-4 --evidence-dir C:\Users\Jairo\Downloads\SIESTAFLOW_CONTEXT\qraft-m9-clean-room\docs\validation\m9_mass_screening_scale_acceptance\root_cause
+
+Result: EXIT=0. The workspace is persistent, external to the repository, and
+is intentionally retained. The earlier bootstrap-only invocations are retained
+as separate external logs; neither initialized a valid N/P case.

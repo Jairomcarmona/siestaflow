@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "scope": "M9 persistence Option B post-fix characterization",
+  "cases": [
+    {
+      "candidates": 25,
+      "parallelism": 4,
+      "total_cpus": 16,
+      "total_nodes": 1,
+      "max_parallel_steps": 4,
+      "cpus_per_task": 4,
+      "wall_seconds": 0.7420395000008284,
+      "process_cpu_seconds": 1.046875,
+      "peak_parallel_steps": 4,
+      "peak_cpus": 16,
+      "peak_nodes": 1,
+      "full_snapshot_write_count": 2,
+      "full_snapshot_bytes": 10280,
+      "journal_append_count": 53,
+      "journal_bytes": 20423,
+      "total_state_persistence_bytes": 30703,
+      "summary_sha256": "73ce82c5a4207d8accd472999474af482f97d9da3a7c165c527f0863155eb1bc"
+    },
+    {
+      "candidates": 100,
+      "parallelism": 4,
+      "total_cpus": 16,
+      "total_nodes": 1,
+      "max_parallel_steps": 4,
+      "cpus_per_task": 4,
+      "wall_seconds": 5.127146800004994,
+      "process_cpu_seconds": 6.5625,
+      "peak_parallel_steps": 4,
+      "peak_cpus": 16,
+      "peak_nodes": 1,
+      "full_snapshot_write_count": 2,
+      "full_snapshot_bytes": 38183,
+      "journal_append_count": 203,
+      "journal_bytes": 78980,
+      "total_state_persistence_bytes": 117163,
+      "summary_sha256": "55bd0659b8500d03ab1951976b295a396b5401ed2e768f5e31879d6bf1c27684"
+    }
+  ]
+}

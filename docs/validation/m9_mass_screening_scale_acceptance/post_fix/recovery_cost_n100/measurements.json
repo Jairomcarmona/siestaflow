@@ -1,0 +1,38 @@
+{
+  "candidates": 100,
+  "topology": "EVAL_i -> SCORE_i",
+  "parallelism": 4,
+  "cpus_per_task": 4,
+  "total_cpus": 16,
+  "total_nodes": 1,
+  "max_parallel_steps": 4,
+  "failure_rule": "i % 20 == 7",
+  "first_invocation": {
+    "unaffected_completed_nodes": 95,
+    "failed_eval_nodes": 5,
+    "blocked_score_descendants": 5,
+    "attempts_started": 195,
+    "wall_seconds": 12.2389807,
+    "snapshot_write_count": 2,
+    "journal_append_count": 398,
+    "journal_bytes": 155096,
+    "total_state_persistence_bytes": 234521
+  },
+  "recovery": {
+    "reused_nodes": 190,
+    "new_attempts": 10,
+    "candidates_reexecuted": 5,
+    "reexecuted_candidates": ["candidate-0007", "candidate-0027", "candidate-0047", "candidate-0067", "candidate-0087"],
+    "final_completed": 100,
+    "final_failed": 0,
+    "final_blocked": 0,
+    "recovery_wall_seconds": 8.8886419,
+    "snapshot_write_count": 1,
+    "journal_append_count": 33,
+    "journal_bytes": 12260,
+    "total_state_persistence_bytes": 62198,
+    "summary_sha256": "55bd0659b8500d03ab1951976b295a396b5401ed2e768f5e31879d6bf1c27684"
+  },
+  "attempt_0001_immutable": true,
+  "clean_equivalent_campaign_executed": false
+}

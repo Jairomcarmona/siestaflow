@@ -33,7 +33,10 @@ from qraft.execution.capability_plugins import (
     SIESTA_ENGINE_CAPABILITY,
     register_siesta_engine,
 )
-from qraft.execution.capability_runtime import CompiledWorkflowRuntime
+from qraft.execution.capability_runtime import (
+    CompiledWorkflowRuntime,
+    load_runtime_state_payload,
+)
 from qraft.execution.srun_launcher import StepLaunchSpec, StepOutcome
 
 
@@ -498,21 +501,28 @@ def test_reserved_attempt_survives_crash_before_workspace_creation(tmp_path: Pat
     launcher = RecordingLauncher()
     registry = registry_for(SyntheticCapability())
     interrupted = runtime(tmp_path, compiled, registry, launcher)
-    atomic_write_json = interrupted.filesystem.atomic_write_json
+    append_text = interrupted.filesystem.append_text
 
-    def crash_after_reservation(path: Path, payload: object) -> None:
-        atomic_write_json(path, payload)
-        task = payload["payload"]["tasks"]["A"]
-        if task["last_attempt"] == "attempt-0001":
+    def crash_after_reservation(path: Path, content: str) -> None:
+        append_text(path, content)
+        if path != interrupted.journal_path:
+            return
+        record = __import__("json").loads(content)
+        mutation = record["mutation"]
+        if (
+            mutation["kind"] == "task"
+            and mutation["task_id"] == "A"
+            and mutation["changes"]["last_attempt"] == "attempt-0001"
+        ):
             raise KeyboardInterrupt("simulated crash after attempt reservation")
 
-    interrupted.filesystem.atomic_write_json = crash_after_reservation
+    interrupted.filesystem.append_text = crash_after_reservation
     with pytest.raises(KeyboardInterrupt, match="attempt reservation"):
         interrupted.run()
 
-    state = __import__("json").loads(
-        (tmp_path / "run" / "state" / "workflow_runtime.json").read_text()
-    )["payload"]["tasks"]["A"]
+    state = load_runtime_state_payload(
+        tmp_path / "run" / "state" / "workflow_runtime.json"
+    )["tasks"]["A"]
     assert state["attempts"] == 1 and state["last_attempt"] == "attempt-0001"
     assert not (tmp_path / "run" / "work" / "A" / "attempt-0001").exists()
 

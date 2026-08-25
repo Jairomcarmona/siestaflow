@@ -271,8 +271,8 @@ non-goals, acceptance gates, evidence, status y closing commit.
 | Non-goals | Física nueva. |
 | Acceptance gates | Summary: `candidate_id`, status, métrica científica, razón rechazo y rank cuando aplique. |
 | Required evidence | Mediciones y `docs/validation/m9_mass_screening_scale_acceptance/`. |
-| Status | `NOT_STARTED` |
-| Closing commit | No aplicable hasta cierre. |
+| Status | `CLOSED` |
+| Closing commit | `feat: close M9 mass screening scale acceptance` |
 
 ### M10 — HPC Portability / Production Acceptance
 
@@ -311,7 +311,8 @@ infraestructura de ejecución.
 | M6 | `CLOSED` |
 | M7 | `CLOSED` |
 | M8 | `CLOSED` |
-| M9–M10 | `NOT_STARTED` |
+| M9 | `CLOSED` |
+| M10 | `NOT_STARTED` |
 | DFT+U / LR-U | `DEFERRED` |
 
 Un agente futuro debe construir sólo el siguiente milestone abierto, en la capa

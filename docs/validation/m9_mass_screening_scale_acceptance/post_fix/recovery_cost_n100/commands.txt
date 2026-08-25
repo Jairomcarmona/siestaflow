@@ -1,0 +1,9 @@
+Environment: PYTHONDONTWRITEBYTECODE=1; PYTHONPATH=src
+One direct validation-driver invocation using the canonical two-stage harness:
+  characterize N=100, topology EVAL_i -> SCORE_i, failure rule i % 20 == 7
+  RuntimeAllocation(total_cpus=16, total_nodes=1, max_parallel_steps=4)
+
+External workspace:
+C:\Users\Jairo\Downloads\SIESTAFLOW_CONTEXT\m9-recovery-cost-n100
+
+No clean equivalent campaign was executed.

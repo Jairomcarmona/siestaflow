@@ -49,6 +49,7 @@ from .srun_launcher import StepLaunchSpec, StepLauncher, StepOutcome
 
 
 _TERMINAL_FAILURES = {"FAILED", "BLOCKED", "CANCELLED"}
+_STATE_JOURNAL_SCHEMA = "1.0"
 _EXECUTABLE_CAPABILITY_METHODS = (
     "inspect_input",
     "validate_input",
@@ -95,6 +96,115 @@ def _safe_relative(value: str, *, field: str) -> Path:
     if not value or path.is_absolute() or ".." in path.parts or not path.parts:
         raise ValueError(f"unsafe relative path in {field}: {value!r}")
     return Path(*path.parts)
+
+
+def _runtime_journal_path(state_path: Path) -> Path:
+    return state_path.with_name("workflow_runtime.journal.jsonl")
+
+
+def _state_payload_from_wrapper(path: Path) -> dict[str, Any]:
+    wrapper = json.loads(path.read_text(encoding="utf-8"))
+    payload = wrapper.get("payload")
+    if wrapper.get("schema_version") != CompiledWorkflowRuntime.STATE_SCHEMA or not isinstance(payload, dict):
+        raise ValueError("invalid workflow runtime state schema")
+    if hashlib.sha256(_canonical(payload).encode("utf-8")).hexdigest() != wrapper.get("sha256"):
+        raise ValueError("workflow runtime state checksum mismatch")
+    return json.loads(_canonical(payload))
+
+
+def _apply_state_mutation(state: dict[str, Any], mutation: Mapping[str, Any]) -> None:
+    kind = mutation.get("kind")
+    if kind == "task":
+        task_id = mutation.get("task_id")
+        changes = mutation.get("changes")
+        if not isinstance(task_id, str) or not isinstance(changes, dict):
+            raise ValueError("invalid workflow runtime task journal mutation")
+        tasks = state.get("tasks")
+        if not isinstance(tasks, dict) or task_id not in tasks or not isinstance(tasks[task_id], dict):
+            raise ValueError("workflow runtime journal task identity mismatch")
+        tasks[task_id].update(changes)
+        return
+    if kind == "allocation_append":
+        invocation = mutation.get("invocation")
+        if not isinstance(invocation, dict):
+            raise ValueError("invalid workflow runtime allocation journal mutation")
+        history = state.setdefault("allocation_history", [])
+        if not isinstance(history, list):
+            raise ValueError("workflow runtime allocation history is invalid")
+        history.append(invocation)
+        return
+    if kind == "allocation_update":
+        changes = mutation.get("changes")
+        history = state.get("allocation_history")
+        if not isinstance(changes, dict) or not isinstance(history, list) or not history:
+            raise ValueError("invalid workflow runtime allocation update mutation")
+        if not isinstance(history[-1], dict):
+            raise ValueError("workflow runtime allocation history entry is invalid")
+        history[-1].update(changes)
+        return
+    if kind == "state":
+        changes = mutation.get("changes")
+        if not isinstance(changes, dict):
+            raise ValueError("invalid workflow runtime state journal mutation")
+        state.update(changes)
+        return
+    raise ValueError("unknown workflow runtime journal mutation")
+
+
+def load_runtime_state_payload(
+    state_path: Path,
+    *,
+    journal_path: Path | None = None,
+) -> dict[str, Any]:
+    """Load a canonical snapshot plus any durable incremental state mutations."""
+
+    state = _state_payload_from_wrapper(state_path)
+    journal = journal_path or _runtime_journal_path(state_path)
+    if not journal.is_file():
+        return state
+    expected_previous: int | None = None
+    for line_number, line in enumerate(journal.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line:
+            raise ValueError(f"empty workflow runtime journal record at line {line_number}")
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"invalid workflow runtime journal JSON at line {line_number}") from exc
+        if not isinstance(record, dict):
+            raise ValueError(f"invalid workflow runtime journal record at line {line_number}")
+        checksum = record.get("sha256")
+        unsigned = {key: value for key, value in record.items() if key != "sha256"}
+        if not isinstance(checksum, str) or hashlib.sha256(_canonical(unsigned).encode("utf-8")).hexdigest() != checksum:
+            raise ValueError(f"workflow runtime journal checksum mismatch at line {line_number}")
+        previous = record.get("previous_revision")
+        revision = record.get("revision")
+        mutation = record.get("mutation")
+        updated_at = record.get("updated_at")
+        if (
+            record.get("schema_version") != _STATE_JOURNAL_SCHEMA
+            or isinstance(previous, bool)
+            or not isinstance(previous, int)
+            or isinstance(revision, bool)
+            or not isinstance(revision, int)
+            or revision != previous + 1
+            or not isinstance(mutation, dict)
+            or not isinstance(updated_at, str)
+        ):
+            raise ValueError(f"invalid workflow runtime journal record at line {line_number}")
+        if expected_previous is not None and previous != expected_previous:
+            raise ValueError(f"workflow runtime journal revision discontinuity at line {line_number}")
+        expected_previous = revision
+        current_revision = state.get("revision")
+        if isinstance(current_revision, bool) or not isinstance(current_revision, int):
+            raise ValueError("workflow runtime state revision is invalid")
+        if revision <= current_revision:
+            continue
+        if previous != current_revision:
+            raise ValueError(f"workflow runtime journal cannot apply revision {revision}")
+        _apply_state_mutation(state, mutation)
+        state["revision"] = revision
+        state["updated_at"] = updated_at
+    return state
 
 
 def normalize_technical_validation(value: object) -> TechnicalValidation:
@@ -191,6 +301,7 @@ class CompiledWorkflowRuntime:
         self.force_new_attempts = bool(force_new_attempts)
         self.filesystem = RealFileSystem()
         self.state_path = self.root / "state" / "workflow_runtime.json"
+        self.journal_path = _runtime_journal_path(self.state_path)
         self.events_path = self.root / "evidence" / "workflow_events.jsonl"
         self._state: dict[str, Any] = {}
         self._results: dict[str, NodeResult] = {}
@@ -297,9 +408,9 @@ class CompiledWorkflowRuntime:
                 "hosts": list(self.allocation.hosts),
             },
         }
-        with self._state_lock:
-            self._state.setdefault("allocation_history", []).append(invocation)
-            self._save_state()
+        self._append_state_mutation(
+            {"kind": "allocation_append", "invocation": invocation}
+        )
         self._event("RUNTIME_INVOCATION_STARTED", **invocation)
         attempted_this_run: set[str] = set()
 
@@ -426,18 +537,22 @@ class CompiledWorkflowRuntime:
             overall = "INTERRUPTED"
         else:
             overall = "BLOCKED"
-        self._state["status"] = overall
-        invocation.update(
-            {
-                "finished_at": _utc_now(),
-                "status": overall,
-                "peak_cpus": self.coordinator.peak_cpus,
-                "peak_nodes": self.coordinator.peak_nodes,
-                "peak_parallel_steps": self.coordinator.peak_steps,
-            }
+        completion = {
+            "finished_at": _utc_now(),
+            "status": overall,
+            "peak_cpus": self.coordinator.peak_cpus,
+            "peak_nodes": self.coordinator.peak_nodes,
+            "peak_parallel_steps": self.coordinator.peak_steps,
+        }
+        self._append_state_mutation(
+            {"kind": "state", "changes": {"status": overall}}
         )
+        self._append_state_mutation(
+            {"kind": "allocation_update", "changes": completion}
+        )
+        invocation.update(completion)
         self._event("RUNTIME_INVOCATION_FINISHED", **invocation)
-        self._save_state()
+        self._compact_state_journal()
         return WorkflowRuntimeResult(
             overall,
             dict(self._results),
@@ -474,12 +589,9 @@ class CompiledWorkflowRuntime:
             self._state = self._initial_state()
             self._save_state()
             return
-        wrapper = json.loads(self.state_path.read_text(encoding="utf-8"))
-        payload = wrapper.get("payload")
-        if wrapper.get("schema_version") != self.STATE_SCHEMA or not isinstance(payload, dict):
-            raise ValueError("invalid workflow runtime state schema")
-        if hashlib.sha256(_canonical(payload).encode("utf-8")).hexdigest() != wrapper.get("sha256"):
-            raise ValueError("workflow runtime state checksum mismatch")
+        payload = load_runtime_state_payload(
+            self.state_path, journal_path=self.journal_path
+        )
         if payload.get("runtime_fingerprint") != self.runtime_fingerprint:
             raise ValueError("workflow runtime identity mismatch")
         if set(payload.get("tasks", {})) != {task.task_id for task in self.workflow.tasks}:
@@ -487,9 +599,9 @@ class CompiledWorkflowRuntime:
         self._state = payload
 
     def _save_state(self) -> None:
+        """Materialize the current canonical snapshot without changing revision."""
+
         with self._state_lock:
-            self._state["revision"] = int(self._state.get("revision", 0)) + 1
-            self._state["updated_at"] = _utc_now()
             payload = json.loads(_canonical(self._state))
             wrapper = {
                 "schema_version": self.STATE_SCHEMA,
@@ -499,6 +611,40 @@ class CompiledWorkflowRuntime:
                 ).hexdigest(),
             }
             self.filesystem.atomic_write_json(self.state_path, wrapper)
+
+    def _append_state_mutation(self, mutation: Mapping[str, Any]) -> None:
+        """Durably append one local state mutation before applying it in memory."""
+
+        with self._state_lock:
+            previous = self._state.get("revision")
+            if isinstance(previous, bool) or not isinstance(previous, int):
+                raise ValueError("workflow runtime state revision is invalid")
+            updated_at = _utc_now()
+            unsigned = {
+                "schema_version": _STATE_JOURNAL_SCHEMA,
+                "previous_revision": previous,
+                "revision": previous + 1,
+                "updated_at": updated_at,
+                "mutation": dict(mutation),
+            }
+            record = {
+                **unsigned,
+                "sha256": hashlib.sha256(
+                    _canonical(unsigned).encode("utf-8")
+                ).hexdigest(),
+            }
+            self.filesystem.append_text(self.journal_path, _canonical(record) + "\n")
+            _apply_state_mutation(self._state, unsigned["mutation"])
+            self._state["revision"] = unsigned["revision"]
+            self._state["updated_at"] = updated_at
+
+    def _compact_state_journal(self) -> None:
+        """Publish the final snapshot before removing replayable journal entries."""
+
+        with self._state_lock:
+            self._save_state()
+            if self.journal_path.is_file():
+                self.filesystem.remove(self.journal_path)
 
     def _event(self, event: str, **fields: object) -> None:
         with self._state_lock:
@@ -511,7 +657,6 @@ class CompiledWorkflowRuntime:
         with self._state_lock:
             current = self._state["tasks"][task_id]
             previous = current["status"]
-            current.update({"status": status, "reason": reason, **fields})
             self._event(
                 "TASK_STATE",
                 task_id=task_id,
@@ -519,7 +664,13 @@ class CompiledWorkflowRuntime:
                 status=status,
                 reason=reason,
             )
-            self._save_state()
+            self._append_state_mutation(
+                {
+                    "kind": "task",
+                    "task_id": task_id,
+                    "changes": {"status": status, "reason": reason, **fields},
+                }
+            )
 
     def _verify_external_artifacts(self) -> None:
         for artifact in self.workflow.external_artifacts:

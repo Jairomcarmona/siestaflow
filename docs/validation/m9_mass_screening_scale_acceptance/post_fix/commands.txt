@@ -1,0 +1,13 @@
+Working tree: feat/qraft-m9-mass-screening
+Execution environment: Python source tree selected with PYTHONPATH=src and PYTHONDONTWRITEBYTECODE=1.
+
+Direct characterization driver executed once against external persistent root:
+  C:\Users\Jairo\Downloads\SIESTAFLOW_CONTEXT\m9-persistence-postfix-characterization
+
+Cases:
+  characterize_case(candidates=25, parallelism=4, cpus_per_task=4,
+                    total_cpus=16, total_nodes=1, max_parallel_steps=4)
+  characterize_case(candidates=100, parallelism=4, cpus_per_task=4,
+                    total_cpus=16, total_nodes=1, max_parallel_steps=4)
+
+No P=1 comparison, N=500 run, full pytest suite, SIESTA, or MPI execution was performed.

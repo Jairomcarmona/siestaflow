@@ -151,6 +151,43 @@ class ResourceCoordinator:
             return False
         return True
 
+    def _current_node_usage(self) -> int:
+        """Return physical nodes occupied by the active leases.
+
+        Non-exclusive single-node tasks may share one physical node.  Requests
+        needing multiple nodes retain their existing whole-node accounting, as
+        do host-exclusive requests.
+        """
+
+        leases = tuple(self._leases.values())
+        shared_single_node = any(
+            lease.nodes == 1 and not lease.hosts for lease in leases
+        )
+        dedicated_nodes = sum(
+            lease.nodes
+            for lease in leases
+            if lease.nodes > 1 or lease.hosts
+        )
+        return dedicated_nodes + int(shared_single_node)
+
+    def _node_usage_with(self, request: ResourceRequest) -> int:
+        """Return physical node occupancy if ``request`` is added."""
+
+        shared_single_node = any(
+            lease.nodes == 1 and not lease.hosts
+            for lease in self._leases.values()
+        )
+        dedicated_nodes = sum(
+            lease.nodes
+            for lease in self._leases.values()
+            if lease.nodes > 1 or lease.hosts
+        )
+        if request.nodes == 1 and not request.exclusive_hosts:
+            shared_single_node = True
+        else:
+            dedicated_nodes += request.nodes
+        return dedicated_nodes + int(shared_single_node)
+
     def try_acquire(self, request: ResourceRequest) -> ResourceLease | None:
         """Return a lease when capacity fits; temporary pressure returns ``None``."""
 
@@ -161,7 +198,8 @@ class ResourceCoordinator:
                 return None
             if request.cpus > self.allocation.total_cpus - self._used_cpus:
                 return None
-            if request.nodes > self.allocation.total_nodes - self._used_nodes:
+            node_usage = self._node_usage_with(request)
+            if node_usage > self.allocation.total_nodes:
                 return None
             hosts: tuple[str, ...] = ()
             if request.exclusive_hosts:
@@ -176,7 +214,7 @@ class ResourceCoordinator:
             lease = ResourceLease(request.task_id, request.cpus, request.nodes, hosts)
             self._leases[request.task_id] = lease
             self._used_cpus += request.cpus
-            self._used_nodes += request.nodes
+            self._used_nodes = node_usage
             self._used_hosts.update(hosts)
             self._peak_cpus = max(self._peak_cpus, self._used_cpus)
             self._peak_nodes = max(self._peak_nodes, self._used_nodes)
@@ -189,8 +227,8 @@ class ResourceCoordinator:
             if current != lease:
                 raise RuntimeError(f"unknown or mismatched resource lease: {lease.task_id}")
             self._used_cpus -= lease.cpus
-            self._used_nodes -= lease.nodes
             self._used_hosts.difference_update(lease.hosts)
+            self._used_nodes = self._current_node_usage()
 
     @property
     def active_task_ids(self) -> tuple[str, ...]:

@@ -1,0 +1,3 @@
+phase,unaffected_completed_nodes,failed_eval_nodes,blocked_score_descendants,attempts_started,reused_nodes,new_attempts,candidates_reexecuted,final_completed,final_failed,final_blocked,wall_seconds,snapshot_write_count,journal_append_count,journal_bytes,total_state_persistence_bytes,summary_sha256
+first,95,5,5,195,,,,,,,12.2389807,2,398,155096,234521,
+recovery,,,,,190,10,5,100,0,0,8.8886419,1,33,12260,62198,55bd0659b8500d03ab1951976b295a396b5401ed2e768f5e31879d6bf1c27684

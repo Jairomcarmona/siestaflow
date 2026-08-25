@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .allocation_controller import ExecutionStatus, load_controller_config
+from .capability_runtime import load_runtime_state_payload
 
 
 def _canonical(value: Any) -> str:
@@ -46,13 +47,16 @@ def read_campaign_progress(value: Path) -> dict[str, Any]:
         current_job_id = None
         revision = 0
     else:
-        wrapper = json.loads(state_path.read_text(encoding="utf-8"))
-        payload = wrapper.get("payload")
-        if wrapper.get("schema_version") != "1.0" or not isinstance(payload, dict):
-            raise ValueError("invalid campaign state schema")
-        digest = hashlib.sha256(_canonical(payload).encode("utf-8")).hexdigest()
-        if digest != wrapper.get("sha256"):
-            raise ValueError("campaign state checksum mismatch")
+        if state_path == canonical_state:
+            payload = load_runtime_state_payload(canonical_state)
+        else:
+            wrapper = json.loads(state_path.read_text(encoding="utf-8"))
+            payload = wrapper.get("payload")
+            if wrapper.get("schema_version") != "1.0" or not isinstance(payload, dict):
+                raise ValueError("invalid campaign state schema")
+            digest = hashlib.sha256(_canonical(payload).encode("utf-8")).hexdigest()
+            if digest != wrapper.get("sha256"):
+                raise ValueError("campaign state checksum mismatch")
         tasks = payload.get("tasks", {})
         if not isinstance(tasks, dict):
             raise ValueError("campaign state tasks are invalid")

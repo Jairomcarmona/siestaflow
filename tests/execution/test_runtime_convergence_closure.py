@@ -315,14 +315,40 @@ def test_node_capacity_prevents_overallocation_and_releases():
     assert coordinator.used_hosts == ()
 
 
-def test_valid_node_concurrency_reaches_allocated_node_capacity():
-    coordinator = ResourceCoordinator(RuntimeAllocation(32, 2, max_parallel_steps=4))
-    first = coordinator.try_acquire(ResourceRequest("A", cpus=4, nodes=1))
-    second = coordinator.try_acquire(ResourceRequest("B", cpus=4, nodes=1))
-    assert first is not None and second is not None
-    assert coordinator.used_nodes == coordinator.peak_nodes == 2
-    coordinator.release(first)
-    coordinator.release(second)
+def test_nonexclusive_single_node_tasks_share_one_physical_node_and_release():
+    coordinator = ResourceCoordinator(RuntimeAllocation(16, 1, max_parallel_steps=4))
+    leases = [
+        coordinator.try_acquire(ResourceRequest(task_id, cpus=4, nodes=1))
+        for task_id in ("A", "B", "C", "D")
+    ]
+    assert all(leases)
+    assert coordinator.used_cpus == coordinator.peak_cpus == 16
+    assert coordinator.used_nodes == coordinator.peak_nodes == 1
+    assert coordinator.peak_steps == 4
+    assert coordinator.try_acquire(ResourceRequest("E", cpus=4, nodes=1)) is None
+    for lease in leases:
+        coordinator.release(lease)
+    coordinator.assert_released()
+    assert coordinator.used_cpus == coordinator.used_nodes == 0
+
+
+def test_exclusive_hosts_remain_unshareable_with_shared_single_node_tasks():
+    coordinator = ResourceCoordinator(
+        RuntimeAllocation(16, 1, max_parallel_steps=4, hosts=("node-1",))
+    )
+    shared = coordinator.try_acquire(ResourceRequest("shared", cpus=4, nodes=1))
+    assert shared is not None
+    assert coordinator.try_acquire(
+        ResourceRequest("exclusive", cpus=4, nodes=1, exclusive_hosts=True)
+    ) is None
+    coordinator.release(shared)
+
+    exclusive = coordinator.try_acquire(
+        ResourceRequest("exclusive", cpus=4, nodes=1, exclusive_hosts=True)
+    )
+    assert exclusive is not None and exclusive.hosts == ("node-1",)
+    assert coordinator.try_acquire(ResourceRequest("shared", cpus=4, nodes=1)) is None
+    coordinator.release(exclusive)
     coordinator.assert_released()
 
 

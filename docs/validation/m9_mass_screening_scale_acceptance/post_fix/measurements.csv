@@ -1,0 +1,3 @@
+candidates,parallelism,total_cpus,total_nodes,max_parallel_steps,cpus_per_task,wall_seconds,process_cpu_seconds,peak_parallel_steps,peak_cpus,peak_nodes,full_snapshot_write_count,full_snapshot_bytes,journal_append_count,journal_bytes,total_state_persistence_bytes,summary_sha256
+25,4,16,1,4,4,0.7420395000008284,1.046875,4,16,1,2,10280,53,20423,30703,73ce82c5a4207d8accd472999474af482f97d9da3a7c165c527f0863155eb1bc
+100,4,16,1,4,4,5.127146800004994,6.5625,4,16,1,2,38183,203,78980,117163,55bd0659b8500d03ab1951976b295a396b5401ed2e768f5e31879d6bf1c27684
