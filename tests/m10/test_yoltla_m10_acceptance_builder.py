@@ -12,10 +12,12 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO), str(REPO / "src")]
 
 from tools.build_yoltla_m10_acceptance import _copy_linux_text
+from tools.resolve_yoltla_m10_runtime import resolve as resolve_runtime
 
 
 def _selection(tmp_path: Path, *, qos: str | None = None) -> Path:
     path = tmp_path / "scheduler_selection.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({
         "account": "observed-account", "partition": "observed-partition", "qos": qos,
         "memory": "256000M", "nodes": 2, "ntasks": 64, "cpus_per_task": 1,
@@ -24,6 +26,23 @@ def _selection(tmp_path: Path, *, qos: str | None = None) -> Path:
         "evidence_status_by_field": {"account": "OBSERVED", "partition": "VERIFIED_BY_CROSS_SOURCE", "qos": "MISSING" if qos is None else "OBSERVED", "memory": "OBSERVED", "resource_shape": "VERIFIED_FROM_CURRENT_CLUSTER_EVIDENCE"},
         "resource_shape_status": "VERIFIED_FROM_CURRENT_CLUSTER_EVIDENCE",
     }, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
+def _runtime_selection(tmp_path: Path, *, python_version: str = "3.11.9", siesta: bool = True, hydra: bool = True, module: bool = False) -> Path:
+    mechanism = "MODULE" if module else "PATH"
+    setup = ["module load observed-python"] if module else []
+    payload = {
+        "schema_version": "1.0", "status": "RESOLVED_FROM_CURRENT_CLUSTER_EVIDENCE",
+        "python": {"requirement": ">=3.11", "selected_mechanism": mechanism, "selected_executable": "observed-python", "observed_version": python_version, "evidence_source": ["current-evidence"], "environment_setup": setup},
+        "siesta": {"selected_mechanism": mechanism, "selected_executable": "observed-siesta" if siesta else "", "observed_version": "5.4", "evidence_source": ["current-evidence"], "environment_setup": ["module load observed-siesta"] if module else []},
+        "launchers": {"srun": {"required": True, "selected_executable": "observed-srun", "arguments": ["--nodes=2", "--ntasks=64", "--ntasks-per-node=32"], "evidence_source": ["current-evidence"], "environment_setup": []}},
+    }
+    if hydra:
+        payload["launchers"]["hydra"] = {"required": True, "selected_executable": "observed-hydra", "arguments": ["-n", "64", "-ppn", "32"], "bootstrap": "slurm", "evidence_source": ["current-evidence"], "environment_setup": []}
+    path = tmp_path / "runtime_selection.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     return path
 
 
@@ -53,12 +72,13 @@ def _resolve(discovery: Path, summary: Path, output: Path, *selection: str) -> s
     )
 
 
-def _build(tmp_path: Path, selection: Path | None = None) -> tuple[Path, dict[str, object]]:
+def _build(tmp_path: Path, selection: Path | None = None, runtime: Path | None = None) -> tuple[Path, dict[str, object]]:
     output = tmp_path / "m10"
     env = os.environ.copy(); env["PYTHONPATH"] = str(REPO / "src")
     command = [sys.executable, "tools/build_yoltla_m10_acceptance.py", "--output", str(output)]
     if selection is not None:
         command.extend(("--scheduler-selection", str(selection)))
+        command.extend(("--runtime-selection", str(runtime or _runtime_selection(tmp_path))))
     result = subprocess.run(command, cwd=REPO, env=env, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     return output, json.loads(result.stdout)
@@ -71,15 +91,13 @@ def test_unresolved_bundle_has_discovery_and_no_authoritative_submit(tmp_path: P
     assert manifest["historical_hint"]["status"] == "HISTORICAL_ONLY_NOT_CURRENT_AUTHORITY"
     discovery = output / "scheduler_discovery"
     assert (discovery / "run_login_probe.sh").is_file()
-    assert (discovery / "scripts" / "probe_common.sh").is_file()
-    assert (discovery / "scripts" / "build_login_summary.py").is_file()
-    assert (discovery / "scripts" / "scheduler_resolution.py").is_file()
+    assert (discovery / "build_login_summary.py").is_file()
     assert (discovery / "resolve_m10_scheduler.py").is_file()
+    assert (discovery / "resolve_m10_runtime.py").is_file()
     run_probe = discovery / "run_login_probe.sh"
-    probe_common = discovery / "scripts" / "probe_common.sh"
     assert run_probe.read_bytes().startswith(b"#!/usr/bin/env bash\n")
     assert b"\r" not in run_probe.read_bytes()
-    assert b"\r" not in probe_common.read_bytes()
+    assert b"build_login_summary.py" not in run_probe.read_bytes()
     fixture = output / "scientific_fixture"
     source = REPO / "remote_validation" / "M3B1_SURF_GR5X5_REAL_SIESTA_SMOKE"
     assert sha256((fixture / "input" / "smoke.fdf").read_bytes()).hexdigest() == sha256((source / "input" / "smoke.fdf").read_bytes()).hexdigest()
@@ -162,8 +180,8 @@ def test_resolved_bundle_uses_selection_provenance_without_qos_fallback(tmp_path
     assert "#SBATCH --output=preflight/preflight.%j.out" in preflight
     assert "#SBATCH --error=preflight/preflight.%j.err" in preflight
     assert (output / "preflight").is_dir()
-    assert "srun --nodes=2 --ntasks=2 --ntasks-per-node=1" in preflight
-    assert "command -v python3" in preflight and "command -v siesta" in preflight
+    assert "srun --nodes=2 --ntasks=64 --ntasks-per-node=32 hostname" in preflight
+    assert "observed-python" in preflight and "observed-siesta" in preflight
 
 
 def test_resolved_packages_are_canonical_and_backend_equivalent(tmp_path: Path) -> None:
@@ -198,6 +216,29 @@ def test_continuation_and_runbook_require_a_terminal_human_barrier(tmp_path: Pat
     assert allocations == {"first_seconds": 60, "second_seconds": 180, "same_package_root_and_config": True}
     assert first["estimated_runtime_seconds"] == 5 and second["estimated_runtime_seconds"] == 90
     assert campaign["resources"]["shutdown_margin_seconds"] == 10
+    assert first["command"][0] == "observed-python"
+    assert "module load python/3.12" not in json.dumps(campaign)
     runbook = (REPO / "docs" / "validation" / "m10_hpc_portability_production_acceptance" / "RUNBOOK.md").read_text(encoding="utf-8")
-    assert runbook.index("CONTINUATION JOB #1") < runbook.index("HUMAN GATE") < runbook.index("CONTINUATION JOB #2")
+    first_job = runbook.index("CONTINUATION JOB #1")
+    assert first_job < runbook.index("HUMAN GATE", first_job) < runbook.index("CONTINUATION JOB #2")
     assert "sacct" in runbook and "sbatch --test-only" in runbook
+
+
+def test_runtime_resolution_accepts_python_311_path_and_rejects_old_python(tmp_path: Path) -> None:
+    summary = {"python_candidates": [{"selected_mechanism": "PATH", "selected_executable": "/bin/python", "observed_version": "3.11.0", "environment_setup": [], "evidence_source": ["raw"]}], "siesta_candidates": [{"selected_mechanism": "PATH", "selected_executable": "/bin/siesta", "observed_version": "5.4", "environment_setup": [], "evidence_source": ["raw"]}], "launcher_candidates": {"srun": [{"selected_mechanism": "PATH", "selected_executable": "/bin/srun", "arguments": [], "environment_setup": [], "evidence_source": ["raw"]}]}}
+    path = tmp_path / "summary.json"; path.write_text(json.dumps(summary), encoding="utf-8")
+    assert resolve_runtime(path)["python"]["observed_version"] == "3.11.0"
+    summary["python_candidates"][0]["observed_version"] = "3.10.14"; path.write_text(json.dumps(summary), encoding="utf-8")
+    try: resolve_runtime(path)
+    except ValueError as error: assert "M10_RUNTIME_PROFILE_UNRESOLVED" in str(error)
+    else: raise AssertionError("too-old Python was accepted")
+
+
+def test_module_runtime_and_missing_hydra_fail_closed(tmp_path: Path) -> None:
+    runtime = _runtime_selection(tmp_path, module=True)
+    output, manifest = _build(tmp_path / "module", _selection(tmp_path / "module"), runtime)
+    assert manifest["runtime_selection"]["python_requirement"] == ">=3.11"
+    assert "module load observed-python" in (output / "sources" / "srun" / "campaign.json").read_text(encoding="utf-8")
+    missing = _runtime_selection(tmp_path / "missing", hydra=False)
+    result = subprocess.run([sys.executable, "tools/build_yoltla_m10_acceptance.py", "--output", str(tmp_path / "blocked"), "--scheduler-selection", str(_selection(tmp_path / "missing")), "--runtime-selection", str(missing)], cwd=REPO, env={**os.environ, "PYTHONPATH": str(REPO / "src")}, capture_output=True, text=True)
+    assert result.returncode != 0 and "M10_RUNTIME_PROFILE_UNRESOLVED" in result.stderr

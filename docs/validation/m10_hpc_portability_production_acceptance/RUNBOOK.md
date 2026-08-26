@@ -1,88 +1,91 @@
 # M10 manual Yoltla runbook
 
-**USER MANUAL SBATCH ONLY.** Do not add SSH automation, credentials or a
-background agent. No M10 submission may start before current scheduler
-discovery has been reviewed by a human.
+**Manual sbatch only.** No M10 submission begins until a human has reviewed
+current scheduler and runtime evidence.
 
-## Discovery and resolved rendering
+## Discovery, selection, and resolved rendering
+
+Build the unresolved bundle locally, transfer it to the shared login-node path,
+then run only the Bash raw probe:
 
 ```bash
-# On the Yoltla login node. The unresolved bundle is self-contained.
 cd /shared/path/qraft-m10-discovery
 bash scheduler_discovery/run_login_probe.sh
-find scheduler_discovery/evidence/login_probe -name summary.json -print
-python3 scheduler_discovery/resolve_m10_scheduler.py \
-  --login-evidence scheduler_discovery/evidence/login_probe/summary.json \
-  --output scheduler_selection.json
-# If the evidence has no unique compatible default partition, use human review:
-python3 scheduler_discovery/resolve_m10_scheduler.py \
-  --login-evidence scheduler_discovery/evidence/login_probe/summary.json \
-  --output scheduler_selection.json \
-  --account <account> --partition <partition> [--qos <qos>]
-cat scheduler_selection.json
+# Completion is: LOGIN_RAW_PROBE_COMPLETE:<path>
 ```
 
-**HUMAN REVIEW GATE:** discovery uses only read-only login-node queries. Do not
-run `sbatch`, `srun`, or SIESTA during this phase. Transfer the reviewed
-`scheduler_selection.json` through the approved channel before rendering:
+The raw probe does not require Python, `module`, Conda, or Spack. It makes no
+module changes. Stop here. If the login Python is absent or too old, transfer
+`scheduler_discovery/evidence/login_probe/raw` to a local or compatible remote
+machine with Python >=3.11.
+
+On that compatible machine, analyze the immutable raw evidence and create the
+two reviewed selections:
+
+```bash
+python3 scheduler_discovery/build_login_summary.py \
+  --raw scheduler_discovery/evidence/login_probe/raw --output login_summary.json
+python3 scheduler_discovery/resolve_m10_scheduler.py \
+  --login-evidence login_summary.json --output scheduler_selection.json
+python3 scheduler_discovery/resolve_m10_runtime.py \
+  --login-evidence login_summary.json --output runtime_selection.json --require-hydra
+cat scheduler_selection.json runtime_selection.json
+```
+
+If scheduler evidence has multiple candidates, choose only an evidence-backed
+account/partition/QoS with the resolver’s explicit arguments. A reviewed
+runtime choice may use PATH with `environment_setup: []`, or only modules
+actually present in current evidence. Historical `python/3.12`, `siesta/5.4.2`,
+`tt2d-64p`, `vini`, and `normal` are never defaults.
+
+**HUMAN REVIEW GATE:** transfer the exact reviewed selection files to the
+local rendering machine. Render with both; either omitted file fails closed.
 
 ```powershell
 python tools/build_yoltla_m10_acceptance.py `
   --output <resolved-output> `
-  --scheduler-selection scheduler_selection.json
+  --scheduler-selection scheduler_selection.json `
+  --runtime-selection runtime_selection.json
 ```
 
-Render the resolved bundle locally with that exact reviewed file, then transfer
-and extract it to the shared submission directory. Historical `tt2d-64p`,
-`vini` and `normal` are never submission defaults.
+## Compute-node preflight
+
+Transfer and extract the resolved bundle to the shared submission directory.
+The preflight replays the reviewed runtime selection inside a two-node batch
+allocation, verifies the shared marker and manifest on both hosts, checks the
+selected Python >=3.11 and SIESTA visibility, explicitly proves 64 `srun`
+ranks at 32 ranks/node, and runs the selected Hydra harmless hostname launch.
+It does not execute `smoke.fdf` or SIESTA.
 
 ```bash
 cd /path/to/qraft-m10-yoltla-bundle
-cat bundle_manifest.json backend_equivalence.json
-sed -n '1,220p' preflight/submit_m10_preflight.slurm
 sbatch --test-only preflight/submit_m10_preflight.slurm
 sbatch preflight/submit_m10_preflight.slurm
-# Wait until terminal; inspect sacct and then evidence/preflight.<job-id>.txt.
+# Wait for terminal state; inspect evidence/preflight.<job-id>.txt and placement evidence.
+```
 
+**HUMAN GATE:** only after a successful non-scientific preflight may the two
+independent real SIESTA technical smokes run (Hydra, then srun).
+
+```bash
 cd packages/hydra/QRAFT_M10_MULTINODE_SIESTA_TECHNICAL_ACCEPTANCE
-python3 verify_package.py
-sed -n '1,220p' submit.slurm
-sbatch --test-only submit.slurm
-sbatch submit.slurm
-# Wait for terminal sacct evidence before inspecting progress.
-./progress.sh
-
+python3 verify_package.py && sbatch --test-only submit.slurm && sbatch submit.slurm
 cd ../../srun/QRAFT_M10_MULTINODE_SIESTA_TECHNICAL_ACCEPTANCE
-python3 verify_package.py
-sbatch --test-only submit.slurm
-sbatch submit.slurm
-# Wait for terminal sacct evidence before inspecting progress.
-./progress.sh
-
-cd ../../continuation/QRAFT_M10_ALLOCATION_CONTINUATION_TECHNICAL
-python3 verify_package.py
+python3 verify_package.py && sbatch --test-only submit.slurm && sbatch submit.slurm
 ```
 
 ## CONTINUATION JOB #1
 
-Run `sbatch --time=00:01:00 submit.slurm` from the continuation package root.
-First run `sbatch --test-only submit.slurm`; it is scheduler validation only,
-not a gate pass. Capture `JOB1`, wait until it leaves `squeue`, and confirm its
-terminal state using `sacct`. Then inspect QRAFT state/evidence and confirm:
-runtime `INTERRUPTED`, `STAGE_A` `COMPLETED`, and no `STAGE_B` attempt. The
-canonical worker exits `2` for `INTERRUPTED`, so Slurm may report this controlled
-Job #1 as failed/nonzero. QRAFT persisted state plus Job #2 reuse is authority.
+From the continuation package root, run `sbatch --time=00:01:00 submit.slurm`.
+After terminal `sacct` evidence, confirm runtime `INTERRUPTED`, `STAGE_A`
+`COMPLETED`, no `STAGE_B` attempt, and the preserved first attempt. The
+controlled worker exit may be nonzero.
 
-**HUMAN GATE:** do not submit Job #2 until every Job #1 condition above has
-been inspected. Do not copy the package, delete `state/`, or alter campaign
-configuration/ExecutionSpec.
+**HUMAN GATE:** do not submit Job #2 until these conditions have been reviewed.
+Do not copy the package or alter its runtime selection/configuration.
 
 ## CONTINUATION JOB #2
 
-From **exactly the same package/root**, run `sbatch --time=00:03:00 submit.slurm`.
-Capture `JOB2`, assert `JOB2 != JOB1`, wait for terminal `sacct` evidence, then
-confirm `STAGE_A` `REUSED` with `attempt-0001` preserved, `STAGE_B` completed,
-final runtime `COMPLETED`, and `allocation_history` contains both job IDs.
-
-Collect `results/campaign_summary.json`, `state/`, `evidence/`, job stdout and
-stderr after each submission.
+From the exact same root, run `sbatch --time=00:03:00 submit.slurm`. Confirm
+`STAGE_A` `REUSED`, `attempt-0001` preserved, `STAGE_B` completed, final runtime
+`COMPLETED`, and both Slurm job IDs in allocation history.
