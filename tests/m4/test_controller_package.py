@@ -8,13 +8,17 @@ import sys
 from pathlib import Path
 from zipfile import ZipFile
 
+import pytest
+
 from qraft.controller_package import ControllerPackageBuilder
 
 
 REPO = Path(__file__).resolve().parents[2]
 
 
-def source_campaign(root: Path) -> Path:
+def source_campaign(
+    root: Path, *, qos: str | None = "normal", include_qos: bool = True,
+) -> Path:
     (root / "input").mkdir()
     (root / "pseudopotentials").mkdir()
     source = root / "input" / "run.fdf"
@@ -25,11 +29,7 @@ def source_campaign(root: Path) -> Path:
         "schema_version": "2.0",
         "campaign_id": "TEST_CONTROLLER_V02",
         "system_id": "test",
-        "slurm": {
-            "partition": "tt2d-100p",
-            "account": "vini",
-            "qos": "normal",
-        },
+        "slurm": {"partition": "tt2d-100p", "account": "vini"},
         "resources": {
             "nodes": 5,
             "total_cpus": 100,
@@ -73,8 +73,24 @@ def source_campaign(root: Path) -> Path:
             "require_scf_converged": True,
         }],
     }
+    if include_qos:
+        config["slurm"]["qos"] = qos
     path = root / "campaign.json"
     path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
+def resolution_lock(root: Path, *, qos: str | None) -> Path:
+    path = root / "run.lock.json"
+    path.write_text(json.dumps({
+        "payload": {"metadata": {"execution_resolution": {
+            "resolution_mode": "MANUAL_COMPATIBILITY_OVERRIDE",
+            "human_confirmed": True,
+            "selected_partition": "tt2d-100p", "selected_account": "vini",
+            "selected_qos": qos, "selected_nodes": 5,
+            "selected_total_ranks": 100, "selected_walltime": "2-00:00:00",
+        }}},
+    }), encoding="utf-8")
     return path
 
 
@@ -152,3 +168,53 @@ def test_controller_package_dry_run_and_cli_have_no_submission(tmp_path: Path):
     assert payload["status"] == "CONTROLLER_PACKAGE_READY_FOR_MANUAL_TRANSFER"
     assert Path(payload["zip_path"]).is_file()
     assert not list(output.rglob("sbatch.invoked"))
+
+
+@pytest.mark.parametrize("include_qos", [False, True])
+def test_controller_package_without_explicit_qos_omits_directive_and_verifies(
+    tmp_path: Path, include_qos: bool,
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    campaign = source_campaign(source, qos=None, include_qos=include_qos)
+    output = tmp_path / "output"
+    output.mkdir()
+    lock = resolution_lock(source, qos=None)
+    result = ControllerPackageBuilder(REPO).build(
+        campaign, output, provenance_files={"run.lock.json": lock},
+    )
+    root = Path(result.destination)
+    submit = (root / "submit.slurm").read_text(encoding="utf-8")
+    assert "#SBATCH --qos=" not in submit
+    verified = subprocess.run(
+        [sys.executable, "verify_package.py"], cwd=root,
+        capture_output=True, text=True,
+    )
+    assert verified.returncode == 0, verified.stderr
+
+
+def test_controller_package_keeps_explicit_qos_and_rejects_resolution_mismatch(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    campaign = source_campaign(source, qos="normal")
+    output = tmp_path / "output"
+    output.mkdir()
+    matching = resolution_lock(source, qos="normal")
+    result = ControllerPackageBuilder(REPO).build(
+        campaign, output, provenance_files={"run.lock.json": matching},
+    )
+    assert (Path(result.destination) / "submit.slurm").read_text().count(
+        "#SBATCH --qos=normal"
+    ) == 1
+    mismatch = source / "mismatch.lock.json"
+    mismatch.write_text(
+        resolution_lock(source, qos="high").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="generated Slurm campaign disagree"):
+        ControllerPackageBuilder(REPO).build(
+            campaign, tmp_path / "mismatch-output",
+            provenance_files={"run.lock.json": mismatch},
+        )

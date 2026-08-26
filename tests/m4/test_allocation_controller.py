@@ -10,7 +10,11 @@ from pathlib import Path
 
 import pytest
 
-from qraft.execution.allocation_controller import AllocationController, ExecutionStatus
+from qraft.execution.allocation_controller import (
+    AllocationController,
+    ExecutionStatus,
+    load_controller_config,
+)
 from qraft.execution.hydra_launcher import HydraLauncher
 from qraft.execution.slurm_environment import ShutdownRequest, SignalHandlers, SlurmEnvironment
 from qraft.execution.srun_launcher import SrunLauncher, StepLaunchSpec, StepOutcome
@@ -123,6 +127,49 @@ def test_one_successful_srun_step_is_fully_validated(tmp_path: Path):
     assert "--exclusive" in command
     assert "--ntasks=1" in command
     assert state(tmp_path)["tasks"]["task-1"]["status"] == "COMPLETED"
+
+
+@pytest.mark.parametrize("qos", ["normal", None])
+def test_schema2_controller_config_accepts_explicit_or_null_qos(
+    tmp_path: Path, qos: str | None,
+) -> None:
+    campaign, config = make_package(tmp_path, ["SUCCESS"])
+    config["schema_version"] = "2.0"
+    config["runtime"]["launcher"] = {
+        "kind": "srun", "command": [sys.executable], "arguments": [],
+        "bootstrap": "ssh",
+    }
+    config["slurm"]["qos"] = qos
+    campaign.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    assert load_controller_config(campaign).campaign_id == "m4-test"
+
+
+def test_schema2_controller_config_accepts_missing_qos(tmp_path: Path) -> None:
+    campaign, config = make_package(tmp_path, ["SUCCESS"])
+    config["schema_version"] = "2.0"
+    config["runtime"]["launcher"] = {
+        "kind": "srun", "command": [sys.executable], "arguments": [],
+        "bootstrap": "ssh",
+    }
+    config["slurm"].pop("qos")
+    campaign.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    assert load_controller_config(campaign).campaign_id == "m4-test"
+
+
+@pytest.mark.parametrize("qos", ["", "MISSING_QOS", 7])
+def test_schema2_controller_config_rejects_invalid_explicit_qos(
+    tmp_path: Path, qos: object,
+) -> None:
+    campaign, config = make_package(tmp_path, ["SUCCESS"])
+    config["schema_version"] = "2.0"
+    config["runtime"]["launcher"] = {
+        "kind": "srun", "command": [sys.executable], "arguments": [],
+        "bootstrap": "ssh",
+    }
+    config["slurm"]["qos"] = qos
+    campaign.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="qos"):
+        load_controller_config(campaign)
 
 
 def test_sequential_steps_use_one_slot(tmp_path: Path):

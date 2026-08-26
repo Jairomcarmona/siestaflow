@@ -270,10 +270,11 @@ class ControllerPackageBuilder:
             return
         if resolution.get("human_confirmed") is not True:
             raise ValueError("resolved run package requires explicit human confirmation")
+        qos = campaign["slurm"].get("qos")
         expected = {
             "selected_partition": campaign["slurm"]["partition"],
             "selected_account": campaign["slurm"]["account"],
-            "selected_qos": campaign["slurm"]["qos"],
+            "selected_qos": qos,
             "selected_nodes": campaign["resources"]["nodes"],
             "selected_total_ranks": campaign["resources"]["total_cpus"],
             "selected_walltime": campaign["resources"]["walltime"],
@@ -320,12 +321,15 @@ class ControllerPackageBuilder:
             )
         environment_text = "\n".join(environment_lines) or ": # no environment overrides"
         signal_seconds = int(resources["shutdown_margin_seconds"])
+        qos = slurm.get("qos")
+        qos_directive = (
+            f"#SBATCH --qos={_directive(qos, 'qos')}\n" if qos is not None else ""
+        )
         return f"""#!/usr/bin/env bash
 #SBATCH --job-name={_directive(campaign["campaign_id"], "campaign_id")[:64]}
 #SBATCH --partition={_directive(slurm["partition"], "partition")}
 #SBATCH --account={_directive(slurm["account"], "account")}
-#SBATCH --qos={_directive(slurm["qos"], "qos")}
-#SBATCH --nodes={_directive(resources["nodes"], "nodes")}
+{qos_directive}#SBATCH --nodes={_directive(resources["nodes"], "nodes")}
 #SBATCH --ntasks={_directive(resources["total_cpus"], "total_cpus")}
 {placement}#SBATCH --cpus-per-task=1
 #SBATCH --hint=nomultithread
@@ -442,7 +446,7 @@ if (root/"run.lock.json").is_file():
  if isinstance(resolution,dict) and resolution.get("resolution_mode")!="PROFILE_ALREADY_RESOLVED":
   if resolution.get("human_confirmed") is not True: fail("HUMAN_CONFIRMATION_REQUIRED")
   campaign=json.loads((root/"campaign.yaml").read_text(encoding="utf-8"))
-  expected={{"selected_partition":campaign["slurm"]["partition"],"selected_account":campaign["slurm"]["account"],"selected_qos":campaign["slurm"]["qos"],"selected_nodes":campaign["resources"]["nodes"],"selected_total_ranks":campaign["resources"]["total_cpus"],"selected_walltime":campaign["resources"]["walltime"]}}
+  expected={{"selected_partition":campaign["slurm"]["partition"],"selected_account":campaign["slurm"]["account"],"selected_qos":campaign["slurm"].get("qos"),"selected_nodes":campaign["resources"]["nodes"],"selected_total_ranks":campaign["resources"]["total_cpus"],"selected_walltime":campaign["resources"]["walltime"]}}
   if any(resolution.get(key)!=value for key,value in expected.items()): fail("RUN_LOCK_SUBMIT_COHERENCE_MISMATCH")
   directives={{}}
   for line in (root/"submit.slurm").read_text(encoding="utf-8").splitlines():
