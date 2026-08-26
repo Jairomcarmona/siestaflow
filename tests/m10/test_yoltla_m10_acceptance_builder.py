@@ -15,15 +15,18 @@ from tools.build_yoltla_m10_acceptance import _copy_linux_text
 from tools.resolve_yoltla_m10_runtime import resolve as resolve_runtime
 
 
-def _selection(tmp_path: Path, *, qos: str | None = None) -> Path:
+def _selection(
+    tmp_path: Path, *, qos: str | None = None,
+    account: str | None = "observed-account",
+) -> Path:
     path = tmp_path / "scheduler_selection.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({
-        "account": "observed-account", "partition": "observed-partition", "qos": qos,
+        "account": account, "partition": "observed-partition", "qos": qos,
         "memory": "256000M", "nodes": 2, "ntasks": 64, "cpus_per_task": 1,
         "processes_per_node": 32, "walltime": "00:20:00",
         "source_files": ["sacctmgr_assoc.txt", "sinfo.txt", "scontrol_partitions.txt"],
-        "evidence_status_by_field": {"account": "OBSERVED", "partition": "VERIFIED_BY_CROSS_SOURCE", "qos": "MISSING" if qos is None else "OBSERVED", "memory": "OBSERVED", "resource_shape": "VERIFIED_FROM_CURRENT_CLUSTER_EVIDENCE"},
+        "evidence_status_by_field": {"account": "OMITTED_WITH_SCHEDULER_DEFAULT_EVIDENCE" if account is None else "OBSERVED", "partition": "VERIFIED_BY_CROSS_SOURCE", "qos": "MISSING" if qos is None else "OBSERVED", "memory": "OBSERVED", "resource_shape": "VERIFIED_FROM_CURRENT_CLUSTER_EVIDENCE"},
         "resource_shape_status": "VERIFIED_FROM_CURRENT_CLUSTER_EVIDENCE",
     }, indent=2) + "\n", encoding="utf-8")
     return path
@@ -182,6 +185,15 @@ def test_resolved_bundle_uses_selection_provenance_without_qos_fallback(tmp_path
     assert (output / "preflight").is_dir()
     assert "srun --nodes=2 --ntasks=64 --ntasks-per-node=32 hostname" in preflight
     assert "observed-python" in preflight and "observed-siesta" in preflight
+
+
+def test_resolved_bundle_supports_evidence_bound_default_account(tmp_path: Path) -> None:
+    output, manifest = _build(tmp_path, _selection(tmp_path, account=None))
+    assert manifest["scheduler_selection"]["account"] is None
+    assert "#SBATCH --account=" not in (output / "preflight" / "submit_m10_preflight.slurm").read_text(encoding="utf-8")
+    for payload in manifest["packages"].values():
+        submit = Path(payload["destination"]).joinpath("submit.slurm").read_text(encoding="utf-8")
+        assert "#SBATCH --account=" not in submit
 
 
 def test_resolved_packages_are_canonical_and_backend_equivalent(tmp_path: Path) -> None:

@@ -18,6 +18,7 @@ REPO = Path(__file__).resolve().parents[2]
 
 def source_campaign(
     root: Path, *, qos: str | None = "normal", include_qos: bool = True,
+    account: str | None = "vini", include_account: bool = True,
 ) -> Path:
     (root / "input").mkdir()
     (root / "pseudopotentials").mkdir()
@@ -29,7 +30,7 @@ def source_campaign(
         "schema_version": "2.0",
         "campaign_id": "TEST_CONTROLLER_V02",
         "system_id": "test",
-        "slurm": {"partition": "tt2d-100p", "account": "vini"},
+        "slurm": {"partition": "tt2d-100p"},
         "resources": {
             "nodes": 5,
             "total_cpus": 100,
@@ -75,18 +76,20 @@ def source_campaign(
     }
     if include_qos:
         config["slurm"]["qos"] = qos
+    if include_account:
+        config["slurm"]["account"] = account
     path = root / "campaign.json"
     path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
     return path
 
 
-def resolution_lock(root: Path, *, qos: str | None) -> Path:
+def resolution_lock(root: Path, *, qos: str | None, account: str | None = "vini") -> Path:
     path = root / "run.lock.json"
     path.write_text(json.dumps({
         "payload": {"metadata": {"execution_resolution": {
             "resolution_mode": "MANUAL_COMPATIBILITY_OVERRIDE",
             "human_confirmed": True,
-            "selected_partition": "tt2d-100p", "selected_account": "vini",
+            "selected_partition": "tt2d-100p", "selected_account": account,
             "selected_qos": qos, "selected_nodes": 5,
             "selected_total_ranks": 100, "selected_walltime": "2-00:00:00",
         }}},
@@ -131,6 +134,7 @@ def test_controller_package_is_reproducible_and_cleanly_verifies(tmp_path: Path)
     assert "QRAFT_SIESTA_MODULE_LOAD_WARNING" in submit
     assert "siesta --version" not in submit
     assert "python3 scripts/run_worker.py" in submit
+    assert submit.count("#SBATCH --account=vini") == 1
     assert submit.index("export OMP_NUM_THREADS=1") < submit.index("command -v siesta")
 
 
@@ -191,6 +195,51 @@ def test_controller_package_without_explicit_qos_omits_directive_and_verifies(
         capture_output=True, text=True,
     )
     assert verified.returncode == 0, verified.stderr
+
+
+@pytest.mark.parametrize("include_account", [False, True])
+def test_controller_package_without_explicit_account_omits_directive_and_verifies(
+    tmp_path: Path, include_account: bool,
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    campaign = source_campaign(
+        source, account=None, include_account=include_account,
+    )
+    output = tmp_path / "output"
+    output.mkdir()
+    lock = resolution_lock(source, qos="normal", account=None)
+    result = ControllerPackageBuilder(REPO).build(
+        campaign, output, provenance_files={"run.lock.json": lock},
+    )
+    root = Path(result.destination)
+    submit = (root / "submit.slurm").read_text(encoding="utf-8")
+    assert "#SBATCH --account=" not in submit
+    verified = subprocess.run(
+        [sys.executable, "verify_package.py"], cwd=root,
+        capture_output=True, text=True,
+    )
+    assert verified.returncode == 0, verified.stderr
+
+
+@pytest.mark.parametrize(
+    ("campaign_account", "include_account", "lock_account"),
+    [(None, False, "vini"), ("vini", True, None)],
+)
+def test_controller_package_rejects_account_resolution_mismatches(
+    tmp_path: Path, campaign_account: str | None, include_account: bool,
+    lock_account: str | None,
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    campaign = source_campaign(
+        source, account=campaign_account, include_account=include_account,
+    )
+    with pytest.raises(ValueError, match="generated Slurm campaign disagree"):
+        ControllerPackageBuilder(REPO).build(
+            campaign, tmp_path / "output",
+            provenance_files={"run.lock.json": resolution_lock(source, qos="normal", account=lock_account)},
+        )
 
 
 def test_controller_package_keeps_explicit_qos_and_rejects_resolution_mismatch(

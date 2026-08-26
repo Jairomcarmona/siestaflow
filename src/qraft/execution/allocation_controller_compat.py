@@ -167,9 +167,14 @@ def load_controller_config(path: Path) -> ControllerConfig:
     if not isinstance(slurm, Mapping) or not isinstance(resources, Mapping) or not isinstance(runtime, Mapping):
         raise ValueError("slurm, resources and runtime mappings are required")
     # These fields are checked here even though sbatch consumes some of them.
-    for field in ("partition", "account", "memory", "walltime"):
-        source = slurm if field in {"partition", "account"} else resources
+    for field in ("partition", "memory", "walltime"):
+        source = slurm if field == "partition" else resources
         _required_text(source.get(field), field)
+    account = slurm.get("account")
+    if account is not None:
+        if not isinstance(account, str):
+            raise ValueError("explicit configuration required: account")
+        _required_text(account, "account")
     qos = slurm.get("qos")
     if qos is not None:
         if not isinstance(qos, str):

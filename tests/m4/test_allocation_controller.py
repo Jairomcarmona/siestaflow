@@ -156,6 +156,40 @@ def test_schema2_controller_config_accepts_missing_qos(tmp_path: Path) -> None:
     assert load_controller_config(campaign).campaign_id == "m4-test"
 
 
+@pytest.mark.parametrize("include_account, account", [(True, "account"), (True, None), (False, None)])
+def test_schema2_controller_config_accepts_explicit_null_or_missing_account(
+    tmp_path: Path, include_account: bool, account: str | None,
+) -> None:
+    campaign, config = make_package(tmp_path, ["SUCCESS"])
+    config["schema_version"] = "2.0"
+    config["runtime"]["launcher"] = {
+        "kind": "srun", "command": [sys.executable], "arguments": [],
+        "bootstrap": "ssh",
+    }
+    if include_account:
+        config["slurm"]["account"] = account
+    else:
+        config["slurm"].pop("account")
+    campaign.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    assert load_controller_config(campaign).campaign_id == "m4-test"
+
+
+@pytest.mark.parametrize("account", ["", "MISSING_ACCOUNT", 7])
+def test_schema2_controller_config_rejects_invalid_explicit_account(
+    tmp_path: Path, account: object,
+) -> None:
+    campaign, config = make_package(tmp_path, ["SUCCESS"])
+    config["schema_version"] = "2.0"
+    config["runtime"]["launcher"] = {
+        "kind": "srun", "command": [sys.executable], "arguments": [],
+        "bootstrap": "ssh",
+    }
+    config["slurm"]["account"] = account
+    campaign.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="account"):
+        load_controller_config(campaign)
+
+
 @pytest.mark.parametrize("qos", ["", "MISSING_QOS", 7])
 def test_schema2_controller_config_rejects_invalid_explicit_qos(
     tmp_path: Path, qos: object,
