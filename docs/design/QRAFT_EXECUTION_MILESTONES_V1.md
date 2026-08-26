@@ -284,7 +284,7 @@ non-goals, acceptance gates, evidence, status y closing commit.
 | Non-goals | Parser/DAG/scientific debug o unit testing en Yoltla. |
 | Acceptance gates | Mismos scientific contracts y workflow identity; diferente `ExecutionSpec` permitido. |
 | Required evidence | Expediente manual Yoltla y `docs/validation/m10_hpc_portability_production_acceptance/`. |
-| Status | `NOT_STARTED` |
+| Status | `IN_PROGRESS` |
 | Closing commit | No aplicable hasta cierre. |
 
 ## DFT+U / LR-U
@@ -312,7 +312,7 @@ infraestructura de ejecución.
 | M7 | `CLOSED` |
 | M8 | `CLOSED` |
 | M9 | `CLOSED` |
-| M10 | `NOT_STARTED` |
+| M10 | `IN_PROGRESS` |
 | DFT+U / LR-U | `DEFERRED` |
 
 Un agente futuro debe construir sólo el siguiente milestone abierto, en la capa
