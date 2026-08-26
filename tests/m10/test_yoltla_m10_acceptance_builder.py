@@ -16,10 +16,38 @@ def _selection(tmp_path: Path, *, qos: str | None = None) -> Path:
     path.write_text(json.dumps({
         "account": "observed-account", "partition": "observed-partition", "qos": qos,
         "memory": "256000M", "nodes": 2, "ntasks": 64, "cpus_per_task": 1,
+        "processes_per_node": 32, "walltime": "00:20:00",
         "source_files": ["sacctmgr_assoc.txt", "sinfo.txt", "scontrol_partitions.txt"],
-        "evidence_status_by_field": {"account": "OBSERVED", "partition": "VERIFIED_BY_CROSS_SOURCE", "qos": "MISSING" if qos is None else "OBSERVED"},
+        "evidence_status_by_field": {"account": "OBSERVED", "partition": "VERIFIED_BY_CROSS_SOURCE", "qos": "MISSING" if qos is None else "OBSERVED", "memory": "OBSERVED", "resource_shape": "VERIFIED_FROM_CURRENT_CLUSTER_EVIDENCE"},
+        "resource_shape_status": "VERIFIED_FROM_CURRENT_CLUSTER_EVIDENCE",
     }, indent=2) + "\n", encoding="utf-8")
     return path
+
+
+def _login_summary(tmp_path: Path, *, partitions: list[dict[str, object]] | None = None) -> Path:
+    partition_rows = partitions or [{"name": "observed-partition", "default": True, "nodes": 2, "cpus_per_node": 64, "memory": 192000}]
+    associations = []
+    policies = []
+    visible = []
+    for number, row in enumerate(partition_rows, 1):
+        name = str(row["name"])
+        associations.append({"account": "observed-account", "partition": name, "qos": None, "scope": "EXPLICIT_PARTITION_ASSOCIATION", "source_file": "sacctmgr_assoc.txt", "source_line": number, "evidence_status": "OBSERVED", "observed_at": "2026-08-25T00:00:00Z"})
+        visible.append({"name": name, "availability": "up", "time_limit": "01:00:00", "nodes": row["nodes"], "cpus_per_node": row["cpus_per_node"], "memory": row["memory"], "default": row["default"], "source_file": "sinfo.txt", "source_line": number})
+        policies.append({"name": name, "allow_accounts": {"kind": "EXPLICIT_LIST", "values": ["observed-account"]}, "allow_qos": {"kind": "ALL", "values": []}, "default": row["default"], "state": "UP", "min_nodes": 1, "max_nodes": 4, "max_time": "01:00:00", "source_file": "scontrol_partitions.txt", "source_line": number})
+    path = tmp_path / "summary.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"eligible_associations": associations, "visible_partitions": visible, "partition_policies": policies}, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
+def _resolve(discovery: Path, summary: Path, output: Path, *selection: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(discovery / "resolve_m10_scheduler.py"), "--login-evidence", str(summary), "--output", str(output), *selection],
+        cwd=output.parent,
+        env={key: value for key, value in os.environ.items() if key != "PYTHONPATH"},
+        capture_output=True,
+        text=True,
+    )
 
 
 def _build(tmp_path: Path, selection: Path | None = None) -> tuple[Path, dict[str, object]]:
@@ -38,9 +66,58 @@ def test_unresolved_bundle_has_discovery_and_no_authoritative_submit(tmp_path: P
     assert manifest["scheduler_profile_status"] == "UNRESOLVED"
     assert manifest["scientific_submit_scripts_generated"] is False
     assert manifest["historical_hint"]["status"] == "HISTORICAL_ONLY_NOT_CURRENT_AUTHORITY"
-    assert (output / "scheduler_discovery" / "scheduler_resolution.py").is_file()
+    discovery = output / "scheduler_discovery"
+    assert (discovery / "run_login_probe.sh").is_file()
+    assert (discovery / "scripts" / "probe_common.sh").is_file()
+    assert (discovery / "scripts" / "build_login_summary.py").is_file()
+    assert (discovery / "scripts" / "scheduler_resolution.py").is_file()
+    assert (discovery / "resolve_m10_scheduler.py").is_file()
     assert (output / "scientific_fixture" / "input" / "smoke.fdf").is_file()
     assert not list(output.rglob("submit.slurm"))
+
+
+def test_self_contained_m10_resolver_uses_current_shape_and_observed_memory(tmp_path: Path) -> None:
+    output, _ = _build(tmp_path)
+    summary = _login_summary(tmp_path)
+    selection = tmp_path / "current-selection.json"
+    result = _resolve(output / "scheduler_discovery", summary, selection)
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(selection.read_text(encoding="utf-8"))
+    assert {field: payload[field] for field in ("nodes", "ntasks", "cpus_per_task", "processes_per_node", "walltime")} == {"nodes": 2, "ntasks": 64, "cpus_per_task": 1, "processes_per_node": 32, "walltime": "00:20:00"}
+    assert payload["qos"] is None
+    assert payload["memory"] == "192000M"
+    assert payload["memory_source"] == {"source_file": "sinfo.txt", "source_line": 1, "observed_mb": 192000}
+    assert payload["resource_shape_status"] == "VERIFIED_FROM_CURRENT_CLUSTER_EVIDENCE"
+    resolved, manifest = _build(tmp_path / "resolved", selection)
+    assert manifest["scheduler_profile_status"] == "RESOLVED_FROM_CLUSTER_EVIDENCE"
+    assert (resolved / "preflight" / "submit_m10_preflight.slurm").is_file()
+
+
+def test_m10_resolver_requires_evidence_bound_human_selection_for_multiple_candidates(tmp_path: Path) -> None:
+    output, _ = _build(tmp_path)
+    summary = _login_summary(tmp_path, partitions=[
+        {"name": "first", "default": True, "nodes": 2, "cpus_per_node": 32, "memory": 64000},
+        {"name": "second", "default": True, "nodes": 2, "cpus_per_node": 32, "memory": 128000},
+    ])
+    automatic = _resolve(output / "scheduler_discovery", summary, tmp_path / "automatic.json")
+    assert automatic.returncode != 0
+    assert "SCHEDULER_PROBE_BLOCKED_MULTIPLE_DEFAULT_PARTITIONS" in automatic.stderr
+    selected = tmp_path / "selected.json"
+    manual = _resolve(output / "scheduler_discovery", summary, selected, "--account", "observed-account", "--partition", "second")
+    assert manual.returncode == 0, manual.stderr
+    assert json.loads(selected.read_text(encoding="utf-8"))["partition"] == "second"
+
+
+def test_m10_resolver_fails_closed_for_inadequate_placement_evidence(tmp_path: Path) -> None:
+    output, _ = _build(tmp_path)
+    for name, row in {
+        "cpus": {"name": "small-cpu", "default": True, "nodes": 2, "cpus_per_node": 31, "memory": 64000},
+        "nodes": {"name": "small-nodes", "default": True, "nodes": 1, "cpus_per_node": 32, "memory": 64000},
+        "memory": {"name": "no-memory", "default": True, "nodes": 2, "cpus_per_node": 32, "memory": None},
+    }.items():
+        result = _resolve(output / "scheduler_discovery", _login_summary(tmp_path / name, partitions=[row]), tmp_path / f"{name}.json")
+        assert result.returncode != 0
+        assert "M10_REMOTE_PROFILE_UNRESOLVED" in result.stderr
 
 
 def test_resolved_bundle_requires_explicit_evidence_bound_selection(tmp_path: Path) -> None:

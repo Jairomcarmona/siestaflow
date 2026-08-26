@@ -11,9 +11,12 @@ python tools/build_yoltla_m10_acceptance.py --output .\qraft-m10-discovery
 ```
 
 The bundle contains the fixed M10 shape (2 nodes, 64 ranks, 32 ranks/node),
-the smoke fixture and the existing M3 evidence-bound scheduler resolver. It
-contains no scientific submit script. `tt2d-64p` / `vini` / `normal` are
-`HISTORICAL_ONLY_NOT_CURRENT_AUTHORITY` hints, never defaults.
+the smoke fixture, and a self-contained login-node discovery workflow. It
+copies the M3 read-only probe and resolver plus an M10 adapter that verifies
+the current partition has at least two visible nodes, 32 CPUs/node, and an
+observed memory value. It contains no scientific submit script. `tt2d-64p` /
+`vini` / `normal` are `HISTORICAL_ONLY_NOT_CURRENT_AUTHORITY` hints, never
+defaults.
 
 After current Yoltla evidence has produced and a human has reviewed a
 `scheduler_selection.json` that demonstrates the exact M10 shape, render the

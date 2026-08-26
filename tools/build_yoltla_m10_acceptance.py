@@ -61,7 +61,7 @@ def _load_selection(path: Path) -> dict[str, Any]:
     qos = result.get("qos")
     if qos is not None:
         result["qos"] = _required_scheduler_text(qos, "qos")
-    for field, expected in (("nodes", 2), ("ntasks", 64), ("cpus_per_task", 1)):
+    for field, expected in (("nodes", 2), ("ntasks", 64), ("cpus_per_task", 1), ("processes_per_node", 32)):
         if result.get(field) != expected:
             raise ValueError(
                 "M10_REMOTE_PROFILE_UNRESOLVED: scheduler selection does not "
@@ -70,9 +70,13 @@ def _load_selection(path: Path) -> dict[str, Any]:
     evidence = result.get("evidence_status_by_field")
     if not isinstance(evidence, Mapping):
         raise ValueError("M10_REMOTE_PROFILE_UNRESOLVED: missing evidence statuses")
-    for field in ("account", "partition", "qos"):
+    for field in ("account", "partition", "qos", "memory", "resource_shape"):
         if field not in evidence:
             raise ValueError(f"M10_REMOTE_PROFILE_UNRESOLVED: missing {field} evidence status")
+    if result.get("walltime") != "00:20:00":
+        raise ValueError("M10_REMOTE_PROFILE_UNRESOLVED: scheduler selection does not demonstrate M10 walltime=00:20:00")
+    if result.get("resource_shape_status") != "VERIFIED_FROM_CURRENT_CLUSTER_EVIDENCE":
+        raise ValueError("M10_REMOTE_PROFILE_UNRESOLVED: M10 resource shape is not verified from current cluster evidence")
     if not isinstance(result.get("source_files"), list) or not result["source_files"]:
         raise ValueError("M10_REMOTE_PROFILE_UNRESOLVED: missing scheduler source files")
     return result
@@ -195,10 +199,11 @@ def _discovery_readme() -> str:
 
 `HISTORICAL_ONLY_NOT_CURRENT_AUTHORITY`: prior observations were partition
 `tt2d-64p`, account `vini`, QoS `normal`. They are hints only and are not used
-by this bundle. Run the existing M3 Yoltla environment probe to capture
-`sinfo`, `scontrol`, and `sacctmgr`; then use its evidence-bound resolver with
-the M10 shape in `resource_requirements.json`. Human review must approve the
-resulting `scheduler_selection.json` before a resolved M10 bundle is built.
+by this bundle. This directory is self-contained for login-node discovery:
+`run_login_probe.sh` captures current read-only scheduler evidence, then
+`resolve_m10_scheduler.py` applies the M10 2-node / 64-rank request using the
+copied M3 resolver authority. It never submits a job. Human review must approve
+the resulting `scheduler_selection.json` before a resolved M10 bundle is built.
 """
 
 
@@ -207,11 +212,18 @@ def _unresolved(repository: Path, output: Path) -> dict[str, Any]:
     hashes = _fixture(repository, fixture)
     discovery = output / "scheduler_discovery"
     discovery.mkdir()
-    resolver = repository / "remote_validation" / "M3_YOLTLA_ENVIRONMENT_PROBE" / "scripts" / "scheduler_resolution.py"
-    shutil.copy2(resolver, discovery / "scheduler_resolution.py")
+    historical = repository / "remote_validation" / "M3_YOLTLA_ENVIRONMENT_PROBE"
+    scripts = discovery / "scripts"
+    scripts.mkdir()
+    for name in ("probe_common.sh", "build_login_summary.py", "scheduler_resolution.py"):
+        shutil.copy2(historical / "scripts" / name, scripts / name)
+    shutil.copy2(historical / "run_login_probe.sh", discovery / "run_login_probe.sh")
+    m10_resolver = repository / "tools" / "resolve_yoltla_m10_scheduler.py"
+    shutil.copy2(m10_resolver, discovery / "resolve_m10_scheduler.py")
     (discovery / "README.md").write_text(_discovery_readme(), encoding="utf-8", newline="\n")
     _write_json(discovery / "resource_requirements.json", {"nodes": 2, "ntasks": 64, "cpus_per_task": 1, "processes_per_node": 32, "walltime": "00:20:00"})
-    manifest = {"schema_version": "1.0", "scheduler_profile_status": "UNRESOLVED", "resource_shape": RESOURCE_SHAPE, "historical_hint": HISTORICAL_HINT, "scientific_fixture_hashes": hashes, "scheduler_resolver": {"source": "remote_validation/M3_YOLTLA_ENVIRONMENT_PROBE/scripts/scheduler_resolution.py", "sha256": _sha(resolver)}, "remote_execution_status": "PENDING_REMOTE", "scientific_submit_scripts_generated": False}
+    resolver = scripts / "scheduler_resolution.py"
+    manifest = {"schema_version": "1.0", "scheduler_profile_status": "UNRESOLVED", "resource_shape": RESOURCE_SHAPE, "historical_hint": HISTORICAL_HINT, "scientific_fixture_hashes": hashes, "scheduler_resolver": {"source": "remote_validation/M3_YOLTLA_ENVIRONMENT_PROBE/scripts/scheduler_resolution.py", "sha256": _sha(resolver)}, "m10_scheduler_adapter": {"source": "tools/resolve_yoltla_m10_scheduler.py", "sha256": _sha(m10_resolver)}, "remote_execution_status": "PENDING_REMOTE", "scientific_submit_scripts_generated": False}
     _write_json(output / "bundle_manifest.json", manifest)
     (output / "README.md").write_text("# QRAFT M10 unresolved discovery bundle\n\nNo scientific submit scripts are generated until a current, human-reviewed scheduler selection is supplied.\n", encoding="utf-8", newline="\n")
     return manifest

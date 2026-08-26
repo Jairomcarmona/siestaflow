@@ -7,10 +7,29 @@ discovery has been reviewed by a human.
 ## Discovery and resolved rendering
 
 ```bash
-# On the Yoltla login node, run the existing M3 environment probe first.
-# It records sinfo, scontrol and sacctmgr evidence and produces review inputs.
-# Human review must approve scheduler_selection.json for nodes=2, ntasks=64,
-# cpus_per_task=1 and an observed scheduler-specific memory value.
+# On the Yoltla login node. The unresolved bundle is self-contained.
+cd /shared/path/qraft-m10-discovery
+bash scheduler_discovery/run_login_probe.sh
+find scheduler_discovery/evidence/login_probe -name summary.json -print
+python3 scheduler_discovery/resolve_m10_scheduler.py \
+  --login-evidence scheduler_discovery/evidence/login_probe/summary.json \
+  --output scheduler_selection.json
+# If the evidence has no unique compatible default partition, use human review:
+python3 scheduler_discovery/resolve_m10_scheduler.py \
+  --login-evidence scheduler_discovery/evidence/login_probe/summary.json \
+  --output scheduler_selection.json \
+  --account <account> --partition <partition> [--qos <qos>]
+cat scheduler_selection.json
+```
+
+**HUMAN REVIEW GATE:** discovery uses only read-only login-node queries. Do not
+run `sbatch`, `srun`, or SIESTA during this phase. Transfer the reviewed
+`scheduler_selection.json` through the approved channel before rendering:
+
+```powershell
+python tools/build_yoltla_m10_acceptance.py `
+  --output <resolved-output> `
+  --scheduler-selection scheduler_selection.json
 ```
 
 Render the resolved bundle locally with that exact reviewed file, then transfer
