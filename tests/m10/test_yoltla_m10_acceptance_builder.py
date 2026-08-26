@@ -4,11 +4,14 @@ import json
 import os
 import subprocess
 import sys
+from hashlib import sha256
 from pathlib import Path
 from zipfile import ZipFile
 
-
 REPO = Path(__file__).resolve().parents[2]
+sys.path[:0] = [str(REPO), str(REPO / "src")]
+
+from tools.build_yoltla_m10_acceptance import _copy_linux_text
 
 
 def _selection(tmp_path: Path, *, qos: str | None = None) -> Path:
@@ -72,8 +75,24 @@ def test_unresolved_bundle_has_discovery_and_no_authoritative_submit(tmp_path: P
     assert (discovery / "scripts" / "build_login_summary.py").is_file()
     assert (discovery / "scripts" / "scheduler_resolution.py").is_file()
     assert (discovery / "resolve_m10_scheduler.py").is_file()
-    assert (output / "scientific_fixture" / "input" / "smoke.fdf").is_file()
+    run_probe = discovery / "run_login_probe.sh"
+    probe_common = discovery / "scripts" / "probe_common.sh"
+    assert run_probe.read_bytes().startswith(b"#!/usr/bin/env bash\n")
+    assert b"\r" not in run_probe.read_bytes()
+    assert b"\r" not in probe_common.read_bytes()
+    fixture = output / "scientific_fixture"
+    source = REPO / "remote_validation" / "M3B1_SURF_GR5X5_REAL_SIESTA_SMOKE"
+    assert sha256((fixture / "input" / "smoke.fdf").read_bytes()).hexdigest() == sha256((source / "input" / "smoke.fdf").read_bytes()).hexdigest()
+    assert sha256((fixture / "pseudopotentials" / "C.psml").read_bytes()).hexdigest() == sha256((source / "pseudopotentials" / "C.psml").read_bytes()).hexdigest()
     assert not list(output.rglob("submit.slurm"))
+
+
+def test_linux_text_copy_normalizes_a_crlf_fixture(tmp_path: Path) -> None:
+    source = tmp_path / "source.sh"
+    destination = tmp_path / "destination.sh"
+    source.write_bytes(b"#!/usr/bin/env bash\r\nset -euo pipefail\r\n")
+    _copy_linux_text(source, destination)
+    assert destination.read_bytes() == b"#!/usr/bin/env bash\nset -euo pipefail\n"
 
 
 def test_self_contained_m10_resolver_uses_current_shape_and_observed_memory(tmp_path: Path) -> None:
@@ -152,10 +171,16 @@ def test_resolved_packages_are_canonical_and_backend_equivalent(tmp_path: Path) 
     equivalence = manifest["backend_equivalence"]
     assert equivalence["workflow_id_equal"] and equivalence["workflow_definition_sha256_equal"]
     assert equivalence["scientific_identity_equal"] and equivalence["execution_spec_different"]
+    shell_files = [*output.rglob("*.sh"), *output.rglob("*.slurm")]
+    assert shell_files
+    assert all(b"\r" not in path.read_bytes() for path in shell_files)
     for name, payload in manifest["packages"].items():
         archive = Path(payload["zip_path"])
         extraction = tmp_path / f"extract-{name}"; extraction.mkdir()
         with ZipFile(archive) as handle:
+            shell_members = [member for member in handle.namelist() if member.endswith((".sh", ".slurm"))]
+            assert shell_members
+            assert all(b"\r" not in handle.read(member) for member in shell_members)
             handle.extractall(extraction)
         root = extraction / payload["package_id"]
         verified = subprocess.run([sys.executable, "verify_package.py"], cwd=root, capture_output=True, text=True)

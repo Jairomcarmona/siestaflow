@@ -41,6 +41,16 @@ def _write_json(path: Path, value: object) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
 
 
+def _copy_linux_text(source: Path, destination: Path) -> None:
+    """Materialize a Linux-targeted text file with LF line endings."""
+
+    destination.write_bytes(source.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n"))
+
+
+def _write_linux_text(destination: Path, text: str) -> None:
+    destination.write_bytes(text.replace("\r\n", "\n").replace("\r", "\n").encode("utf-8"))
+
+
 def _required_scheduler_text(value: object, field: str) -> str:
     if not isinstance(value, str) or not _SAFE.fullmatch(value):
         raise ValueError(f"M10_REMOTE_PROFILE_UNRESOLVED: invalid {field}")
@@ -216,10 +226,10 @@ def _unresolved(repository: Path, output: Path) -> dict[str, Any]:
     scripts = discovery / "scripts"
     scripts.mkdir()
     for name in ("probe_common.sh", "build_login_summary.py", "scheduler_resolution.py"):
-        shutil.copy2(historical / "scripts" / name, scripts / name)
-    shutil.copy2(historical / "run_login_probe.sh", discovery / "run_login_probe.sh")
+        _copy_linux_text(historical / "scripts" / name, scripts / name)
+    _copy_linux_text(historical / "run_login_probe.sh", discovery / "run_login_probe.sh")
     m10_resolver = repository / "tools" / "resolve_yoltla_m10_scheduler.py"
-    shutil.copy2(m10_resolver, discovery / "resolve_m10_scheduler.py")
+    _copy_linux_text(m10_resolver, discovery / "resolve_m10_scheduler.py")
     (discovery / "README.md").write_text(_discovery_readme(), encoding="utf-8", newline="\n")
     _write_json(discovery / "resource_requirements.json", {"nodes": 2, "ntasks": 64, "cpus_per_task": 1, "processes_per_node": 32, "walltime": "00:20:00"})
     resolver = scripts / "scheduler_resolution.py"
@@ -244,7 +254,7 @@ def _resolved(repository: Path, output: Path, selection_path: Path) -> dict[str,
     equivalence = _equivalence(hydra, srun)
     _write_json(output / "backend_equivalence.json", equivalence)
     preflight = output / "preflight"; preflight.mkdir()
-    (preflight / "submit_m10_preflight.slurm").write_text(_preflight_script(selection), encoding="utf-8", newline="\n")
+    _write_linux_text(preflight / "submit_m10_preflight.slurm", _preflight_script(selection))
     manifest = {"schema_version": "1.0", "scheduler_profile_status": "RESOLVED_FROM_CLUSTER_EVIDENCE", "resource_shape": RESOURCE_SHAPE, "scheduler_selection": {"relative_path": "provenance/scheduler_selection.json", "sha256": _sha(copied_selection), "account": selection["account"], "partition": selection["partition"], "qos": selection.get("qos"), "source_files": selection["source_files"], "evidence_status_by_field": selection["evidence_status_by_field"]}, "packages": results, "backend_equivalence": equivalence, "continuation_external_allocations": {"first_seconds": 60, "second_seconds": 180, "same_package_root_and_config": True}, "execution_authority": "ControllerPackageBuilder -> CanonicalController -> CompiledWorkflowRuntime", "remote_execution_status": "PENDING_REMOTE"}
     _write_json(output / "bundle_manifest.json", manifest)
     return manifest
