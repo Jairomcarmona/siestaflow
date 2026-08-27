@@ -12,7 +12,7 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO), str(REPO / "src")]
 
 from tools.build_yoltla_m10_acceptance import _copy_linux_text
-from tools.build_yoltla_m10_login_summary import build as build_login_summary
+from tools.build_yoltla_m10_login_summary import _hydra_launcher_mechanisms, build as build_login_summary
 from tools.resolve_yoltla_m10_runtime import resolve as resolve_runtime
 from qraft.execution.allocation_controller import load_controller_config
 from qraft.execution.hydra_launcher import HydraLauncher
@@ -74,6 +74,14 @@ def _raw_login_evidence(tmp_path: Path) -> Path:
     raw = tmp_path / "raw"
     raw.mkdir(parents=True)
     files = {
+        "observed_at.txt": "2026-08-27T00:00:00Z\n",
+        "hostname.txt": "observed-login\n",
+        "user.txt": "vini\n",
+        "system.txt": "Linux observed\n",
+        "shell.txt": "/bin/bash\n",
+        "path.txt": "/usr/bin\n",
+        "working_path.txt": "/observed/path\n",
+        "environment_redacted.txt": "PATH=/usr/bin\n",
         "sacctmgr_assoc.txt": "vini||normal\n",
         "squeue.txt": "1|name|q4d-20p|vini|normal\n",
         "sinfo.txt": "q4d-20p|up|01:00:00|2|20|64000\ntt2d-64p|up|01:00:00|2|32|128000\nqz2d-64p|up|01:00:00|2|64|128000\nqz2d-128p|up|01:00:00|2|64|128000\ntt1d-128p|up|01:00:00|4|32|128000\n",
@@ -107,6 +115,7 @@ def _runtime_probe_evidence(tmp_path: Path, *, python_version: str = "3.11.9", s
         "selected_python_module.txt": "python/3.11.9\n",
         "selected_siesta_module.txt": "siesta/5.4.2\n",
         "module_setup_commands.txt": "module purge\nmodule load python/3.11.9\nmodule load siesta/5.4.2\n",
+        "module_mechanism.exit_code": "0\n",
         "module_purge.exit_code": "0\n",
         "module_load_python.exit_code": "0\n",
         "module_load_siesta.exit_code": "0\n",
@@ -200,6 +209,59 @@ def test_summary_preserves_global_association_and_partition_policy_fields(tmp_pa
     assert {field: policy[field] for field in ("state", "min_nodes", "max_nodes", "max_time")} == {"state": "UP", "min_nodes": 2, "max_nodes": 2, "max_time": "01:00:00"}
     assert policy["allow_accounts"] == {"kind": "ALL", "values": []}
     assert policy["allow_qos"] == {"kind": "ALL", "values": []}
+
+
+def test_hydra_launcher_mechanisms_parse_only_the_observed_launcher_section() -> None:
+    expected = ["ssh", "slurm", "rsh", "ll", "sge", "pbs", "pbsdsh", "pdsh", "srun", "lsf", "blaunch", "qrsh", "fork"]
+    assert _hydra_launcher_mechanisms("-launcher launcher to use (ssh slurm rsh ll sge pbs pbsdsh pdsh srun lsf blaunch qrsh fork)\n-n ranks\n") == expected
+    assert _hydra_launcher_mechanisms("-launcher\n  launcher to use\n  (ssh slurm rsh fork)\n-n ranks\n") == ["ssh", "slurm", "rsh", "fork"]
+    assert _hydra_launcher_mechanisms("-n ranks\n") == []
+    assert _hydra_launcher_mechanisms("general note (ssh slurm)\n-n ranks\n") == []
+
+
+def test_real_shaped_hydra_summary_has_observed_mechanisms_without_bootstrap_default(tmp_path: Path) -> None:
+    raw = _raw_login_evidence(tmp_path)
+    probe = _runtime_probe_evidence(tmp_path, hydra=True)
+    (probe / "mpiexec_hydra_help.txt").write_text(
+        "-launcher launcher to use (ssh slurm rsh ll sge pbs pbsdsh pdsh srun lsf blaunch qrsh fork)\n-n ranks\n-ppn ranks\n",
+        encoding="utf-8",
+    )
+    hydra = build_login_summary(raw, probe)["launcher_candidates"]["mpiexec.hydra"][0]
+    assert hydra["observed_launcher_mechanisms"][:2] == ["ssh", "slurm"]
+    assert hydra["bootstrap_selection_required"] is True
+    assert "bootstrap" not in hydra
+
+
+def test_login_summary_cli_rejects_missing_or_incomplete_evidence_without_output(tmp_path: Path) -> None:
+    valid_raw = _raw_login_evidence(tmp_path / "valid")
+    raw_file = tmp_path / "raw-file"
+    raw_file.write_text("not a directory\n", encoding="utf-8")
+    incomplete = tmp_path / "incomplete"
+    incomplete.mkdir()
+    cases = ((tmp_path / "absent", None), (raw_file, None), (incomplete, None), (valid_raw, tmp_path / "missing-probe"))
+    for index, (raw, probe) in enumerate(cases):
+        output = tmp_path / f"blocked-{index}.json"
+        command = [sys.executable, "tools/build_yoltla_m10_login_summary.py", "--raw", str(raw), "--output", str(output)]
+        if probe is not None:
+            command.extend(("--runtime-probe", str(probe)))
+        result = subprocess.run(command, cwd=REPO, capture_output=True, text=True)
+        assert result.returncode != 0
+        assert "M10_LOGIN_SUMMARY_UNRESOLVED" in result.stderr
+        assert not output.exists()
+
+
+def test_login_summary_cli_accepts_complete_current_evidence(tmp_path: Path) -> None:
+    raw = _raw_login_evidence(tmp_path)
+    probe = _runtime_probe_evidence(tmp_path)
+    output = tmp_path / "login-summary.json"
+    result = subprocess.run(
+        [sys.executable, "tools/build_yoltla_m10_login_summary.py", "--raw", str(raw), "--runtime-probe", str(probe), "--output", str(output)],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(output.read_text(encoding="utf-8"))["runtime_probe"]["status"] == "VERIFIED"
 
 
 def test_global_association_expands_only_to_current_policy_compatible_partitions(tmp_path: Path) -> None:

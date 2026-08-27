@@ -123,13 +123,34 @@ def _runtime_probe_is_bound(raw: Path, probe: Path, setup: list[str]) -> bool:
     return setup == ["module purge", f"module load {python_module}", f"module load {siesta_module}"]
 
 
+_RAW_LOGIN_PROBE_ARTIFACTS = (
+    "observed_at.txt", "hostname.txt", "user.txt", "system.txt", "shell.txt",
+    "path.txt", "working_path.txt", "environment_redacted.txt", "module_available.txt",
+    "conda_available.txt", "spack_available.txt",
+)
+_RUNTIME_PROBE_ARTIFACTS = (
+    "selected_python_module.txt", "selected_siesta_module.txt",
+    "module_setup_commands.txt", "module_mechanism.exit_code",
+)
+
+
+def _validate_evidence_directory(path: Path, artifacts: tuple[str, ...], label: str) -> None:
+    if not path.exists():
+        raise ValueError(f"M10_LOGIN_SUMMARY_UNRESOLVED: {label} evidence directory missing")
+    if not path.is_dir():
+        raise ValueError(f"M10_LOGIN_SUMMARY_UNRESOLVED: {label} evidence path is not a directory")
+    missing = [name for name in artifacts if not (path / name).is_file()]
+    if missing:
+        raise ValueError(f"M10_LOGIN_SUMMARY_UNRESOLVED: {label} evidence is incomplete: {', '.join(missing)}")
+
+
 def _hydra_launcher_mechanisms(help_text: str) -> list[str]:
     """Extract the launcher mechanisms advertised by the observed Hydra help."""
     lines = help_text.splitlines()
     for index, line in enumerate(lines):
         if not re.match(r"^\s*-launcher(?:\s|$)", line):
             continue
-        section: list[str] = []
+        section = [line]
         for following in lines[index + 1:]:
             if re.match(r"^\s*-\w", following):
                 break
@@ -202,6 +223,9 @@ def _module_candidates(raw: Path, probe: Path | None) -> tuple[list[dict[str, ob
 
 
 def build(raw: Path, runtime_probe: Path | None = None) -> dict[str, object]:
+    _validate_evidence_directory(raw, _RAW_LOGIN_PROBE_ARTIFACTS, "raw login probe")
+    if runtime_probe is not None:
+        _validate_evidence_directory(runtime_probe, _RUNTIME_PROBE_ARTIFACTS, "runtime candidate probe")
     commands = _commands(raw)
     environment = {
         line.split("=", 1)[0]: line.split("=", 1)[1]
