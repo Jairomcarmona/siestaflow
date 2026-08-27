@@ -295,9 +295,12 @@ def _discovery_readme() -> str:
 `tt2d-64p`, account `vini`, QoS `normal`. They are hints only and are not used
 by this bundle. This directory is self-contained for login-node discovery:
 `run_login_probe.sh` captures Bash-only, read-only raw evidence and never calls
-Python. On a machine with Python >=3.11, `build_login_summary.py`,
-`resolve_m10_scheduler.py`, and `resolve_m10_runtime.py` produce reviewed
-selections. They never submit a job. Both selections need human approval.
+Python. Review its available module names before explicitly running
+`run_runtime_candidate_probe.sh`; that isolated Bash probe verifies selected
+module environments without launching ranks. On a machine with Python >=3.11,
+`build_login_summary.py --runtime-probe ...`, `resolve_m10_scheduler.py`, and
+`resolve_m10_runtime.py` produce reviewed selections. They never submit a job.
+Both selections need human approval.
 """
 
 
@@ -307,16 +310,18 @@ def _unresolved(repository: Path, output: Path) -> dict[str, Any]:
     discovery = output / "scheduler_discovery"
     discovery.mkdir()
     raw_probe = repository / "tools" / "m10_yoltla_raw_login_probe.sh"
+    runtime_probe = repository / "tools" / "m10_yoltla_runtime_candidate_probe.sh"
     summary_builder = repository / "tools" / "build_yoltla_m10_login_summary.py"
     scheduler_resolver = repository / "tools" / "resolve_yoltla_m10_scheduler.py"
     runtime_resolver = repository / "tools" / "resolve_yoltla_m10_runtime.py"
     _copy_linux_text(raw_probe, discovery / "run_login_probe.sh")
+    _copy_linux_text(runtime_probe, discovery / "run_runtime_candidate_probe.sh")
     _copy_linux_text(summary_builder, discovery / "build_login_summary.py")
     _copy_linux_text(scheduler_resolver, discovery / "resolve_m10_scheduler.py")
     _copy_linux_text(runtime_resolver, discovery / "resolve_m10_runtime.py")
     (discovery / "README.md").write_text(_discovery_readme(), encoding="utf-8", newline="\n")
     _write_json(discovery / "resource_requirements.json", {"nodes": 2, "ntasks": 64, "cpus_per_task": 1, "processes_per_node": 32, "walltime": "00:20:00"})
-    manifest = {"schema_version": "1.0", "scheduler_profile_status": "UNRESOLVED", "runtime_profile_status": "UNRESOLVED", "resource_shape": RESOURCE_SHAPE, "historical_hint": HISTORICAL_HINT, "scientific_fixture_hashes": hashes, "raw_login_probe": {"source": "tools/m10_yoltla_raw_login_probe.sh", "sha256": _sha(raw_probe), "python_required": False, "module_required": False}, "m10_scheduler_resolver": {"source": "tools/resolve_yoltla_m10_scheduler.py", "sha256": _sha(scheduler_resolver)}, "m10_runtime_resolver": {"source": "tools/resolve_yoltla_m10_runtime.py", "sha256": _sha(runtime_resolver)}, "remote_execution_status": "PENDING_REMOTE", "scientific_submit_scripts_generated": False}
+    manifest = {"schema_version": "1.0", "scheduler_profile_status": "UNRESOLVED", "runtime_profile_status": "UNRESOLVED", "resource_shape": RESOURCE_SHAPE, "historical_hint": HISTORICAL_HINT, "scientific_fixture_hashes": hashes, "raw_login_probe": {"source": "tools/m10_yoltla_raw_login_probe.sh", "sha256": _sha(raw_probe), "python_required": False, "module_required": False}, "runtime_candidate_probe": {"source": "tools/m10_yoltla_runtime_candidate_probe.sh", "sha256": _sha(runtime_probe), "python_required": False, "requires_explicit_modules": True, "launches_work": False}, "m10_scheduler_resolver": {"source": "tools/resolve_yoltla_m10_scheduler.py", "sha256": _sha(scheduler_resolver)}, "m10_runtime_resolver": {"source": "tools/resolve_yoltla_m10_runtime.py", "sha256": _sha(runtime_resolver)}, "remote_execution_status": "PENDING_REMOTE", "scientific_submit_scripts_generated": False}
     _write_json(output / "bundle_manifest.json", manifest)
     (output / "README.md").write_text("# QRAFT M10 unresolved discovery bundle\n\nNo scientific submit scripts are generated until a current, human-reviewed scheduler selection is supplied.\n", encoding="utf-8", newline="\n")
     return manifest

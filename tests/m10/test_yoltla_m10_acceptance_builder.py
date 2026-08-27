@@ -12,6 +12,7 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO), str(REPO / "src")]
 
 from tools.build_yoltla_m10_acceptance import _copy_linux_text
+from tools.build_yoltla_m10_login_summary import build as build_login_summary
 from tools.resolve_yoltla_m10_runtime import resolve as resolve_runtime
 
 
@@ -65,6 +66,64 @@ def _login_summary(tmp_path: Path, *, partitions: list[dict[str, object]] | None
     return path
 
 
+def _raw_login_evidence(tmp_path: Path) -> Path:
+    raw = tmp_path / "raw"
+    raw.mkdir(parents=True)
+    files = {
+        "sacctmgr_assoc.txt": "vini||normal\n",
+        "squeue.txt": "1|name|q4d-20p|vini|normal\n",
+        "sinfo.txt": "q4d-20p|up|01:00:00|2|20|64000\ntt2d-64p|up|01:00:00|2|32|128000\nqz2d-64p|up|01:00:00|2|64|128000\nqz2d-128p|up|01:00:00|2|64|128000\ntt1d-128p|up|01:00:00|4|32|128000\n",
+        "scontrol_partitions.txt": "\n".join((
+            "PartitionName=q4d-20p State=UP MinNodes=1 MaxNodes=2 MaxTime=01:00:00 AllowAccounts=ALL AllowQos=ALL",
+            "PartitionName=tt2d-64p State=UP MinNodes=2 MaxNodes=2 MaxTime=01:00:00 AllowAccounts=ALL AllowQos=ALL",
+            "PartitionName=qz2d-64p State=UP MinNodes=1 MaxNodes=1 MaxTime=01:00:00 AllowAccounts=ALL AllowQos=ALL",
+            "PartitionName=qz2d-128p State=UP MinNodes=2 MaxNodes=2 MaxTime=01:00:00 AllowAccounts=vini AllowQos=normal",
+            "PartitionName=tt1d-128p State=UP MinNodes=4 MaxNodes=4 MaxTime=01:00:00 AllowAccounts=ALL AllowQos=ALL",
+        )) + "\n",
+        "module_python_candidates.txt": "python/3.11.9\n",
+        "module_siesta_candidates.txt": "siesta/5.4.2\n",
+        "module_available.txt": "true\n",
+        "conda_available.txt": "false\n",
+        "spack_available.txt": "false\n",
+        "command_python.txt": "/usr/bin/python\n",
+        "python_version.txt": "Python 2.7.5\n",
+        "command_python3.txt": "/usr/bin/python3\n",
+        "python3_version.txt": "Python 3.6.8\n",
+        "command_srun.txt": "/usr/bin/srun\n",
+    }
+    for name, value in files.items():
+        (raw / name).write_text(value, encoding="utf-8")
+    return raw
+
+
+def _runtime_probe_evidence(tmp_path: Path, *, python_version: str = "3.11.9", siesta: bool = True, hydra: bool = False, bootstrap: str | None = None) -> Path:
+    probe = tmp_path / "runtime-probe"
+    probe.mkdir(parents=True)
+    files = {
+        "module_setup_commands.txt": "module purge\nmodule load selected-python\nmodule load selected-siesta\n",
+        "module_purge.exit_code": "0\n",
+        "module_load_python.exit_code": "0\n",
+        "module_load_siesta.exit_code": "0\n",
+        "command_python3.txt": "/opt/python/bin/python3\n",
+        "python3_version.txt": f"Python {python_version}\n",
+        "command_srun.txt": "/usr/bin/srun\n",
+    }
+    if siesta:
+        files.update({"command_siesta.txt": "/opt/siesta/bin/siesta\n", "siesta_version.txt": "SIESTA 5.4.2\n"})
+    if hydra:
+        files.update({"command_mpiexec_hydra.txt": "/opt/mpi/bin/mpiexec.hydra\n", "mpiexec_hydra_help.txt": "-n number\n-ppn number\n"})
+    if bootstrap:
+        files["environment_redacted.txt"] = f"I_MPI_HYDRA_BOOTSTRAP={bootstrap}\n"
+    for name, value in files.items():
+        (probe / name).write_text(value, encoding="utf-8")
+    return probe
+
+
+def _bash_path(path: Path) -> str:
+    drive = path.drive.rstrip(":").lower()
+    return f"/mnt/{drive}/{path.as_posix().split(':', 1)[1].lstrip('/')}" if drive else path.as_posix()
+
+
 def _resolve(discovery: Path, summary: Path, output: Path, *selection: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, str(discovery / "resolve_m10_scheduler.py"), "--login-evidence", str(summary), "--output", str(output), *selection],
@@ -94,18 +153,76 @@ def test_unresolved_bundle_has_discovery_and_no_authoritative_submit(tmp_path: P
     assert manifest["historical_hint"]["status"] == "HISTORICAL_ONLY_NOT_CURRENT_AUTHORITY"
     discovery = output / "scheduler_discovery"
     assert (discovery / "run_login_probe.sh").is_file()
+    assert (discovery / "run_runtime_candidate_probe.sh").is_file()
     assert (discovery / "build_login_summary.py").is_file()
     assert (discovery / "resolve_m10_scheduler.py").is_file()
     assert (discovery / "resolve_m10_runtime.py").is_file()
     run_probe = discovery / "run_login_probe.sh"
     assert run_probe.read_bytes().startswith(b"#!/usr/bin/env bash\n")
     assert b"\r" not in run_probe.read_bytes()
+    assert all(b"\r" not in path.read_bytes() for path in discovery.glob("*.sh"))
     assert b"build_login_summary.py" not in run_probe.read_bytes()
     fixture = output / "scientific_fixture"
     source = REPO / "remote_validation" / "M3B1_SURF_GR5X5_REAL_SIESTA_SMOKE"
     assert sha256((fixture / "input" / "smoke.fdf").read_bytes()).hexdigest() == sha256((source / "input" / "smoke.fdf").read_bytes()).hexdigest()
     assert sha256((fixture / "pseudopotentials" / "C.psml").read_bytes()).hexdigest() == sha256((source / "pseudopotentials" / "C.psml").read_bytes()).hexdigest()
     assert not list(output.rglob("submit.slurm"))
+
+
+def test_summary_preserves_global_association_and_partition_policy_fields(tmp_path: Path) -> None:
+    summary = build_login_summary(_raw_login_evidence(tmp_path))
+    global_association = summary["eligible_associations"][0]
+    assert global_association == {
+        "account": "vini", "partition": None, "qos": "normal", "scope": "GLOBAL_USER_ASSOCIATION",
+        "source": "sacctmgr", "source_file": "sacctmgr_assoc.txt", "source_line": 1,
+    }
+    queue_association = summary["eligible_associations"][1]
+    assert queue_association["partition"] == "q4d-20p"
+    assert queue_association["scope"] == "CURRENT_USER_QUEUE_EVIDENCE"
+    policy = next(item for item in summary["partition_policies"] if item["name"] == "tt2d-64p")
+    assert {field: policy[field] for field in ("state", "min_nodes", "max_nodes", "max_time")} == {"state": "UP", "min_nodes": 2, "max_nodes": 2, "max_time": "01:00:00"}
+    assert policy["allow_accounts"] == {"kind": "ALL", "values": []}
+    assert policy["allow_qos"] == {"kind": "ALL", "values": []}
+
+
+def test_global_association_expands_only_to_current_policy_compatible_partitions(tmp_path: Path) -> None:
+    output, _ = _build(tmp_path)
+    summary_path = tmp_path / "summary.json"
+    summary_path.write_text(json.dumps(build_login_summary(_raw_login_evidence(tmp_path))), encoding="utf-8")
+    automatic = _resolve(output / "scheduler_discovery", summary_path, tmp_path / "automatic.json")
+    assert automatic.returncode != 0
+    assert "SCHEDULER_PROBE_BLOCKED_MULTIPLE_DEFAULT_PARTITIONS" in automatic.stderr
+    selected = tmp_path / "tt2d.json"
+    explicit = _resolve(output / "scheduler_discovery", summary_path, selected, "--account", "vini", "--partition", "tt2d-64p", "--qos", "normal")
+    assert explicit.returncode == 0, explicit.stderr
+    assert json.loads(selected.read_text(encoding="utf-8"))["association_scope"] == "GLOBAL_USER_ASSOCIATION"
+    for partition, reason in (("q4d-20p", "CPUS_PER_NODE_INSUFFICIENT"), ("tt1d-128p", "MIN_NODES_VIOLATED"), ("qz2d-64p", "MAX_NODES_VIOLATED")):
+        rejected = _resolve(output / "scheduler_discovery", summary_path, tmp_path / f"{partition}.json", "--account", "vini", "--partition", partition, "--qos", "normal")
+        assert rejected.returncode != 0 and reason in rejected.stderr
+
+
+def test_module_availability_requires_verified_runtime_probe(tmp_path: Path) -> None:
+    raw = _raw_login_evidence(tmp_path)
+    availability_only = build_login_summary(raw)
+    assert not [item for item in availability_only["python_candidates"] if item["selected_mechanism"] == "MODULE"]
+    assert not availability_only["siesta_candidates"]
+    verified = build_login_summary(raw, _runtime_probe_evidence(tmp_path))
+    python = next(item for item in verified["python_candidates"] if item["selected_mechanism"] == "MODULE")
+    assert python["selected_executable"] == "/opt/python/bin/python3"
+    assert python["environment_setup"] == ["module purge", "module load selected-python", "module load selected-siesta"]
+    assert any(item["selected_mechanism"] == "MODULE" for item in verified["siesta_candidates"])
+    assert verified["launcher_candidates"]["srun"][-1]["selected_mechanism"] == "MODULE"
+
+
+def test_runtime_candidate_probe_rejects_module_not_in_raw_evidence(tmp_path: Path) -> None:
+    raw = _raw_login_evidence(tmp_path)
+    script = REPO / "tools" / "m10_yoltla_runtime_candidate_probe.sh"
+    result = subprocess.run(["bash", _bash_path(script), "--raw", _bash_path(raw), "--python-module", "not-observed", "--siesta-module", "siesta/5.4.2"], capture_output=True, text=True)
+    assert result.returncode != 0
+    assert "not exactly observed" in result.stderr
+    source = script.read_text(encoding="utf-8")
+    assert "sbatch" not in source and "smoke.fdf" not in source and "mpiexec.hydra -help" in source
+    assert "(\n  [[ ! -e" in source
 
 
 def test_linux_text_copy_normalizes_a_crlf_fixture(tmp_path: Path) -> None:
@@ -244,6 +361,55 @@ def test_runtime_resolution_accepts_python_311_path_and_rejects_old_python(tmp_p
     try: resolve_runtime(path)
     except ValueError as error: assert "M10_RUNTIME_PROFILE_UNRESOLVED" in str(error)
     else: raise AssertionError("too-old Python was accepted")
+
+
+def test_verified_module_probe_runtime_fails_closed_for_old_python_or_missing_siesta(tmp_path: Path) -> None:
+    raw = _raw_login_evidence(tmp_path)
+    for name, probe in {
+        "old": _runtime_probe_evidence(tmp_path / "old", python_version="3.10.14"),
+        "siesta": _runtime_probe_evidence(tmp_path / "siesta", siesta=False),
+    }.items():
+        summary = build_login_summary(raw, probe)
+        path = tmp_path / f"{name}.json"
+        path.write_text(json.dumps(summary), encoding="utf-8")
+        try:
+            resolve_runtime(path)
+        except ValueError as error:
+            assert "M10_RUNTIME_PROFILE_UNRESOLVED" in str(error)
+        else:
+            raise AssertionError(f"{name} module evidence was accepted")
+
+
+def test_verified_module_probe_hydra_needs_observed_bootstrap(tmp_path: Path) -> None:
+    raw = _raw_login_evidence(tmp_path)
+    no_bootstrap = build_login_summary(raw, _runtime_probe_evidence(tmp_path, hydra=True))
+    path = tmp_path / "no-bootstrap.json"
+    path.write_text(json.dumps(no_bootstrap), encoding="utf-8")
+    assert "mpiexec.hydra" in no_bootstrap["launcher_candidates"]
+    selected = {"python": "/opt/python/bin/python3", "siesta": "/opt/siesta/bin/siesta", "srun": "/usr/bin/srun", "hydra": "/opt/mpi/bin/mpiexec.hydra"}
+    try:
+        resolve_runtime(path, require_hydra=True, **selected)
+    except ValueError as error:
+        assert "M10_RUNTIME_PROFILE_UNRESOLVED" in str(error)
+    else:
+        raise AssertionError("Hydra bootstrap was guessed")
+    resolved = build_login_summary(raw, _runtime_probe_evidence(tmp_path / "resolved", hydra=True, bootstrap="observed-bootstrap"))
+    path.write_text(json.dumps(resolved), encoding="utf-8")
+    runtime = resolve_runtime(path, require_hydra=True, **selected)
+    assert runtime["launchers"]["hydra"]["bootstrap"] == "observed-bootstrap"
+    assert runtime["launchers"]["srun"]["selected_mechanism"] == "MODULE"
+
+
+def test_verified_module_probe_without_hydra_is_rejected_when_required(tmp_path: Path) -> None:
+    summary = build_login_summary(_raw_login_evidence(tmp_path), _runtime_probe_evidence(tmp_path))
+    path = tmp_path / "no-hydra.json"
+    path.write_text(json.dumps(summary), encoding="utf-8")
+    try:
+        resolve_runtime(path, python="/opt/python/bin/python3", siesta="/opt/siesta/bin/siesta", srun="/usr/bin/srun", require_hydra=True)
+    except ValueError as error:
+        assert "M10_RUNTIME_PROFILE_UNRESOLVED" in str(error)
+    else:
+        raise AssertionError("missing Hydra was accepted")
 
 
 def test_module_runtime_and_missing_hydra_fail_closed(tmp_path: Path) -> None:

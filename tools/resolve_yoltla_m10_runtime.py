@@ -27,6 +27,13 @@ def _candidates(data: Mapping[str, Any], key: str) -> list[dict[str, Any]]:
 
 def _select(candidates: list[dict[str, Any]], executable: str | None, label: str) -> dict[str, Any]:
     matches = [item for item in candidates if executable is None or item.get("selected_executable") == executable]
+    # A reviewed module probe can expose the same absolute executable as the
+    # login PATH.  An explicit path then identifies one replayable MODULE
+    # candidate without turning an unqualified selection into a preference.
+    if executable is not None and len(matches) > 1:
+        module_matches = [item for item in matches if item.get("selected_mechanism") == "MODULE"]
+        if len(module_matches) == 1:
+            matches = module_matches
     if len(matches) != 1:
         reason = "missing" if not matches else "ambiguous"
         raise ValueError(f"M10_RUNTIME_PROFILE_UNRESOLVED: {label} candidate is {reason}; select an evidence-supported executable")
