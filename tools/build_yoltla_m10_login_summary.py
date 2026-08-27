@@ -107,13 +107,30 @@ def _module_setup(probe: Path) -> list[str]:
     return [line for line in (_read(probe, "module_setup_commands.txt") or "").splitlines() if line]
 
 
-def _module_candidates(probe: Path | None) -> tuple[list[dict[str, object]], list[dict[str, object]], dict[str, list[dict[str, object]]]]:
+def _observed_once(raw: Path, name: str, module: str) -> bool:
+    return (raw / name).is_file() and (_read(raw, name) or "").splitlines().count(module) == 1
+
+
+def _runtime_probe_is_bound(raw: Path, probe: Path, setup: list[str]) -> bool:
+    python_module = _read(probe, "selected_python_module.txt")
+    siesta_module = _read(probe, "selected_siesta_module.txt")
+    if not python_module or not siesta_module:
+        return False
+    if not _observed_once(raw, "module_python_candidates.txt", python_module):
+        return False
+    if not _observed_once(raw, "module_siesta_candidates.txt", siesta_module):
+        return False
+    return setup == ["module purge", f"module load {python_module}", f"module load {siesta_module}"]
+
+
+def _module_candidates(raw: Path, probe: Path | None) -> tuple[list[dict[str, object]], list[dict[str, object]], dict[str, list[dict[str, object]]]]:
     """Use only a successful explicit module probe as executable authority."""
     if probe is None:
         return [], [], {}
     setup = _module_setup(probe)
     if (
         not setup
+        or not _runtime_probe_is_bound(raw, probe, setup)
         or _read(probe, "module_purge.exit_code") != "0"
         or _read(probe, "module_load_python.exit_code") != "0"
         or _read(probe, "module_load_siesta.exit_code") != "0"
@@ -203,7 +220,7 @@ def build(raw: Path, runtime_probe: Path | None = None) -> dict[str, object]:
                     candidate.update({"arguments": ["-n", "64", "-ppn", "32"], "bootstrap": bootstrap})
                     candidate["evidence_source"] = [*candidate["evidence_source"], "mpiexec_hydra_help.txt", "environment_redacted.txt"]
             launchers[name] = [candidate]
-    module_python, module_siesta, module_launchers = _module_candidates(runtime_probe)
+    module_python, module_siesta, module_launchers = _module_candidates(raw, runtime_probe)
     python_candidates.extend(module_python)
     siesta_candidates.extend(module_siesta)
     for name, candidates in module_launchers.items():

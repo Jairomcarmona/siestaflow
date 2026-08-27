@@ -42,8 +42,16 @@ python3 scheduler_discovery/build_login_summary.py \
   --output login_summary.json
 python3 scheduler_discovery/resolve_m10_scheduler.py \
   --login-evidence login_summary.json --output scheduler_selection.json
+# Inspect login_summary.json and copy only its reviewed executable paths.
+# Do not omit these selections when multiple candidates are present.
 python3 scheduler_discovery/resolve_m10_runtime.py \
-  --login-evidence login_summary.json --output runtime_selection.json --require-hydra
+  --login-evidence login_summary.json \
+  --python <observed-module-python-path> \
+  --siesta <observed-module-siesta-path> \
+  --srun <observed-srun-path> \
+  --hydra <observed-hydra-path> \
+  --require-hydra \
+  --output runtime_selection.json
 cat scheduler_selection.json runtime_selection.json
 ```
 
@@ -52,7 +60,9 @@ account/partition/QoS with the resolver’s explicit arguments. A reviewed
 runtime choice may use PATH with `environment_setup: []`, or only a verified
 module probe. Hydra is eligible only when its selected module environment
 actually exposes it and establishes its bootstrap evidence. Historical values
-are never defaults.
+are never defaults. A summary that contains both login-PATH and verified MODULE
+Python candidates is intentionally ambiguous until the reviewer supplies the
+observed executable paths above; the resolver does not rank or prefer them.
 
 **HUMAN REVIEW GATE:** transfer the exact reviewed selection files to the
 local rendering machine. Render with both; either omitted file fails closed.

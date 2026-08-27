@@ -100,7 +100,9 @@ def _runtime_probe_evidence(tmp_path: Path, *, python_version: str = "3.11.9", s
     probe = tmp_path / "runtime-probe"
     probe.mkdir(parents=True)
     files = {
-        "module_setup_commands.txt": "module purge\nmodule load selected-python\nmodule load selected-siesta\n",
+        "selected_python_module.txt": "python/3.11.9\n",
+        "selected_siesta_module.txt": "siesta/5.4.2\n",
+        "module_setup_commands.txt": "module purge\nmodule load python/3.11.9\nmodule load siesta/5.4.2\n",
         "module_purge.exit_code": "0\n",
         "module_load_python.exit_code": "0\n",
         "module_load_siesta.exit_code": "0\n",
@@ -209,9 +211,43 @@ def test_module_availability_requires_verified_runtime_probe(tmp_path: Path) -> 
     verified = build_login_summary(raw, _runtime_probe_evidence(tmp_path))
     python = next(item for item in verified["python_candidates"] if item["selected_mechanism"] == "MODULE")
     assert python["selected_executable"] == "/opt/python/bin/python3"
-    assert python["environment_setup"] == ["module purge", "module load selected-python", "module load selected-siesta"]
+    assert python["environment_setup"] == ["module purge", "module load python/3.11.9", "module load siesta/5.4.2"]
     assert any(item["selected_mechanism"] == "MODULE" for item in verified["siesta_candidates"])
     assert verified["launcher_candidates"]["srun"][-1]["selected_mechanism"] == "MODULE"
+
+
+def test_real_shaped_runtime_requires_explicit_module_executable_selection(tmp_path: Path) -> None:
+    summary = build_login_summary(_raw_login_evidence(tmp_path), _runtime_probe_evidence(tmp_path))
+    path = tmp_path / "summary.json"
+    path.write_text(json.dumps(summary), encoding="utf-8")
+    try:
+        resolve_runtime(path)
+    except ValueError as error:
+        assert "Python candidate is ambiguous" in str(error)
+    else:
+        raise AssertionError("runtime resolver selected a Python candidate automatically")
+    resolved = resolve_runtime(
+        path,
+        python="/opt/python/bin/python3",
+        siesta="/opt/siesta/bin/siesta",
+        srun="/usr/bin/srun",
+    )
+    assert resolved["python"]["selected_mechanism"] == "MODULE"
+    assert resolved["python"]["observed_version"] == "3.11.9"
+
+
+def test_summary_rejects_unbound_or_forged_runtime_probe_modules(tmp_path: Path) -> None:
+    raw = _raw_login_evidence(tmp_path)
+    for name, replacement in {
+        "unobserved": ("selected_python_module.txt", "python/not-observed\n"),
+        "setup-mismatch": ("module_setup_commands.txt", "module purge\nmodule load python/3.11.9\nmodule load another-siesta\n"),
+    }.items():
+        probe = _runtime_probe_evidence(tmp_path / name)
+        (probe / replacement[0]).write_text(replacement[1], encoding="utf-8")
+        summary = build_login_summary(raw, probe)
+        assert not [candidate for candidate in summary["python_candidates"] if candidate["selected_mechanism"] == "MODULE"]
+        assert not [candidate for candidate in summary["siesta_candidates"] if candidate["selected_mechanism"] == "MODULE"]
+        assert summary["runtime_probe"]["status"] == "NOT_EXECUTABLE_EVIDENCE"
 
 
 def test_runtime_candidate_probe_rejects_module_not_in_raw_evidence(tmp_path: Path) -> None:
@@ -351,6 +387,10 @@ def test_continuation_and_runbook_require_a_terminal_human_barrier(tmp_path: Pat
     first_job = runbook.index("CONTINUATION JOB #1")
     assert first_job < runbook.index("HUMAN GATE", first_job) < runbook.index("CONTINUATION JOB #2")
     assert "sacct" in runbook and "sbatch --test-only" in runbook
+    assert "--python <observed-module-python-path>" in runbook
+    assert "--siesta <observed-module-siesta-path>" in runbook
+    assert "--srun <observed-srun-path>" in runbook
+    assert "--hydra <observed-hydra-path>" in runbook
 
 
 def test_runtime_resolution_accepts_python_311_path_and_rejects_old_python(tmp_path: Path) -> None:
