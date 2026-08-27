@@ -14,6 +14,10 @@ sys.path[:0] = [str(REPO), str(REPO / "src")]
 from tools.build_yoltla_m10_acceptance import _copy_linux_text
 from tools.build_yoltla_m10_login_summary import build as build_login_summary
 from tools.resolve_yoltla_m10_runtime import resolve as resolve_runtime
+from qraft.execution.allocation_controller import load_controller_config
+from qraft.execution.hydra_launcher import HydraLauncher
+from qraft.execution.legacy_translation import translate_controller_config
+from qraft.execution.srun_launcher import StepLaunchSpec
 
 
 def _selection(
@@ -43,7 +47,7 @@ def _runtime_selection(tmp_path: Path, *, python_version: str = "3.11.9", siesta
         "launchers": {"srun": {"required": True, "selected_executable": "observed-srun", "arguments": ["--nodes=2", "--ntasks=64", "--ntasks-per-node=32"], "evidence_source": ["current-evidence"], "environment_setup": []}},
     }
     if hydra:
-        payload["launchers"]["hydra"] = {"required": True, "selected_executable": "observed-hydra", "arguments": ["-n", "64", "-ppn", "32"], "bootstrap": "slurm", "evidence_source": ["current-evidence"], "environment_setup": []}
+        payload["launchers"]["hydra"] = {"required": True, "selected_executable": "observed-hydra", "arguments": [], "bootstrap": "slurm", "evidence_source": ["current-evidence"], "environment_setup": []}
     path = tmp_path / "runtime_selection.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
@@ -113,12 +117,23 @@ def _runtime_probe_evidence(tmp_path: Path, *, python_version: str = "3.11.9", s
     if siesta:
         files.update({"command_siesta.txt": "/opt/siesta/bin/siesta\n", "siesta_version.txt": "SIESTA 5.4.2\n"})
     if hydra:
-        files.update({"command_mpiexec_hydra.txt": "/opt/mpi/bin/mpiexec.hydra\n", "mpiexec_hydra_help.txt": "-n number\n-ppn number\n"})
+        files.update({"command_mpiexec_hydra.txt": "/opt/mpi/bin/mpiexec.hydra\n", "mpiexec_hydra_help.txt": "Hydra specific options:\n\n  Launch options:\n    -launcher\n        launcher to use\n        (ssh slurm rsh ll sge pbs pbsdsh pdsh srun lsf blaunch qrsh fork)\n    -n number\n    -ppn number\n"})
     if bootstrap:
         files["environment_redacted.txt"] = f"I_MPI_HYDRA_BOOTSTRAP={bootstrap}\n"
     for name, value in files.items():
         (probe / name).write_text(value, encoding="utf-8")
     return probe
+
+
+def _hydra_policy_evidence(tmp_path: Path, bootstrap: str) -> Path:
+    path = tmp_path / "hydra-policy.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({
+        "schema_version": "1.0", "bootstrap": bootstrap,
+        "source_type": "ADMINISTRATIVE_POLICY", "source_reference": "reviewed-policy-record",
+        "decision_text": f"Use the reviewed Hydra bootstrap policy: {bootstrap}.",
+    }, indent=2) + "\n", encoding="utf-8")
+    return path
 
 
 def _bash_path(path: Path) -> str:
@@ -253,7 +268,9 @@ def test_summary_rejects_unbound_or_forged_runtime_probe_modules(tmp_path: Path)
 def test_runtime_candidate_probe_rejects_module_not_in_raw_evidence(tmp_path: Path) -> None:
     raw = _raw_login_evidence(tmp_path)
     script = REPO / "tools" / "m10_yoltla_runtime_candidate_probe.sh"
-    result = subprocess.run(["bash", _bash_path(script), "--raw", _bash_path(raw), "--python-module", "not-observed", "--siesta-module", "siesta/5.4.2"], capture_output=True, text=True)
+    normalized = tmp_path / "runtime-probe.sh"
+    _copy_linux_text(script, normalized)
+    result = subprocess.run(["bash", _bash_path(normalized), "--raw", _bash_path(raw), "--python-module", "not-observed", "--siesta-module", "siesta/5.4.2"], capture_output=True, text=True)
     assert result.returncode != 0
     assert "not exactly observed" in result.stderr
     source = script.read_text(encoding="utf-8")
@@ -438,6 +455,77 @@ def test_verified_module_probe_hydra_needs_observed_bootstrap(tmp_path: Path) ->
     runtime = resolve_runtime(path, require_hydra=True, **selected)
     assert runtime["launchers"]["hydra"]["bootstrap"] == "observed-bootstrap"
     assert runtime["launchers"]["srun"]["selected_mechanism"] == "MODULE"
+
+
+def test_hydra_bootstrap_policy_is_explicit_and_evidence_bound(tmp_path: Path) -> None:
+    raw = _raw_login_evidence(tmp_path)
+    summary = build_login_summary(raw, _runtime_probe_evidence(tmp_path, hydra=True))
+    path = tmp_path / "summary.json"
+    path.write_text(json.dumps(summary), encoding="utf-8")
+    selected = {"python": "/opt/python/bin/python3", "siesta": "/opt/siesta/bin/siesta", "srun": "/usr/bin/srun", "hydra": "/opt/mpi/bin/mpiexec.hydra"}
+    capability = summary["launcher_candidates"]["mpiexec.hydra"][0]
+    assert capability["observed_launcher_mechanisms"][:2] == ["ssh", "slurm"]
+    assert capability["bootstrap_selection_required"] is True
+    assert "bootstrap" not in capability
+    policy = _hydra_policy_evidence(tmp_path, "ssh")
+    try:
+        resolve_runtime(path, require_hydra=True, **selected)
+    except ValueError as error:
+        assert "Hydra requires reviewed bootstrap strategy" in str(error)
+    else:
+        raise AssertionError("Hydra bootstrap default was introduced")
+    resolved = resolve_runtime(path, require_hydra=True, hydra_bootstrap="ssh", hydra_policy_evidence=policy, **selected)
+    hydra = resolved["launchers"]["hydra"]
+    assert hydra["bootstrap"] == "ssh"
+    assert hydra["bootstrap_selection"]["kind"] == "EXPLICIT_ADMINISTRATIVE_POLICY"
+    assert hydra["bootstrap_selection"]["policy_evidence_sha256"] == sha256(policy.read_bytes()).hexdigest()
+    for bootstrap, evidence in (("ssh", None), ("not-in-policy", policy)):
+        try:
+            resolve_runtime(path, require_hydra=True, hydra_bootstrap=bootstrap, hydra_policy_evidence=evidence, **selected)
+        except ValueError as error:
+            assert "M10_RUNTIME_PROFILE_UNRESOLVED" in str(error)
+        else:
+            raise AssertionError("unsupported Hydra bootstrap selection was accepted")
+    try:
+        resolve_runtime(path, hydra_bootstrap="ssh", hydra_policy_evidence=policy, **{key: value for key, value in selected.items() if key != "hydra"})
+    except ValueError as error:
+        assert "requires --require-hydra" in str(error)
+    else:
+        raise AssertionError("Hydra bootstrap was accepted without --require-hydra")
+
+
+def test_hydra_policy_materializes_command_and_execution_fingerprint(tmp_path: Path) -> None:
+    selected = {"python": "/opt/python/bin/python3", "siesta": "/opt/siesta/bin/siesta", "srun": "/usr/bin/srun", "hydra": "/opt/mpi/bin/mpiexec.hydra"}
+
+    def build_policy_bundle(root: Path, bootstrap: str) -> tuple[Path, dict[str, object]]:
+        raw = _raw_login_evidence(root)
+        summary = build_login_summary(raw, _runtime_probe_evidence(root, hydra=True))
+        summary_path = root / "summary.json"
+        summary_path.write_text(json.dumps(summary), encoding="utf-8")
+        runtime_path = root / "runtime.json"
+        runtime_path.write_text(json.dumps(resolve_runtime(summary_path, require_hydra=True, hydra_bootstrap=bootstrap, hydra_policy_evidence=_hydra_policy_evidence(root, bootstrap), **selected)), encoding="utf-8")
+        return _build(root, _selection(root), runtime_path)
+
+    first_output, first_manifest = build_policy_bundle(tmp_path / "first", "ssh")
+    second_output, second_manifest = build_policy_bundle(tmp_path / "second", "slurm")
+    first_root = Path(first_manifest["packages"]["hydra"]["destination"])
+    second_root = Path(second_manifest["packages"]["hydra"]["destination"])
+    first_config = load_controller_config(first_root / "campaign.yaml")
+    first_plan = translate_controller_config(first_config, root=first_root)
+    second_plan = translate_controller_config(load_controller_config(second_root / "campaign.yaml"), root=second_root)
+    task_id = "M10_SIESTA_SMOKE"
+    assert first_plan.execution_specs[task_id].environment["I_MPI_HYDRA_BOOTSTRAP"] == "ssh"
+    assert first_plan.execution_specs[task_id].fingerprint != second_plan.execution_specs[task_id].fingerprint
+    assert first_plan.scientific_identities[task_id].fingerprint == second_plan.scientific_identities[task_id].fingerprint
+    command = HydraLauncher(command=first_config.srun_command, arguments=first_config.srun_arguments, bootstrap=first_config.launcher_bootstrap).build_command(
+        StepLaunchSpec(task_id=task_id, attempt_id="test", workdir=first_root, input_path=first_root / "input" / "smoke.fdf", stdout_path=first_root / "out", stderr_path=first_root / "err", mpi_processes=64, cpus_per_process=1, executable=first_config.siesta_executable, hosts=("node-a", "node-b"), processes_per_node=32)
+    )
+    assert command[command.index("-bootstrap") + 1] == "ssh"
+    assert command.count("-bootstrap") == 1
+    assert sum(argument in {"-n", "-np"} for argument in command) == 1
+    assert command.count("-ppn") == 1
+    assert (first_output / "sources" / "hydra" / "campaign.json").is_file()
+    assert (second_output / "sources" / "hydra" / "campaign.json").is_file()
 
 
 def test_verified_module_probe_without_hydra_is_rejected_when_required(tmp_path: Path) -> None:

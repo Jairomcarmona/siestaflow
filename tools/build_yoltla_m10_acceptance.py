@@ -193,12 +193,15 @@ def _siesta_campaign(repository: Path, selection: Mapping[str, Any], runtime: Ma
         "bootstrap": selected_launcher.get("bootstrap", "evidence-bound"),
         "processes_per_node": RESOURCE_SHAPE["processes_per_node"],
     }
+    runtime_environment = {"OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1", "MKL_NUM_THREADS": "1"}
+    if launcher == "hydra":
+        runtime_environment["I_MPI_HYDRA_BOOTSTRAP"] = str(selected_launcher["bootstrap"])
     campaign = {
         "schema_version": "2.0", "campaign_id": CAMPAIGN_ID, "system_id": SYSTEM_ID,
         "classification": ["NON_SCIENTIFIC_TECHNICAL_ACCEPTANCE", "ENERGY_INTERPRETATION_FORBIDDEN"],
         "slurm": _slurm(selection),
         "resources": {"nodes": 2, "total_cpus": 64, "memory": selection["memory"], "walltime": "00:20:00", "max_parallel_steps": 1, "shutdown_margin_seconds": 120, "termination_grace_seconds": 30},
-        "runtime": {"module_commands": _runtime_environment(runtime, launcher), "siesta_executable": runtime["siesta"]["selected_executable"], "executable_arguments": [], "launcher": launcher_data, "exclusive": True, "environment": {"OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1", "MKL_NUM_THREADS": "1"}},
+        "runtime": {"module_commands": _runtime_environment(runtime, launcher), "siesta_executable": runtime["siesta"]["selected_executable"], "executable_arguments": [], "launcher": launcher_data, "exclusive": True, "environment": runtime_environment},
         "tasks": [{"task_id": "M10_SIESTA_SMOKE", "input": "input/smoke.fdf", "input_hashes": hashes, "required_artifacts": [], "mpi_processes": 64, "cpus_per_process": 1, "nodes": 2, "estimated_runtime_seconds": 600, "max_attempts": 1, "require_scf_converged": True}],
     }
     path = source / "campaign.json"

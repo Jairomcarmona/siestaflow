@@ -123,6 +123,23 @@ def _runtime_probe_is_bound(raw: Path, probe: Path, setup: list[str]) -> bool:
     return setup == ["module purge", f"module load {python_module}", f"module load {siesta_module}"]
 
 
+def _hydra_launcher_mechanisms(help_text: str) -> list[str]:
+    """Extract the launcher mechanisms advertised by the observed Hydra help."""
+    lines = help_text.splitlines()
+    for index, line in enumerate(lines):
+        if not re.match(r"^\s*-launcher(?:\s|$)", line):
+            continue
+        section: list[str] = []
+        for following in lines[index + 1:]:
+            if re.match(r"^\s*-\w", following):
+                break
+            section.append(following)
+        groups = re.findall(r"\(([^)]*)\)", "\n".join(section))
+        mechanisms = [token for group in groups for token in re.findall(r"[A-Za-z0-9._-]+", group)]
+        return list(dict.fromkeys(mechanisms))
+    return []
+
+
 def _module_candidates(raw: Path, probe: Path | None) -> tuple[list[dict[str, object]], list[dict[str, object]], dict[str, list[dict[str, object]]]]:
     """Use only a successful explicit module probe as executable authority."""
     if probe is None:
@@ -171,12 +188,12 @@ def _module_candidates(raw: Path, probe: Path | None) -> tuple[list[dict[str, ob
         help_text = _read(probe, "mpiexec_hydra_help.txt") or ""
         candidate: dict[str, object] = {
             "selected_mechanism": "MODULE", "selected_executable": hydra, "arguments": [],
+            "observed_launcher_mechanisms": _hydra_launcher_mechanisms(help_text),
+            "bootstrap_selection_required": "I_MPI_HYDRA_BOOTSTRAP" not in environment,
             "environment_setup": setup,
             "evidence_source": [f"{source_prefix}module_setup_commands.txt", f"{source_prefix}command_mpiexec_hydra.txt", f"{source_prefix}mpiexec_hydra_help.txt"],
         }
         bootstrap = environment.get("I_MPI_HYDRA_BOOTSTRAP")
-        if "-n" in help_text and "-ppn" in help_text:
-            candidate["arguments"] = ["-n", "64", "-ppn", "32"]
         if bootstrap:
             candidate["bootstrap"] = bootstrap
             candidate["evidence_source"] = [*candidate["evidence_source"], f"{source_prefix}environment_redacted.txt"]
@@ -211,13 +228,14 @@ def build(raw: Path, runtime_probe: Path | None = None) -> dict[str, object]:
         if executable:
             candidate: dict[str, object] = {
                 "selected_mechanism": "PATH", "selected_executable": executable, "arguments": [],
+                "observed_launcher_mechanisms": _hydra_launcher_mechanisms(_read(raw, "mpiexec_hydra_help.txt") or "") if name == "mpiexec.hydra" else [],
+                "bootstrap_selection_required": name == "mpiexec.hydra" and "I_MPI_HYDRA_BOOTSTRAP" not in environment,
                 "environment_setup": [], "evidence_source": [f"command_{name.replace('.', '_')}.txt"],
             }
             if name == "mpiexec.hydra":
-                help_text = _read(raw, "mpiexec_hydra_help.txt") or ""
                 bootstrap = environment.get("I_MPI_HYDRA_BOOTSTRAP")
-                if "-n" in help_text and "-ppn" in help_text and bootstrap:
-                    candidate.update({"arguments": ["-n", "64", "-ppn", "32"], "bootstrap": bootstrap})
+                if bootstrap:
+                    candidate["bootstrap"] = bootstrap
                     candidate["evidence_source"] = [*candidate["evidence_source"], "mpiexec_hydra_help.txt", "environment_redacted.txt"]
             launchers[name] = [candidate]
     module_python, module_siesta, module_launchers = _module_candidates(raw, runtime_probe)

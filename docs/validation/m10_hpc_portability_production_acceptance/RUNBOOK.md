@@ -44,12 +44,19 @@ python3 scheduler_discovery/resolve_m10_scheduler.py \
   --login-evidence login_summary.json --output scheduler_selection.json
 # Inspect login_summary.json and copy only its reviewed executable paths.
 # Do not omit these selections when multiple candidates are present.
+# Inspect the observed Hydra launcher mechanisms in login_summary.json. If no
+# bootstrap environment value was observed, create a reviewed administrative
+# policy-evidence JSON file selecting one of those mechanisms. It must contain
+# schema_version "1.0", bootstrap, source_type, source_reference, and
+# decision_text. This is a human-supplied acceptance input, not a default.
 python3 scheduler_discovery/resolve_m10_runtime.py \
   --login-evidence login_summary.json \
   --python <observed-module-python-path> \
   --siesta <observed-module-siesta-path> \
   --srun <observed-srun-path> \
   --hydra <observed-hydra-path> \
+  --hydra-bootstrap <administratively-selected-bootstrap> \
+  --hydra-policy-evidence <reviewed-administrative-policy.json> \
   --require-hydra \
   --output runtime_selection.json
 cat scheduler_selection.json runtime_selection.json
@@ -59,10 +66,20 @@ If scheduler evidence has multiple candidates, choose only an evidence-backed
 account/partition/QoS with the resolver’s explicit arguments. A reviewed
 runtime choice may use PATH with `environment_setup: []`, or only a verified
 module probe. Hydra is eligible only when its selected module environment
-actually exposes it and establishes its bootstrap evidence. Historical values
+actually exposes it and the observed help records its launcher mechanisms.
+Technical capability evidence (for example, an observed `-launcher` mechanism
+list) establishes which mechanisms Hydra supports; it does not assert that
+`-bootstrap` syntax was observed. Historical values
 are never defaults. A summary that contains both login-PATH and verified MODULE
 Python candidates is intentionally ambiguous until the reviewer supplies the
 observed executable paths above; the resolver does not rank or prefer them.
+When bootstrap is not observed in the environment, a human explicitly selects
+one technically observed mechanism under an administrative policy. The policy
+may direct `-bootstrap <mechanism>` even though the technical help documented
+the mechanism through `-launcher`; its exact evidence-file SHA-256 is recorded
+in the runtime selection. That selected value then becomes the Hydra runtime
+environment and canonical ExecutionSpec fingerprint. An administrative policy
+that discovery cannot detect never becomes a default.
 
 **HUMAN REVIEW GATE:** transfer the exact reviewed selection files to the
 local rendering machine. Render with both; either omitted file fails closed.
