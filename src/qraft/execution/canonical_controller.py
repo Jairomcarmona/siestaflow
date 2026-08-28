@@ -46,7 +46,6 @@ class CanonicalController:
         self.launcher = launcher or self.launcher_adapter.create(
             command=config.srun_command,
             arguments=config.srun_arguments,
-            bootstrap=config.launcher_bootstrap,
         )
         self.summary_path = self.root / "results" / "campaign_summary.json"
         self.plan: CanonicalLegacyPlan | None = None

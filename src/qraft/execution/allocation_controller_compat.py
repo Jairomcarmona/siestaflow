@@ -97,7 +97,7 @@ class ControllerConfig:
     environment: Mapping[str, str]
     tasks: tuple[ControllerTask, ...]
     launcher_kind: str = "srun"
-    launcher_bootstrap: str = "ssh"
+    launcher_bootstrap: str = ""
     processes_per_node: int | None = None
 
 
@@ -198,8 +198,10 @@ def load_controller_config(path: Path) -> ControllerConfig:
             )
         command_raw = launcher_raw.get("command")
         arguments_raw = launcher_raw.get("arguments", [])
-        launcher_bootstrap = _required_text(
-            launcher_raw.get("bootstrap", "ssh"), "runtime.launcher.bootstrap"
+        bootstrap_raw = launcher_raw.get("bootstrap")
+        launcher_bootstrap = (
+            _required_text(bootstrap_raw, "runtime.launcher.bootstrap")
+            if launcher_kind == "hydra" else str(bootstrap_raw or "")
         )
         ppn_raw = launcher_raw.get("processes_per_node")
         processes_per_node = (
@@ -211,7 +213,7 @@ def load_controller_config(path: Path) -> ControllerConfig:
         launcher_adapter = launcher_registry.require(launcher_kind)
         command_raw = runtime.get("srun_command")
         arguments_raw = runtime.get("srun_arguments", [])
-        launcher_bootstrap = "ssh"
+        launcher_bootstrap = ""
         processes_per_node = None
     if not isinstance(command_raw, list) or not command_raw:
         raise ValueError("runtime launcher command must be a non-empty argument list")
@@ -221,6 +223,13 @@ def load_controller_config(path: Path) -> ControllerConfig:
     environment_raw = runtime.get("environment", {})
     if not isinstance(srun_args_raw, list) or not isinstance(executable_args_raw, list) or not isinstance(environment_raw, Mapping):
         raise ValueError("runtime arguments/environment have invalid types")
+    srun_arguments = tuple(map(str, srun_args_raw))
+    if launcher_kind == "hydra":
+        if "-bootstrap" in srun_arguments:
+            raise ValueError(
+                "Hydra bootstrap must be supplied only by runtime.launcher.bootstrap"
+            )
+        srun_arguments = (*srun_arguments, "-bootstrap", launcher_bootstrap)
     tasks_raw = data.get("tasks")
     if not isinstance(tasks_raw, list) or not tasks_raw:
         raise ValueError("at least one task is required")
@@ -414,7 +423,7 @@ def load_controller_config(path: Path) -> ControllerConfig:
     return ControllerConfig(
         campaign_id, system_id, nodes, total_cpus, max_parallel, margin, grace,
         siesta, tuple(map(str, executable_args_raw)), srun_command,
-        tuple(map(str, srun_args_raw)), bool(runtime.get("exclusive", True)),
+        srun_arguments, bool(runtime.get("exclusive", True)),
         {str(key): str(value) for key, value in environment_raw.items()}, tuple(tasks),
         launcher_kind, launcher_bootstrap, processes_per_node,
     )
@@ -446,7 +455,6 @@ class AllocationController:
             self.launcher = self.launcher_adapter.create(
                 command=config.srun_command,
                 arguments=config.srun_arguments,
-                bootstrap=config.launcher_bootstrap,
             )
         self.shutdown = shutdown or ShutdownRequest()
         self.poll_interval_seconds = max(0.01, float(poll_interval_seconds))

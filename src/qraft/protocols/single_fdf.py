@@ -610,7 +610,6 @@ def _launch(execution: ExecutionSpec, spec: StepLaunchSpec) -> StepOutcome:
     launcher = adapter.create(
         command=execution.launcher_command,
         arguments=execution.launcher_arguments,
-        bootstrap="ssh",
     )
     return launcher.launch(launch_spec)
 

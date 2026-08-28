@@ -25,7 +25,6 @@ class LauncherAdapter(Protocol):
 
     def create(
         self, *, command: Sequence[str] = (), arguments: Sequence[str] = (),
-        bootstrap: str = "ssh",
     ) -> StepLauncher: ...
 
     def validate_resources(self, *, mpi_ranks: int, nodes: int) -> None: ...
@@ -41,7 +40,7 @@ class LauncherAdapter(Protocol):
 class RegisteredLauncher:
     name: str
     default_command: tuple[str, ...]
-    factory: Callable[[tuple[str, ...], tuple[str, ...], str], StepLauncher]
+    factory: Callable[[tuple[str, ...], tuple[str, ...]], StepLauncher]
     scheduler: str = "local"
     requires_allocation: bool = False
     requires_hosts: bool = False
@@ -57,10 +56,9 @@ class RegisteredLauncher:
 
     def create(
         self, *, command: Sequence[str] = (), arguments: Sequence[str] = (),
-        bootstrap: str = "ssh",
     ) -> StepLauncher:
         resolved = tuple(map(str, command)) or self.default_command
-        return self.factory(resolved, tuple(map(str, arguments)), str(bootstrap))
+        return self.factory(resolved, tuple(map(str, arguments)))
 
     def validate_resources(self, *, mpi_ranks: int, nodes: int) -> None:
         if self.max_mpi_ranks is not None and mpi_ranks > self.max_mpi_ranks:
@@ -158,19 +156,19 @@ class SchedulerRegistry:
         return tuple(sorted(self._adapters))
 
 
-def _direct(command: tuple[str, ...], arguments: tuple[str, ...], bootstrap: str) -> StepLauncher:
+def _direct(command: tuple[str, ...], arguments: tuple[str, ...]) -> StepLauncher:
     return DirectLauncher()
 
 
-def _srun(command: tuple[str, ...], arguments: tuple[str, ...], bootstrap: str) -> StepLauncher:
+def _srun(command: tuple[str, ...], arguments: tuple[str, ...]) -> StepLauncher:
     return SrunLauncher(srun_command=command, srun_arguments=arguments, exclusive=True)
 
 
-def _hydra(command: tuple[str, ...], arguments: tuple[str, ...], bootstrap: str) -> StepLauncher:
-    return HydraLauncher(command=command, arguments=arguments, bootstrap=bootstrap)
+def _hydra(command: tuple[str, ...], arguments: tuple[str, ...]) -> StepLauncher:
+    return HydraLauncher(command=command, arguments=arguments)
 
 
-def _openmpi(command: tuple[str, ...], arguments: tuple[str, ...], bootstrap: str) -> StepLauncher:
+def _openmpi(command: tuple[str, ...], arguments: tuple[str, ...]) -> StepLauncher:
     return OpenMpiLauncher(command=command, arguments=arguments)
 
 

@@ -15,7 +15,12 @@ from qraft.execution.allocation_controller import (
     ExecutionStatus,
     load_controller_config,
 )
+from qraft.execution.canonical_controller import CanonicalController
+from qraft.execution.legacy_translation import translate_controller_config
 from qraft.execution.hydra_launcher import HydraLauncher
+from qraft.execution.adapters import launcher_registry
+from qraft.execution.runtime_composition import compose_runtime
+from qraft.core import ExecutionSpec
 from qraft.execution.slurm_environment import ShutdownRequest, SignalHandlers, SlurmEnvironment
 from qraft.execution.srun_launcher import SrunLauncher, StepLaunchSpec, StepOutcome
 
@@ -468,7 +473,7 @@ def test_failed_dependency_blocks_child_without_launch(tmp_path: Path):
     assert not (tmp_path / "work" / "task-2").exists()
 
 
-def test_hydra_builds_explicit_yoltla_placement(tmp_path: Path):
+def test_hydra_requires_one_explicit_bootstrap_argument_pair(tmp_path: Path):
     source = tmp_path / "input.fdf"
     source.write_text("test\n", encoding="utf-8")
     spec = StepLaunchSpec(
@@ -476,15 +481,40 @@ def test_hydra_builds_explicit_yoltla_placement(tmp_path: Path):
         tmp_path / "out", tmp_path / "err", 40, 1, "siesta",
         hosts=("tt1", "tt2"), processes_per_node=20,
     )
-    command = HydraLauncher().build_command(
-        spec, fabric_uuid="00000000-0000-0000-0000-000000000001"
-    )
+    with pytest.raises(ValueError, match="bootstrap"):
+        HydraLauncher()
+    with pytest.raises(ValueError, match="bootstrap"):
+        HydraLauncher(arguments=("-bootstrap", ""))
+    with pytest.raises(ValueError, match="bootstrap"):
+        HydraLauncher(arguments=("-bootstrap", "ssh", "-bootstrap", "slurm"))
+    command = HydraLauncher(arguments=("-bootstrap", "ssh")).build_command(spec)
     assert command[:7] == (
         "mpiexec.hydra", "-bootstrap", "ssh", "-hosts", "tt1,tt2", "-np", "40"
     )
     assert ("-ppn", "20") == command[7:9]
-    assert "FI_PSM3_UUID" in command
     assert command[-1] == "siesta"
+    slurm = HydraLauncher(arguments=("-bootstrap", "slurm")).build_command(spec)
+    assert slurm[slurm.index("-bootstrap") + 1] == "slurm"
+    with pytest.raises(TypeError):
+        HydraLauncher(
+            arguments=("-bootstrap", "ssh"),
+            fabric_uuid_environment="FI_PSM3_UUID",
+        )
+    with pytest.raises(TypeError):
+        HydraLauncher(arguments=("-bootstrap", "ssh")).build_command(
+            spec, fabric_uuid="00000000-0000-0000-0000-000000000001"
+        )
+
+
+def test_launcher_adapter_requires_hydra_bootstrap_only() -> None:
+    with pytest.raises(ValueError, match="bootstrap"):
+        launcher_registry.require("hydra").create()
+    assert launcher_registry.require("hydra").create(
+        arguments=("-bootstrap", "ssh")
+    ).arguments == ("-bootstrap", "ssh")
+    assert launcher_registry.require("srun").create() is not None
+    assert launcher_registry.require("direct").create() is not None
+    assert launcher_registry.require("openmpi").create() is not None
 
 
 def test_schema2_hydra_controller_assigns_exclusive_hosts(tmp_path: Path):
@@ -517,6 +547,56 @@ def test_schema2_hydra_controller_assigns_exclusive_hosts(tmp_path: Path):
     )
     assert current.run(install_signal_handlers=False) is ExecutionStatus.COMPLETED
     assert {spec.hosts for spec in launcher.specs} == {("tt76",), ("tt77",)}
+
+
+def test_hydra_bootstrap_is_materialized_in_execution_spec_and_canonical_launcher(
+    tmp_path: Path,
+) -> None:
+    campaign, config = make_package(tmp_path, ["SUCCESS"], total_cpus=20, mpi_processes=20)
+    config["schema_version"] = "2.0"
+    config["resources"]["nodes"] = 1
+    config["runtime"].pop("srun_command")
+    config["runtime"].pop("srun_arguments")
+    config["runtime"]["launcher"] = {
+        "kind": "hydra",
+        "command": ["mpiexec.hydra"],
+        "arguments": [],
+        "bootstrap": "ssh",
+        "processes_per_node": 20,
+    }
+    config["tasks"][0]["nodes"] = 1
+    campaign.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+
+    loaded = load_controller_config(campaign)
+    assert loaded.launcher_bootstrap == "ssh"
+    assert loaded.srun_arguments == ("-bootstrap", "ssh")
+    first = translate_controller_config(loaded, root=tmp_path)
+    assert first.execution_specs["task-1"].launcher_arguments == ("-bootstrap", "ssh")
+
+    config["runtime"]["launcher"]["bootstrap"] = "slurm"
+    campaign.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    second = translate_controller_config(load_controller_config(campaign), root=tmp_path)
+    assert first.execution_specs["task-1"].fingerprint != second.execution_specs["task-1"].fingerprint
+    assert first.scientific_identities["task-1"].fingerprint == second.scientific_identities["task-1"].fingerprint
+
+    env = environment(tmp_path, "hydra-canonical", total_cpus=20)
+    env.update({"QRAFT_HOSTS": "tt76"})
+    canonical = CanonicalController.from_file(campaign, environment=env)
+    assert isinstance(canonical.launcher, HydraLauncher)
+    assert canonical.launcher.arguments == ("-bootstrap", "slurm")
+
+
+def test_runtime_composition_hydra_uses_execution_spec_arguments(tmp_path: Path) -> None:
+    execution = ExecutionSpec(
+        partition="test", nodes=1, mpi_ranks=20, cpus_per_rank=1,
+        memory_mb=None, launcher="hydra", executable="siesta", walltime_seconds=60,
+        launcher_arguments=("-bootstrap", "ssh"),
+    )
+    env = environment(tmp_path, "hydra-compose", total_cpus=20)
+    env.update({"QRAFT_HOSTS": "tt76"})
+    composition = compose_runtime(execution, environment=env)
+    assert isinstance(composition.launcher, HydraLauncher)
+    assert composition.launcher.arguments == execution.launcher_arguments
 
 
 def test_hash_bound_gate_task_runs_after_parent_and_emits_decision(tmp_path: Path):

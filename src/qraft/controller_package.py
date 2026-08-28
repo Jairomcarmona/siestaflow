@@ -315,10 +315,6 @@ class ControllerPackageBuilder:
             if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", str(name)):
                 raise ValueError(f"unsafe environment variable name: {name}")
             environment_lines.append(f"export {name}={shlex.quote(str(value))}")
-        if isinstance(launcher, dict) and launcher.get("kind") == "hydra":
-            environment_lines.append(
-                f"export I_MPI_HYDRA_BOOTSTRAP={shlex.quote(str(launcher.get('bootstrap', 'ssh')))}"
-            )
         environment_text = "\n".join(environment_lines) or ": # no environment overrides"
         signal_seconds = int(resources["shutdown_margin_seconds"])
         qos = slurm.get("qos")

@@ -35,7 +35,6 @@ def compose_runtime(
     launcher = adapter.create(
         command=execution.launcher_command,
         arguments=execution.launcher_arguments,
-        bootstrap="ssh",
     )
     values = dict(os.environ if environment is None else environment)
     active_slurm = str(values.get("SLURM_JOB_ID", "")).strip()

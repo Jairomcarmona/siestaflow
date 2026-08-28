@@ -97,6 +97,20 @@ def resolution_lock(root: Path, *, qos: str | None, account: str | None = "vini"
     return path
 
 
+def test_hydra_package_requires_explicit_bootstrap(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    campaign = source_campaign(source)
+    data = json.loads(campaign.read_text(encoding="utf-8"))
+    data["runtime"]["launcher"].pop("bootstrap")
+    campaign.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    output = tmp_path / "output"
+    output.mkdir()
+    with pytest.raises(ValueError, match="runtime.launcher.bootstrap"):
+        ControllerPackageBuilder(REPO).build(campaign, output)
+    assert not list(output.rglob("submit.slurm"))
+
+
 def test_controller_package_is_reproducible_and_cleanly_verifies(tmp_path: Path):
     source = tmp_path / "source"
     source.mkdir()

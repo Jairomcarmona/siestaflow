@@ -125,7 +125,7 @@ def test_launcher_registry_is_extensible_and_openmpi_builds_coordinated_command(
     registry = LauncherRegistry()
     registry.register(RegisteredLauncher(
         "custom", ("custom-mpi",),
-        lambda command, arguments, bootstrap: DirectLauncher(),
+        lambda command, arguments: DirectLauncher(),
     ))
     assert registry.require("custom").default_command == ("custom-mpi",)
     with pytest.raises(ValueError, match="already registered"):

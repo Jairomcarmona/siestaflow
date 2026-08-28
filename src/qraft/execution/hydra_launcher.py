@@ -6,7 +6,6 @@ import os
 import subprocess
 import threading
 import time
-import uuid
 from dataclasses import dataclass
 from typing import Sequence
 
@@ -23,30 +22,40 @@ class _ActiveProcess:
 
 
 class HydraLauncher:
-    """Launch one SIESTA step through ``mpiexec.hydra -bootstrap ssh``."""
+    """Launch one SIESTA step through an explicitly configured Hydra bootstrap."""
 
     def __init__(
         self,
         *,
         command: Sequence[str] = ("mpiexec.hydra",),
         arguments: Sequence[str] = (),
-        bootstrap: str = "ssh",
-        fabric_uuid_environment: str = "FI_PSM3_UUID",
         popen_factory=subprocess.Popen,
     ) -> None:
         if not command or any(not str(item) for item in command):
             raise ValueError("Hydra command must contain non-empty arguments")
-        if not bootstrap:
-            raise ValueError("Hydra bootstrap must be explicit")
         self.command = tuple(map(str, command))
         self.arguments = tuple(map(str, arguments))
-        self.bootstrap = str(bootstrap)
-        self.fabric_uuid_environment = str(fabric_uuid_environment)
+        bootstrap_indexes = [
+            index for index, argument in enumerate(self.arguments)
+            if argument == "-bootstrap"
+        ]
+        if len(bootstrap_indexes) != 1:
+            raise ValueError(
+                "Hydra requires exactly one explicit -bootstrap <value> argument pair"
+            )
+        bootstrap_index = bootstrap_indexes[0]
+        if (
+            bootstrap_index + 1 >= len(self.arguments)
+            or not self.arguments[bootstrap_index + 1].strip()
+        ):
+            raise ValueError(
+                "Hydra requires exactly one explicit -bootstrap <value> argument pair"
+            )
         self._popen_factory = popen_factory
         self._active: dict[str, _ActiveProcess] = {}
         self._lock = threading.Lock()
 
-    def build_command(self, spec: StepLaunchSpec, *, fabric_uuid: str | None = None) -> tuple[str, ...]:
+    def build_command(self, spec: StepLaunchSpec) -> tuple[str, ...]:
         if spec.mpi_processes <= 0 or spec.cpus_per_process <= 0:
             raise ValueError("MPI processes and CPUs per process must be positive")
         if not spec.hosts:
@@ -59,24 +68,17 @@ class HydraLauncher:
                 "Hydra placement mismatch: "
                 f"{spec.mpi_processes} ranks != {len(spec.hosts)} hosts * {ppn} ppn"
             )
-        token = fabric_uuid or str(uuid.uuid4())
-        return (
+        command = (
             *self.command,
-            "-bootstrap",
-            self.bootstrap,
+            *self.arguments,
             "-hosts",
             ",".join(spec.hosts),
             "-np",
             str(spec.mpi_processes),
             "-ppn",
             str(ppn),
-            "-genv",
-            self.fabric_uuid_environment,
-            token,
-            *self.arguments,
-            spec.executable,
-            *spec.executable_arguments,
         )
+        return (*command, spec.executable, *spec.executable_arguments)
 
     def launch(self, spec: StepLaunchSpec) -> StepOutcome:
         command = self.build_command(spec)

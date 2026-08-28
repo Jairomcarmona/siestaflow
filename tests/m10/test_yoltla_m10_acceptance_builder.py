@@ -576,10 +576,10 @@ def test_hydra_policy_materializes_command_and_execution_fingerprint(tmp_path: P
     first_plan = translate_controller_config(first_config, root=first_root)
     second_plan = translate_controller_config(load_controller_config(second_root / "campaign.yaml"), root=second_root)
     task_id = "M10_SIESTA_SMOKE"
-    assert first_plan.execution_specs[task_id].environment["I_MPI_HYDRA_BOOTSTRAP"] == "ssh"
+    assert first_plan.execution_specs[task_id].launcher_arguments == ("-bootstrap", "ssh")
     assert first_plan.execution_specs[task_id].fingerprint != second_plan.execution_specs[task_id].fingerprint
     assert first_plan.scientific_identities[task_id].fingerprint == second_plan.scientific_identities[task_id].fingerprint
-    command = HydraLauncher(command=first_config.srun_command, arguments=first_config.srun_arguments, bootstrap=first_config.launcher_bootstrap).build_command(
+    command = HydraLauncher(command=first_config.srun_command, arguments=first_config.srun_arguments).build_command(
         StepLaunchSpec(task_id=task_id, attempt_id="test", workdir=first_root, input_path=first_root / "input" / "smoke.fdf", stdout_path=first_root / "out", stderr_path=first_root / "err", mpi_processes=64, cpus_per_process=1, executable=first_config.siesta_executable, hosts=("node-a", "node-b"), processes_per_node=32)
     )
     assert command[command.index("-bootstrap") + 1] == "ssh"
