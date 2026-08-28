@@ -268,6 +268,7 @@ def _preflight_script(selection: Mapping[str, Any], runtime: Mapping[str, Any]) 
     account = f"#SBATCH --account={selection['account']}\n" if selection.get("account") is not None else ""
     setup = "\n".join(_runtime_setup(runtime, "srun"))
     hydra = runtime["launchers"].get("hydra")
+    hydra_setup = ""
     hydra_check = ""
     if isinstance(hydra, Mapping) and hydra.get("required") is not False:
         bootstrap = _hydra_bootstrap(hydra.get("bootstrap"))
@@ -293,7 +294,6 @@ def _preflight_script(selection: Mapping[str, Any], runtime: Mapping[str, Any]) 
             ]
         )
         hydra_check = f"""
-  {hydra_setup}
   {hydra_command} | LC_ALL=C sort | uniq -c | tee "evidence/hydra-placement.${{SLURM_JOB_ID}}.txt"
   [[ "$(awk 'NR==1 {{a=$1}} NR==2 {{b=$1}} END {{print NR ":" a ":" b}}' "evidence/hydra-placement.${{SLURM_JOB_ID}}.txt")" =~ ^2:32:32$ ]] || {{ echo "M10_PREFLIGHT_HYDRA_PLACEMENT_INVALID" >&2; exit 1; }}
 """
@@ -317,6 +317,7 @@ printf 'QRAFT M10 shared filesystem marker\\n' > "$MARKER"
   mapfile -t M10_HOSTS < <(scontrol show hostnames "${{SLURM_JOB_NODELIST:?SLURM_JOB_NODELIST required}}")
   [[ "${{#M10_HOSTS[@]}}" -eq 2 ]] || {{ echo "M10_PREFLIGHT_ALLOCATION_HOST_COUNT_INVALID:${{#M10_HOSTS[@]}}" >&2; exit 1; }}
   {setup}
+  {hydra_setup}
   test -x /usr/bin/srun
   command -v {shlex.quote(runtime['launchers']['srun']['selected_executable'])}
   export M10_SELECTED_PYTHON={shlex.quote(runtime['python']['selected_executable'])}

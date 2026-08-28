@@ -474,10 +474,14 @@ def test_resolved_bundle_uses_selection_provenance_without_qos_fallback(tmp_path
 
 
 def test_preflight_hydra_has_explicit_multinode_single_source_contract(tmp_path: Path) -> None:
+    runtime_path = _runtime_selection(tmp_path, hydra_bootstrap="ssh")
+    runtime_data = json.loads(runtime_path.read_text(encoding="utf-8"))
+    runtime_data["launchers"]["hydra"]["environment_setup"] = ["module load observed-hydra"]
+    runtime_path.write_text(json.dumps(runtime_data), encoding="utf-8")
     output, _ = _build(
         tmp_path,
         _selection(tmp_path),
-        _runtime_selection(tmp_path, hydra_bootstrap="ssh"),
+        runtime_path,
     )
     preflight = (output / "preflight" / "submit_m10_preflight.slurm").read_text(encoding="utf-8")
     assert "observed-hydra -bootstrap ssh -hosts \"${M10_HOSTS[0]},${M10_HOSTS[1]}\" -np 64 -ppn 32 hostname" in preflight
@@ -485,6 +489,7 @@ def test_preflight_hydra_has_explicit_multinode_single_source_contract(tmp_path:
     assert "M10_PREFLIGHT_HYDRA_PLACEMENT_INVALID" in preflight
     assert "test -x /usr/bin/srun" in preflight
     assert "command -v \"$M10_SELECTED_HYDRA\"" in preflight
+    assert preflight.index("module load observed-hydra") < preflight.index('command -v "$M10_SELECTED_HYDRA"')
     assert "python3() {" not in preflight
     assert "I_MPI_HYDRA_BOOTSTRAP" not in preflight
     assert "FI_PSM3_UUID" not in preflight
