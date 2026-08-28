@@ -195,15 +195,20 @@ def resolve(
         raise ValueError("M10_REMOTE_PROFILE_UNRESOLVED: QoS omission is not justified")
     source_files = [*selected["source_files"], placement["memory_source"]["source_file"], placement["policy_source"]["source_file"]]
     derived = placement["derived_placement"]
+    selection_policy = (
+        "EXPLICIT_SELECTION_VALIDATED_BY_CURRENT_CLUSTER_EVIDENCE"
+        if account is not None
+        else "UNIQUE_CURRENT_CLUSTER_EVIDENCE"
+    )
     return {
         "account": selected["account"], "partition": selected["partition"], "qos": chosen_qos, **placement, **derived,
-        "association_scope": selected["association_scope"], "selection_policy": "UNIQUE_CURRENT_CLUSTER_EVIDENCE",
+        "association_scope": selected["association_scope"], "selection_policy": selection_policy,
         "candidate_partitions": sorted(item[0]["partition"] for item in accepted), "source_files": sorted(set(str(item) for item in source_files)),
         "evidence_status_by_field": {
             "account": "OMITTED_WITH_SCHEDULER_DEFAULT_EVIDENCE" if selected["account"] is None else "OBSERVED",
             "partition": "VERIFIED_BY_CROSS_SOURCE", "qos": "OMITTED_WITH_SCHEDULER_DEFAULT_EVIDENCE" if chosen_qos is None and selected["account"] is None else ("MISSING" if chosen_qos is None else "OBSERVED"),
-            "memory": "OBSERVED", "resource_shape": "DERIVED_FROM_OBSERVED_CAPACITY",
-        }, "resource_shape_status": "DERIVED_FROM_CURRENT_CLUSTER_CAPABILITIES",
+            "memory": "OBSERVED", "resource_shape": "DERIVED_FROM_RESOURCE_REQUEST_AND_CURRENT_CLUSTER_CAPABILITIES",
+        }, "resource_shape_status": "DERIVED_FROM_RESOURCE_REQUEST_AND_CURRENT_CLUSTER_CAPABILITIES",
     }
 
 

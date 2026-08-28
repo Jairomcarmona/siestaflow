@@ -57,8 +57,8 @@ def _selection(
         },
         "derived_placement": placement,
         "source_files": ["sacctmgr_assoc.txt", "sinfo.txt", "scontrol_partitions.txt"],
-        "evidence_status_by_field": {"account": "OMITTED_WITH_SCHEDULER_DEFAULT_EVIDENCE" if account is None else "OBSERVED", "partition": "VERIFIED_BY_CROSS_SOURCE", "qos": "MISSING" if qos is None else "OBSERVED", "memory": "OBSERVED", "resource_shape": "DERIVED_FROM_OBSERVED_CAPACITY"},
-        "resource_shape_status": "DERIVED_FROM_CURRENT_CLUSTER_CAPABILITIES",
+        "evidence_status_by_field": {"account": "OMITTED_WITH_SCHEDULER_DEFAULT_EVIDENCE" if account is None else "OBSERVED", "partition": "VERIFIED_BY_CROSS_SOURCE", "qos": "MISSING" if qos is None else "OBSERVED", "memory": "OBSERVED", "resource_shape": "DERIVED_FROM_RESOURCE_REQUEST_AND_CURRENT_CLUSTER_CAPABILITIES"},
+        "resource_shape_status": "DERIVED_FROM_RESOURCE_REQUEST_AND_CURRENT_CLUSTER_CAPABILITIES",
     }, indent=2) + "\n", encoding="utf-8")
     return path
 
@@ -445,7 +445,9 @@ def test_self_contained_m10_resolver_uses_current_shape_and_observed_memory(tmp_
     assert payload["qos"] is None
     assert payload["memory"] == "192000M"
     assert payload["memory_source"] == {"source_file": "sinfo.txt", "source_line": 1, "observed_mb": 192000}
-    assert payload["resource_shape_status"] == "DERIVED_FROM_CURRENT_CLUSTER_CAPABILITIES"
+    assert payload["selection_policy"] == "UNIQUE_CURRENT_CLUSTER_EVIDENCE"
+    assert payload["resource_shape_status"] == "DERIVED_FROM_RESOURCE_REQUEST_AND_CURRENT_CLUSTER_CAPABILITIES"
+    assert payload["evidence_status_by_field"]["resource_shape"] == "DERIVED_FROM_RESOURCE_REQUEST_AND_CURRENT_CLUSTER_CAPABILITIES"
     assert payload["capacity_evidence"]["cpus_per_node"] == 32
     assert payload["derived_placement"]["policy"] == "MAXIMUM_LEGAL_PLACEMENT_FIXED_PARTITION"
     resolved, manifest = _build(tmp_path / "resolved", selection)
@@ -465,7 +467,9 @@ def test_m10_resolver_requires_evidence_bound_human_selection_for_multiple_candi
     selected = tmp_path / "selected.json"
     manual = _resolve(output / "scheduler_discovery", summary, selected, "--account", "observed-account", "--partition", "second")
     assert manual.returncode == 0, manual.stderr
-    assert json.loads(selected.read_text(encoding="utf-8"))["partition"] == "second"
+    payload = json.loads(selected.read_text(encoding="utf-8"))
+    assert payload["partition"] == "second"
+    assert payload["selection_policy"] == "EXPLICIT_SELECTION_VALIDATED_BY_CURRENT_CLUSTER_EVIDENCE"
 
 
 def test_m10_resolver_derives_fixed_placements_and_fails_closed(tmp_path: Path) -> None:

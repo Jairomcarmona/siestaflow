@@ -126,7 +126,7 @@ def _load_scheduler_selection(path: Path) -> dict[str, Any]:
     for field in ("account", "partition", "qos", "memory", "resource_shape"):
         if field not in evidence:
             raise ValueError(f"M10_REMOTE_PROFILE_UNRESOLVED: missing {field} evidence status")
-    if result.get("resource_shape_status") != "DERIVED_FROM_CURRENT_CLUSTER_CAPABILITIES":
+    if result.get("resource_shape_status") != "DERIVED_FROM_RESOURCE_REQUEST_AND_CURRENT_CLUSTER_CAPABILITIES":
         raise ValueError("M10_REMOTE_PROFILE_UNRESOLVED: placement is not derived from cluster capabilities")
     if not isinstance(result.get("source_files"), list) or not result["source_files"]:
         raise ValueError("M10_REMOTE_PROFILE_UNRESOLVED: missing scheduler source files")
