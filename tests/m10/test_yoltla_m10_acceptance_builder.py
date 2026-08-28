@@ -11,7 +11,7 @@ from zipfile import ZipFile
 REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO), str(REPO / "src")]
 
-from tools.build_yoltla_m10_acceptance import CAMPAIGN_ID, _copy_linux_text
+from tools.build_yoltla_m10_acceptance import CAMPAIGN_ID, _copy_linux_text, _preflight_script
 from tools.build_yoltla_m10_login_summary import _hydra_launcher_mechanisms, build as build_login_summary
 from tools.resolve_yoltla_m10_runtime import resolve as resolve_runtime
 from qraft.execution.allocation_controller import load_controller_config
@@ -471,6 +471,37 @@ def test_resolved_bundle_uses_selection_provenance_without_qos_fallback(tmp_path
     assert (output / "preflight").is_dir()
     assert "srun --nodes=2 --ntasks=64 --ntasks-per-node=32 hostname" in preflight
     assert "observed-python" in preflight and "observed-siesta" in preflight
+
+
+def test_preflight_hydra_has_explicit_multinode_single_source_contract(tmp_path: Path) -> None:
+    output, _ = _build(
+        tmp_path,
+        _selection(tmp_path),
+        _runtime_selection(tmp_path, hydra_bootstrap="ssh"),
+    )
+    preflight = (output / "preflight" / "submit_m10_preflight.slurm").read_text(encoding="utf-8")
+    assert "observed-hydra -bootstrap ssh -hosts \"${M10_HOSTS[0]},${M10_HOSTS[1]}\" -np 64 -ppn 32 hostname" in preflight
+    assert 'evidence/hydra-placement.${SLURM_JOB_ID}.txt' in preflight
+    assert "M10_PREFLIGHT_HYDRA_PLACEMENT_INVALID" in preflight
+    assert "test -x /usr/bin/srun" in preflight
+    assert "command -v \"$M10_SELECTED_HYDRA\"" in preflight
+    assert "python3() {" not in preflight
+    assert "I_MPI_HYDRA_BOOTSTRAP" not in preflight
+    assert "FI_PSM3_UUID" not in preflight
+    assert "evidence-bound" not in preflight
+    assert "smoke.fdf" not in preflight
+
+
+def test_preflight_rejects_duplicate_hydra_bootstrap_argument(tmp_path: Path) -> None:
+    selection = json.loads(_selection(tmp_path).read_text(encoding="utf-8"))
+    runtime = json.loads(_runtime_selection(tmp_path, hydra_bootstrap="ssh").read_text(encoding="utf-8"))
+    runtime["launchers"]["hydra"]["arguments"] = ["-bootstrap", "slurm"]
+    try:
+        _preflight_script(selection, runtime)
+    except ValueError as error:
+        assert "only by launchers.hydra.bootstrap" in str(error)
+    else:
+        raise AssertionError("preflight accepted duplicated Hydra bootstrap authority")
 
 
 def test_resolved_bundle_supports_evidence_bound_default_account(tmp_path: Path) -> None:

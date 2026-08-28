@@ -183,10 +183,15 @@ def _fixture(repository: Path, destination: Path) -> dict[str, str]:
     }
 
 
-def _runtime_environment(runtime: Mapping[str, Any], launcher: str | None = None) -> list[str]:
+def _runtime_setup(runtime: Mapping[str, Any], launcher: str | None = None) -> list[str]:
     commands = [*runtime["python"]["environment_setup"], *runtime["siesta"]["environment_setup"]]
     if launcher is not None:
         commands.extend(runtime["launchers"][launcher]["environment_setup"])
+    return commands
+
+
+def _runtime_environment(runtime: Mapping[str, Any], launcher: str | None = None) -> list[str]:
+    commands = _runtime_setup(runtime, launcher)
     # Controller packages invoke their embedded worker as python3.  This shell
     # function makes that invocation the reviewed executable, without assuming
     # that a cluster's login default is suitable.
@@ -261,13 +266,37 @@ def _equivalence(hydra: Path, srun: Path) -> dict[str, Any]:
 def _preflight_script(selection: Mapping[str, Any], runtime: Mapping[str, Any]) -> str:
     qos = f"#SBATCH --qos={selection['qos']}\n" if selection.get("qos") is not None else ""
     account = f"#SBATCH --account={selection['account']}\n" if selection.get("account") is not None else ""
-    setup = "\n".join(_runtime_environment(runtime, "srun"))
+    setup = "\n".join(_runtime_setup(runtime, "srun"))
     hydra = runtime["launchers"].get("hydra")
     hydra_check = ""
     if isinstance(hydra, Mapping) and hydra.get("required") is not False:
-        hydra_setup = "\n".join(_runtime_environment(runtime, "hydra"))
-        hydra_command = " ".join(shlex.quote(str(item)) for item in [hydra["selected_executable"], *hydra["arguments"], "hostname"])
-        hydra_check = f"\n  {hydra_setup}\n  {hydra_command}\n"
+        bootstrap = _hydra_bootstrap(hydra.get("bootstrap"))
+        hydra_arguments = _runtime_commands(hydra.get("arguments"), "launchers.hydra.arguments")
+        if "-bootstrap" in hydra_arguments:
+            raise ValueError(
+                "M10_RUNTIME_PROFILE_UNRESOLVED: Hydra bootstrap must be supplied only by launchers.hydra.bootstrap"
+            )
+        hydra_setup = "\n".join(_runtime_setup(runtime, "hydra"))
+        hydra_command = " ".join(
+            [
+                shlex.quote(str(hydra["selected_executable"])),
+                *(shlex.quote(item) for item in hydra_arguments),
+                "-bootstrap",
+                shlex.quote(bootstrap),
+                "-hosts",
+                '"${M10_HOSTS[0]},${M10_HOSTS[1]}"',
+                "-np",
+                str(RESOURCE_SHAPE["mpi_ranks"]),
+                "-ppn",
+                str(RESOURCE_SHAPE["processes_per_node"]),
+                "hostname",
+            ]
+        )
+        hydra_check = f"""
+  {hydra_setup}
+  {hydra_command} | LC_ALL=C sort | uniq -c | tee "evidence/hydra-placement.${{SLURM_JOB_ID}}.txt"
+  [[ "$(awk 'NR==1 {{a=$1}} NR==2 {{b=$1}} END {{print NR ":" a ":" b}}' "evidence/hydra-placement.${{SLURM_JOB_ID}}.txt")" =~ ^2:32:32$ ]] || {{ echo "M10_PREFLIGHT_HYDRA_PLACEMENT_INVALID" >&2; exit 1; }}
+"""
     return f"""#!/usr/bin/env bash
 #SBATCH --job-name=QRAFT_M10_PREFLIGHT
 #SBATCH --partition={selection['partition']}
@@ -288,9 +317,12 @@ printf 'QRAFT M10 shared filesystem marker\\n' > "$MARKER"
   mapfile -t M10_HOSTS < <(scontrol show hostnames "${{SLURM_JOB_NODELIST:?SLURM_JOB_NODELIST required}}")
   [[ "${{#M10_HOSTS[@]}}" -eq 2 ]] || {{ echo "M10_PREFLIGHT_ALLOCATION_HOST_COUNT_INVALID:${{#M10_HOSTS[@]}}" >&2; exit 1; }}
   {setup}
-  command -v {shlex.quote(runtime['python']['selected_executable'])}
-  {shlex.quote(runtime['python']['selected_executable'])} -c 'import sys; assert sys.version_info >= (3, 11), sys.version'
-  command -v {shlex.quote(runtime['siesta']['selected_executable'])}
+  test -x /usr/bin/srun
+  command -v {shlex.quote(runtime['launchers']['srun']['selected_executable'])}
+  export M10_SELECTED_PYTHON={shlex.quote(runtime['python']['selected_executable'])}
+  export M10_SELECTED_SIESTA={shlex.quote(runtime['siesta']['selected_executable'])}
+  export M10_SELECTED_HYDRA={shlex.quote(runtime['launchers']['hydra']['selected_executable'])}
+  srun --nodes=2 --ntasks=2 --ntasks-per-node=1 bash -c 'set -eu; command -v "$M10_SELECTED_PYTHON"; "$M10_SELECTED_PYTHON" -c "import sys; assert sys.version_info >= (3, 11), sys.version"; command -v "$M10_SELECTED_SIESTA"; test -x /usr/bin/srun; command -v "$M10_SELECTED_HYDRA"'
   env | LC_ALL=C sort | grep '^SLURM_' || true
   export M10_SHARED_MARKER="$MARKER" M10_SHARED_MANIFEST="$MANIFEST"
   srun --nodes=2 --ntasks=2 --ntasks-per-node=1 bash -c 'set -eu; printf "host=%s path=%s marker_sha256=%s manifest_sha256=%s\\n" "$(hostname -f 2>/dev/null || hostname)" "$M10_SHARED_MARKER" "$(sha256sum "$M10_SHARED_MARKER" | awk "{{print \\$1}}")" "$(sha256sum "$M10_SHARED_MANIFEST" | awk "{{print \\$1}}")"'
