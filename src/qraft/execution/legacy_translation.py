@@ -253,7 +253,7 @@ def translate_controller_config(
             else 1
         )
         executions[task.task_id] = ExecutionSpec(
-            partition="allocation",
+            partition=config.partition,
             nodes=execution_nodes,
             mpi_ranks=task.mpi_processes,
             cpus_per_rank=task.cpus_per_process,

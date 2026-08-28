@@ -11,7 +11,6 @@ from typing import Any, Mapping
 
 
 PYTHON_REQUIREMENT = (3, 11)
-SRUN_PLACEMENT = ["--nodes=2", "--ntasks=64", "--ntasks-per-node=32"]
 _BOOTSTRAP = re.compile(r"[A-Za-z0-9._-]+")
 
 
@@ -91,7 +90,7 @@ def resolve(summary_path: Path, *, python: str | None = None, siesta: str | None
     launchers = data.get("launcher_candidates", {})
     if not isinstance(launchers, Mapping): raise ValueError("M10_RUNTIME_PROFILE_UNRESOLVED: launcher evidence missing")
     selected_srun = _select(_candidates(launchers, "srun"), srun, "srun")
-    selected_srun["arguments"] = SRUN_PLACEMENT
+    selected_srun.setdefault("arguments", [])
     selected_srun["required"] = True
     result: dict[str, Any] = {"schema_version": "1.0", "status": "RESOLVED_FROM_CURRENT_CLUSTER_EVIDENCE", "python": {"requirement": ">=3.11", **selected_python}, "siesta": selected_siesta, "launchers": {"srun": selected_srun}}
     hydra_candidates = _candidates(launchers, "mpiexec.hydra")

@@ -20,7 +20,6 @@ from qraft.execution.legacy_translation import translate_controller_config
 CAMPAIGN_ID = "QRAFT_M10_MULTINODE_SIESTA_TECHNICAL_ACCEPTANCE"
 SYSTEM_ID = "SURF_Gr5x5_clean_v01_TECHNICAL_ACCEPTANCE"
 CONTINUATION_CAMPAIGN_ID = "QRAFT_M10_ALLOCATION_CONTINUATION_TECHNICAL"
-RESOURCE_SHAPE = {"nodes": 2, "mpi_ranks": 64, "processes_per_node": 32}
 HISTORICAL_HINT = {
     "partition": "tt2d-64p", "account": "vini", "qos": "normal",
     "status": "HISTORICAL_ONLY_NOT_CURRENT_AUTHORITY",
@@ -57,6 +56,52 @@ def _required_scheduler_text(value: object, field: str) -> str:
     return value
 
 
+def _positive_int(value: object, field: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise ValueError(f"M10_REMOTE_PROFILE_UNRESOLVED: invalid {field}")
+    return value
+
+
+def _resolved_placement(selection: Mapping[str, Any]) -> dict[str, Any]:
+    placement = selection.get("derived_placement")
+    capacity = selection.get("capacity_evidence")
+    if not isinstance(placement, Mapping) or not isinstance(capacity, Mapping):
+        raise ValueError(
+            "M10_REMOTE_PROFILE_UNRESOLVED: capacity evidence and derived placement are required"
+        )
+    result = {
+        field: _positive_int(placement.get(field), f"derived_placement.{field}")
+        for field in (
+            "nodes",
+            "ntasks",
+            "cpus_per_task",
+            "processes_per_node",
+            "total_cpus",
+        )
+    }
+    walltime = placement.get("walltime")
+    if not isinstance(walltime, str) or not walltime.strip():
+        raise ValueError("M10_REMOTE_PROFILE_UNRESOLVED: invalid derived_placement.walltime")
+    result["walltime"] = walltime
+    if placement.get("policy") != "MAXIMUM_LEGAL_PLACEMENT_FIXED_PARTITION":
+        raise ValueError("M10_REMOTE_PROFILE_UNRESOLVED: unsupported placement policy")
+    if result["nodes"] * result["processes_per_node"] != result["ntasks"]:
+        raise ValueError("M10_REMOTE_PROFILE_UNRESOLVED: inconsistent derived placement")
+    cpus_per_node = _positive_int(
+        capacity.get("cpus_per_node"), "capacity_evidence.cpus_per_node"
+    )
+    if result["processes_per_node"] * result["cpus_per_task"] > cpus_per_node:
+        raise ValueError("M10_REMOTE_PROFILE_UNRESOLVED: CPU overcommit")
+    if result["total_cpus"] != result["nodes"] * cpus_per_node:
+        raise ValueError("M10_REMOTE_PROFILE_UNRESOLVED: total CPU capacity mismatch")
+    for field in ("nodes", "ntasks", "cpus_per_task", "processes_per_node", "walltime"):
+        if selection.get(field) != result[field]:
+            raise ValueError(
+                f"M10_REMOTE_PROFILE_UNRESOLVED: top-level {field} disagrees with derived placement"
+            )
+    return result
+
+
 def _load_scheduler_selection(path: Path) -> dict[str, Any]:
     """Validate the existing M3 scheduler-selection shape without a fallback."""
 
@@ -74,22 +119,15 @@ def _load_scheduler_selection(path: Path) -> dict[str, Any]:
     qos = result.get("qos")
     if qos is not None:
         result["qos"] = _required_scheduler_text(qos, "qos")
-    for field, expected in (("nodes", 2), ("ntasks", 64), ("cpus_per_task", 1), ("processes_per_node", 32)):
-        if result.get(field) != expected:
-            raise ValueError(
-                "M10_REMOTE_PROFILE_UNRESOLVED: scheduler selection does not "
-                f"demonstrate M10 {field}={expected}"
-            )
+    _resolved_placement(result)
     evidence = result.get("evidence_status_by_field")
     if not isinstance(evidence, Mapping):
         raise ValueError("M10_REMOTE_PROFILE_UNRESOLVED: missing evidence statuses")
     for field in ("account", "partition", "qos", "memory", "resource_shape"):
         if field not in evidence:
             raise ValueError(f"M10_REMOTE_PROFILE_UNRESOLVED: missing {field} evidence status")
-    if result.get("walltime") != "00:20:00":
-        raise ValueError("M10_REMOTE_PROFILE_UNRESOLVED: scheduler selection does not demonstrate M10 walltime=00:20:00")
-    if result.get("resource_shape_status") != "VERIFIED_FROM_CURRENT_CLUSTER_EVIDENCE":
-        raise ValueError("M10_REMOTE_PROFILE_UNRESOLVED: M10 resource shape is not verified from current cluster evidence")
+    if result.get("resource_shape_status") != "DERIVED_FROM_CURRENT_CLUSTER_CAPABILITIES":
+        raise ValueError("M10_REMOTE_PROFILE_UNRESOLVED: placement is not derived from cluster capabilities")
     if not isinstance(result.get("source_files"), list) or not result["source_files"]:
         raise ValueError("M10_REMOTE_PROFILE_UNRESOLVED: missing scheduler source files")
     return result
@@ -156,10 +194,25 @@ def _load_runtime_selection(path: Path) -> dict[str, Any]:
         if name == "hydra":
             _hydra_bootstrap(payload.get("bootstrap"))
     srun_args = result["launchers"]["srun"]["arguments"]
-    for required in ("--nodes=2", "--ntasks=64", "--ntasks-per-node=32"):
-        if required not in srun_args:
-            raise ValueError(f"M10_RUNTIME_PROFILE_UNRESOLVED: srun selection lacks {required}")
+    placement_options = ("--nodes", "--ntasks", "--ntasks-per-node", "--cpus-per-task")
+    if any(
+        argument == option or argument.startswith(f"{option}=")
+        for argument in srun_args for option in placement_options
+    ):
+        raise ValueError(
+            "M10_RUNTIME_PROFILE_UNRESOLVED: runtime selection cannot carry placement"
+        )
     return result
+
+
+def _srun_arguments(runtime: Mapping[str, Any], placement: Mapping[str, Any]) -> list[str]:
+    return [
+        *runtime["launchers"]["srun"]["arguments"],
+        f"--nodes={placement['nodes']}",
+        f"--ntasks={placement['ntasks']}",
+        f"--ntasks-per-node={placement['processes_per_node']}",
+        f"--cpus-per-task={placement['cpus_per_task']}",
+    ]
 
 
 def _slurm(selection: Mapping[str, Any]) -> dict[str, str]:
@@ -201,11 +254,15 @@ def _runtime_environment(runtime: Mapping[str, Any], launcher: str | None = None
 
 def _siesta_campaign(repository: Path, selection: Mapping[str, Any], runtime: Mapping[str, Any], launcher: str, source: Path) -> Path:
     hashes = _fixture(repository, source)
+    placement = _resolved_placement(selection)
     selected_launcher = runtime["launchers"][launcher]
     launcher_data: dict[str, Any] = {
         "kind": launcher, "command": [selected_launcher["selected_executable"]],
-        "arguments": selected_launcher["arguments"],
-        "processes_per_node": RESOURCE_SHAPE["processes_per_node"],
+        "arguments": (
+            _srun_arguments(runtime, placement)
+            if launcher == "srun" else selected_launcher["arguments"]
+        ),
+        "processes_per_node": placement["processes_per_node"],
     }
     if launcher == "hydra":
         launcher_data["bootstrap"] = _hydra_bootstrap(selected_launcher.get("bootstrap"))
@@ -214,9 +271,9 @@ def _siesta_campaign(repository: Path, selection: Mapping[str, Any], runtime: Ma
         "schema_version": "2.0", "campaign_id": CAMPAIGN_ID, "system_id": SYSTEM_ID,
         "classification": ["NON_SCIENTIFIC_TECHNICAL_ACCEPTANCE", "ENERGY_INTERPRETATION_FORBIDDEN"],
         "slurm": _slurm(selection),
-        "resources": {"nodes": 2, "total_cpus": 64, "memory": selection["memory"], "walltime": "00:20:00", "max_parallel_steps": 1, "shutdown_margin_seconds": 120, "termination_grace_seconds": 30},
+        "resources": {"nodes": placement["nodes"], "total_cpus": placement["total_cpus"], "ntasks": placement["ntasks"], "cpus_per_task": placement["cpus_per_task"], "memory": selection["memory"], "walltime": placement["walltime"], "max_parallel_steps": 1, "shutdown_margin_seconds": 120, "termination_grace_seconds": 30},
         "runtime": {"module_commands": _runtime_environment(runtime, launcher), "siesta_executable": runtime["siesta"]["selected_executable"], "executable_arguments": [], "launcher": launcher_data, "exclusive": True, "environment": runtime_environment},
-        "tasks": [{"task_id": "M10_SIESTA_SMOKE", "input": "input/smoke.fdf", "input_hashes": hashes, "required_artifacts": [], "mpi_processes": 64, "cpus_per_process": 1, "nodes": 2, "estimated_runtime_seconds": 600, "max_attempts": 1, "require_scf_converged": True}],
+        "tasks": [{"task_id": "M10_SIESTA_SMOKE", "input": "input/smoke.fdf", "input_hashes": hashes, "required_artifacts": [], "mpi_processes": placement["ntasks"], "cpus_per_process": placement["cpus_per_task"], "nodes": placement["nodes"], "estimated_runtime_seconds": 600, "max_attempts": 1, "require_scf_converged": True}],
     }
     path = source / "campaign.json"
     _write_json(path, campaign)
@@ -224,6 +281,7 @@ def _siesta_campaign(repository: Path, selection: Mapping[str, Any], runtime: Ma
 
 
 def _continuation_campaign(selection: Mapping[str, Any], runtime: Mapping[str, Any], source: Path) -> Path:
+    placement = _resolved_placement(selection)
     (source / "input").mkdir(parents=True)
     input_path = source / "input" / "continuation-input.json"
     _write_json(input_path, {"classification": "NON_SCIENTIFIC_TECHNICAL_ACCEPTANCE", "purpose": "M10 allocation continuation"})
@@ -232,8 +290,8 @@ def _continuation_campaign(selection: Mapping[str, Any], runtime: Mapping[str, A
     campaign = {
         "schema_version": "2.0", "campaign_id": CONTINUATION_CAMPAIGN_ID, "system_id": "M10_ALLOCATION_CONTINUATION_TECHNICAL",
         "classification": ["NON_SCIENTIFIC_TECHNICAL_ACCEPTANCE", "ENERGY_INTERPRETATION_FORBIDDEN"], "slurm": _slurm(selection),
-        "resources": {"nodes": 2, "total_cpus": 64, "memory": selection["memory"], "walltime": "00:03:00", "max_parallel_steps": 1, "shutdown_margin_seconds": CONTINUATION_SHUTDOWN_MARGIN_SECONDS, "termination_grace_seconds": 10},
-        "runtime": {"module_commands": _runtime_environment(runtime, "srun"), "siesta_executable": runtime["python"]["selected_executable"], "executable_arguments": [], "launcher": {"kind": "srun", "command": [runtime["launchers"]["srun"]["selected_executable"]], "arguments": runtime["launchers"]["srun"]["arguments"], "processes_per_node": 32}, "exclusive": True, "environment": {}},
+        "resources": {"nodes": placement["nodes"], "total_cpus": placement["total_cpus"], "ntasks": placement["ntasks"], "cpus_per_task": placement["cpus_per_task"], "memory": selection["memory"], "walltime": "00:03:00", "max_parallel_steps": 1, "shutdown_margin_seconds": CONTINUATION_SHUTDOWN_MARGIN_SECONDS, "termination_grace_seconds": 10},
+        "runtime": {"module_commands": _runtime_environment(runtime, "srun"), "siesta_executable": runtime["python"]["selected_executable"], "executable_arguments": [], "launcher": {"kind": "srun", "command": [runtime["launchers"]["srun"]["selected_executable"]], "arguments": _srun_arguments(runtime, placement), "processes_per_node": placement["processes_per_node"]}, "exclusive": True, "environment": {}},
         "tasks": [
             {"task_id": "STAGE_A", "command": [runtime["python"]["selected_executable"], "-c", "from pathlib import Path; import time; time.sleep(4); Path('stage_a.complete').write_text('complete\\n', encoding='utf-8')"], "estimated_runtime_seconds": CONTINUATION_STAGE_A_ESTIMATE_SECONDS, **task_base},
             {"task_id": "STAGE_B", "command": [runtime["python"]["selected_executable"], "-c", "from pathlib import Path; import time; time.sleep(2); Path('stage_b.complete').write_text('complete\\n', encoding='utf-8')"], "depends_on": ["STAGE_A"], "estimated_runtime_seconds": CONTINUATION_STAGE_B_ESTIMATE_SECONDS, **task_base},
@@ -264,6 +322,7 @@ def _equivalence(hydra: Path, srun: Path) -> dict[str, Any]:
 
 
 def _preflight_script(selection: Mapping[str, Any], runtime: Mapping[str, Any]) -> str:
+    placement = _resolved_placement(selection)
     qos = f"#SBATCH --qos={selection['qos']}\n" if selection.get("qos") is not None else ""
     account = f"#SBATCH --account={selection['account']}\n" if selection.get("account") is not None else ""
     setup = "\n".join(_runtime_setup(runtime, "srun"))
@@ -285,24 +344,25 @@ def _preflight_script(selection: Mapping[str, Any], runtime: Mapping[str, Any]) 
                 "-bootstrap",
                 shlex.quote(bootstrap),
                 "-hosts",
-                '"${M10_HOSTS[0]},${M10_HOSTS[1]}"',
+                '"$M10_HOST_CSV"',
                 "-np",
-                str(RESOURCE_SHAPE["mpi_ranks"]),
+                str(placement["ntasks"]),
                 "-ppn",
-                str(RESOURCE_SHAPE["processes_per_node"]),
+                str(placement["processes_per_node"]),
                 "hostname",
             ]
         )
         hydra_check = f"""
   {hydra_command} | LC_ALL=C sort | uniq -c | tee "evidence/hydra-placement.${{SLURM_JOB_ID}}.txt"
-  [[ "$(awk 'NR==1 {{a=$1}} NR==2 {{b=$1}} END {{print NR ":" a ":" b}}' "evidence/hydra-placement.${{SLURM_JOB_ID}}.txt")" =~ ^2:32:32$ ]] || {{ echo "M10_PREFLIGHT_HYDRA_PLACEMENT_INVALID" >&2; exit 1; }}
+  validate_placement "evidence/hydra-placement.${{SLURM_JOB_ID}}.txt" M10_PREFLIGHT_HYDRA_PLACEMENT_INVALID
 """
     return f"""#!/usr/bin/env bash
 #SBATCH --job-name=QRAFT_M10_PREFLIGHT
 #SBATCH --partition={selection['partition']}
-{account}{qos}#SBATCH --nodes=2
-#SBATCH --ntasks=64
-#SBATCH --ntasks-per-node=32
+{account}{qos}#SBATCH --nodes={placement['nodes']}
+#SBATCH --ntasks={placement['ntasks']}
+#SBATCH --ntasks-per-node={placement['processes_per_node']}
+#SBATCH --cpus-per-task={placement['cpus_per_task']}
 #SBATCH --time=00:05:00
 #SBATCH --output=preflight/preflight.%j.out
 #SBATCH --error=preflight/preflight.%j.err
@@ -315,7 +375,15 @@ printf 'QRAFT M10 shared filesystem marker\\n' > "$MARKER"
   scontrol --version || scontrol version || true
   printf 'SLURM_JOB_ID=%s\\nSLURM_JOB_PARTITION=%s\\nSLURM_NNODES=%s\\nSLURM_SUBMIT_DIR=%s\\n' "$SLURM_JOB_ID" "${{SLURM_JOB_PARTITION:-}}" "$SLURM_NNODES" "$ROOT"
   mapfile -t M10_HOSTS < <(scontrol show hostnames "${{SLURM_JOB_NODELIST:?SLURM_JOB_NODELIST required}}")
-  [[ "${{#M10_HOSTS[@]}}" -eq 2 ]] || {{ echo "M10_PREFLIGHT_ALLOCATION_HOST_COUNT_INVALID:${{#M10_HOSTS[@]}}" >&2; exit 1; }}
+  [[ "${{#M10_HOSTS[@]}}" -eq {placement['nodes']} ]] || {{ echo "M10_PREFLIGHT_ALLOCATION_HOST_COUNT_INVALID:${{#M10_HOSTS[@]}}" >&2; exit 1; }}
+  M10_HOST_CSV="$(IFS=,; echo "${{M10_HOSTS[*]}}")"
+  validate_placement() {{
+    local evidence_file="$1" failure_code="$2"
+    awk -v expected_nodes={placement['nodes']} -v expected_ppn={placement['processes_per_node']} -v expected_tasks={placement['ntasks']} '
+      {{ if ($1 != expected_ppn) exit 2; rows += 1; tasks += $1 }}
+      END {{ if (rows != expected_nodes || tasks != expected_tasks) exit 3 }}
+    ' "$evidence_file" || {{ echo "$failure_code" >&2; exit 1; }}
+  }}
   {setup}
   {hydra_setup}
   test -x /usr/bin/srun
@@ -323,13 +391,13 @@ printf 'QRAFT M10 shared filesystem marker\\n' > "$MARKER"
   export M10_SELECTED_PYTHON={shlex.quote(runtime['python']['selected_executable'])}
   export M10_SELECTED_SIESTA={shlex.quote(runtime['siesta']['selected_executable'])}
   export M10_SELECTED_HYDRA={shlex.quote(runtime['launchers']['hydra']['selected_executable'])}
-  srun --nodes=2 --ntasks=2 --ntasks-per-node=1 bash -c 'set -eu; command -v "$M10_SELECTED_PYTHON"; "$M10_SELECTED_PYTHON" -c "import sys; assert sys.version_info >= (3, 11), sys.version"; command -v "$M10_SELECTED_SIESTA"; test -x /usr/bin/srun; command -v "$M10_SELECTED_HYDRA"'
+  srun --nodes={placement['nodes']} --ntasks={placement['nodes']} --ntasks-per-node=1 --cpus-per-task=1 bash -c 'set -eu; command -v "$M10_SELECTED_PYTHON"; "$M10_SELECTED_PYTHON" -c "import sys; assert sys.version_info >= (3, 11), sys.version"; command -v "$M10_SELECTED_SIESTA"; test -x /usr/bin/srun; command -v "$M10_SELECTED_HYDRA"'
   env | LC_ALL=C sort | grep '^SLURM_' || true
   export M10_SHARED_MARKER="$MARKER" M10_SHARED_MANIFEST="$MANIFEST"
-  srun --nodes=2 --ntasks=2 --ntasks-per-node=1 bash -c 'set -eu; printf "host=%s path=%s marker_sha256=%s manifest_sha256=%s\\n" "$(hostname -f 2>/dev/null || hostname)" "$M10_SHARED_MARKER" "$(sha256sum "$M10_SHARED_MARKER" | awk "{{print \\$1}}")" "$(sha256sum "$M10_SHARED_MANIFEST" | awk "{{print \\$1}}")"'
-  srun --nodes=2 --ntasks=64 --ntasks-per-node=32 hostname | LC_ALL=C sort | uniq -c | tee "evidence/srun-placement.${{SLURM_JOB_ID}}.txt"
-  [[ "$(awk 'NR==1 {{a=$1}} NR==2 {{b=$1}} END {{print NR ":" a ":" b}}' "evidence/srun-placement.${{SLURM_JOB_ID}}.txt")" =~ ^2:32:32$ ]] || {{ echo "M10_PREFLIGHT_SRUN_PLACEMENT_INVALID" >&2; exit 1; }}{hydra_check}
-}} | tee "evidence/preflight.${{SLURM_JOB_ID}}.txt"
+  srun --nodes={placement['nodes']} --ntasks={placement['nodes']} --ntasks-per-node=1 --cpus-per-task=1 bash -c 'set -eu; printf "host=%s path=%s marker_sha256=%s manifest_sha256=%s\\n" "$(hostname -f 2>/dev/null || hostname)" "$M10_SHARED_MARKER" "$(sha256sum "$M10_SHARED_MARKER" | awk "{{print \\$1}}")" "$(sha256sum "$M10_SHARED_MANIFEST" | awk "{{print \\$1}}")"'
+  srun --nodes={placement['nodes']} --ntasks={placement['ntasks']} --ntasks-per-node={placement['processes_per_node']} --cpus-per-task={placement['cpus_per_task']} hostname | LC_ALL=C sort | uniq -c | tee "evidence/srun-placement.${{SLURM_JOB_ID}}.txt"
+  validate_placement "evidence/srun-placement.${{SLURM_JOB_ID}}.txt" M10_PREFLIGHT_SRUN_PLACEMENT_INVALID{hydra_check}
+}} 2>&1 | tee "evidence/preflight.${{SLURM_JOB_ID}}.txt"
 """
 
 
@@ -358,15 +426,17 @@ def _unresolved(repository: Path, output: Path) -> dict[str, Any]:
     runtime_probe = repository / "tools" / "m10_yoltla_runtime_candidate_probe.sh"
     summary_builder = repository / "tools" / "build_yoltla_m10_login_summary.py"
     scheduler_resolver = repository / "tools" / "resolve_yoltla_m10_scheduler.py"
+    scheduler_resolution = repository / "src" / "qraft" / "validation" / "scheduler_resolution.py"
     runtime_resolver = repository / "tools" / "resolve_yoltla_m10_runtime.py"
     _copy_linux_text(raw_probe, discovery / "run_login_probe.sh")
     _copy_linux_text(runtime_probe, discovery / "run_runtime_candidate_probe.sh")
     _copy_linux_text(summary_builder, discovery / "build_login_summary.py")
     _copy_linux_text(scheduler_resolver, discovery / "resolve_m10_scheduler.py")
+    _copy_linux_text(scheduler_resolution, discovery / "scheduler_resolution.py")
     _copy_linux_text(runtime_resolver, discovery / "resolve_m10_runtime.py")
     (discovery / "README.md").write_text(_discovery_readme(), encoding="utf-8", newline="\n")
-    _write_json(discovery / "resource_requirements.json", {"nodes": 2, "ntasks": 64, "cpus_per_task": 1, "processes_per_node": 32, "walltime": "00:20:00"})
-    manifest = {"schema_version": "1.0", "scheduler_profile_status": "UNRESOLVED", "runtime_profile_status": "UNRESOLVED", "resource_shape": RESOURCE_SHAPE, "historical_hint": HISTORICAL_HINT, "scientific_fixture_hashes": hashes, "raw_login_probe": {"source": "tools/m10_yoltla_raw_login_probe.sh", "sha256": _sha(raw_probe), "python_required": False, "module_required": False}, "runtime_candidate_probe": {"source": "tools/m10_yoltla_runtime_candidate_probe.sh", "sha256": _sha(runtime_probe), "python_required": False, "requires_explicit_modules": True, "launches_work": False}, "m10_scheduler_resolver": {"source": "tools/resolve_yoltla_m10_scheduler.py", "sha256": _sha(scheduler_resolver)}, "m10_runtime_resolver": {"source": "tools/resolve_yoltla_m10_runtime.py", "sha256": _sha(runtime_resolver)}, "remote_execution_status": "PENDING_REMOTE", "scientific_submit_scripts_generated": False}
+    _write_json(discovery / "resource_requirements.json", {"allocation_policy": "MAXIMUM_LEGAL_PLACEMENT_FIXED_PARTITION", "cpus_per_task": 1, "walltime": "00:20:00"})
+    manifest = {"schema_version": "1.0", "scheduler_profile_status": "UNRESOLVED", "runtime_profile_status": "UNRESOLVED", "placement_status": "UNRESOLVED", "historical_hint": HISTORICAL_HINT, "scientific_fixture_hashes": hashes, "raw_login_probe": {"source": "tools/m10_yoltla_raw_login_probe.sh", "sha256": _sha(raw_probe), "python_required": False, "module_required": False}, "runtime_candidate_probe": {"source": "tools/m10_yoltla_runtime_candidate_probe.sh", "sha256": _sha(runtime_probe), "python_required": False, "requires_explicit_modules": True, "launches_work": False}, "m10_scheduler_resolver": {"source": "tools/resolve_yoltla_m10_scheduler.py", "sha256": _sha(scheduler_resolver), "generic_engine_source": "src/qraft/validation/scheduler_resolution.py", "generic_engine_sha256": _sha(scheduler_resolution)}, "m10_runtime_resolver": {"source": "tools/resolve_yoltla_m10_runtime.py", "sha256": _sha(runtime_resolver)}, "remote_execution_status": "PENDING_REMOTE", "scientific_submit_scripts_generated": False}
     _write_json(output / "bundle_manifest.json", manifest)
     (output / "README.md").write_text("# QRAFT M10 unresolved discovery bundle\n\nNo scientific submit scripts are generated until a current, human-reviewed scheduler selection is supplied.\n", encoding="utf-8", newline="\n")
     return manifest
@@ -374,6 +444,7 @@ def _unresolved(repository: Path, output: Path) -> dict[str, Any]:
 
 def _resolved(repository: Path, output: Path, selection_path: Path, runtime_path: Path) -> dict[str, Any]:
     selection = _load_scheduler_selection(selection_path)
+    placement = _resolved_placement(selection)
     runtime = _load_runtime_selection(runtime_path)
     if not isinstance(runtime["launchers"].get("hydra"), Mapping) or runtime["launchers"]["hydra"].get("required") is False:
         raise ValueError("M10_RUNTIME_PROFILE_UNRESOLVED: resolved M10 bundle requires reviewed Hydra acceptance")
@@ -392,7 +463,7 @@ def _resolved(repository: Path, output: Path, selection_path: Path, runtime_path
     _write_json(output / "backend_equivalence.json", equivalence)
     preflight = output / "preflight"; preflight.mkdir()
     _write_linux_text(preflight / "submit_m10_preflight.slurm", _preflight_script(selection, runtime))
-    manifest = {"schema_version": "1.0", "scheduler_profile_status": "RESOLVED_FROM_CLUSTER_EVIDENCE", "runtime_profile_status": "RESOLVED_FROM_CLUSTER_EVIDENCE", "resource_shape": RESOURCE_SHAPE, "scheduler_selection": {"relative_path": "provenance/scheduler_selection.json", "sha256": _sha(copied_selection), "account": selection.get("account"), "partition": selection["partition"], "qos": selection.get("qos"), "source_files": selection["source_files"], "evidence_status_by_field": selection["evidence_status_by_field"]}, "runtime_selection": {"relative_path": "provenance/runtime_selection.json", "sha256": _sha(copied_runtime), "python_requirement": runtime["python"]["requirement"], "environment_setup": [*runtime["python"]["environment_setup"], *runtime["siesta"]["environment_setup"]]}, "packages": results, "backend_equivalence": equivalence, "continuation_external_allocations": {"first_seconds": 60, "second_seconds": 180, "same_package_root_and_config": True}, "execution_authority": "ControllerPackageBuilder -> CanonicalController -> CompiledWorkflowRuntime", "remote_execution_status": "PENDING_REMOTE"}
+    manifest = {"schema_version": "1.0", "scheduler_profile_status": "RESOLVED_FROM_CLUSTER_EVIDENCE", "runtime_profile_status": "RESOLVED_FROM_CLUSTER_EVIDENCE", "capacity_evidence": selection["capacity_evidence"], "derived_placement": placement, "scheduler_selection": {"relative_path": "provenance/scheduler_selection.json", "sha256": _sha(copied_selection), "account": selection.get("account"), "partition": selection["partition"], "qos": selection.get("qos"), "source_files": selection["source_files"], "evidence_status_by_field": selection["evidence_status_by_field"]}, "runtime_selection": {"relative_path": "provenance/runtime_selection.json", "sha256": _sha(copied_runtime), "python_requirement": runtime["python"]["requirement"], "environment_setup": [*runtime["python"]["environment_setup"], *runtime["siesta"]["environment_setup"]]}, "packages": results, "backend_equivalence": equivalence, "continuation_external_allocations": {"first_seconds": 60, "second_seconds": 180, "same_package_root_and_config": True}, "execution_authority": "ControllerPackageBuilder -> CanonicalController -> CompiledWorkflowRuntime", "remote_execution_status": "PENDING_REMOTE"}
     _write_json(output / "bundle_manifest.json", manifest)
     return manifest
 

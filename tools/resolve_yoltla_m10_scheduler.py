@@ -4,12 +4,21 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 from pathlib import Path
 from typing import Any, Mapping
 
-
-RESOURCE_REQUEST = {"nodes": 2, "ntasks": 64, "cpus_per_task": 1, "processes_per_node": 32, "walltime": "00:20:00"}
+try:
+    from scheduler_resolution import (
+        PartitionPolicy,
+        VisiblePartition,
+        derive_fixed_partition_placement,
+    )
+except ModuleNotFoundError:  # Repository execution with src/ on PYTHONPATH.
+    from qraft.validation.scheduler_resolution import (  # type: ignore[no-redef]
+        PartitionPolicy,
+        VisiblePartition,
+        derive_fixed_partition_placement,
+    )
 
 
 def _mapping_by_name(data: Mapping[str, Any], field: str) -> dict[str, Mapping[str, Any]]:
@@ -17,21 +26,6 @@ def _mapping_by_name(data: Mapping[str, Any], field: str) -> dict[str, Mapping[s
     if not isinstance(raw, list):
         return {}
     return {str(item["name"]): item for item in raw if isinstance(item, Mapping) and item.get("name")}
-
-
-def _slurm_seconds(value: object) -> int | None:
-    """Support the small current-evidence time grammar needed for MaxTime."""
-    if not isinstance(value, str) or value.upper() in {"UNLIMITED", "INFINITE"}:
-        return None if isinstance(value, str) else -1
-    matched = re.fullmatch(r"(?:(\d+)-)?(\d{1,2}):(\d{2})(?::(\d{2}))?", value)
-    if not matched:
-        return -1
-    days, first, second, third = matched.groups()
-    if third is None:
-        hours, minutes, seconds = 0, int(first), int(second)
-    else:
-        hours, minutes, seconds = int(first), int(second), int(third)
-    return (int(days or 0) * 86400) + (hours * 3600) + (minutes * 60) + seconds
 
 
 def _policy_allows(policy: Mapping[str, Any], field: str, value: object) -> bool:
@@ -46,39 +40,63 @@ def _policy_allows(policy: Mapping[str, Any], field: str, value: object) -> bool
     return isinstance(values, list) and value in values
 
 
-def _placement(name: str, view: Mapping[str, Any], policy: Mapping[str, Any], account: object, qos: object) -> dict[str, Any]:
+def _placement(
+    name: str,
+    view: Mapping[str, Any],
+    policy: Mapping[str, Any],
+    account: object,
+    qos: object,
+    *,
+    cpus_per_task: int,
+    walltime: str,
+) -> dict[str, Any]:
     failures: list[str] = []
-    if not isinstance(view.get("nodes"), int) or view["nodes"] < RESOURCE_REQUEST["nodes"]:
-        failures.append("VISIBLE_NODES_INSUFFICIENT")
-    if not isinstance(view.get("cpus_per_node"), int) or view["cpus_per_node"] < RESOURCE_REQUEST["processes_per_node"]:
-        failures.append("CPUS_PER_NODE_INSUFFICIENT")
-    if not isinstance(view.get("memory"), int) or view["memory"] <= 0:
-        failures.append("MEMORY_NOT_OBSERVED")
-    if str(view.get("availability", "")).lower() != "up":
-        failures.append("VISIBLE_PARTITION_NOT_UP")
-    if str(policy.get("state", "")).upper() != "UP":
-        failures.append("PARTITION_POLICY_NOT_UP")
-    min_nodes, max_nodes = policy.get("min_nodes"), policy.get("max_nodes")
-    if not isinstance(min_nodes, int) or RESOURCE_REQUEST["nodes"] < min_nodes:
-        failures.append("MIN_NODES_VIOLATED")
-    if max_nodes is not None and (not isinstance(max_nodes, int) or RESOURCE_REQUEST["nodes"] > max_nodes):
-        failures.append("MAX_NODES_VIOLATED")
-    max_seconds = _slurm_seconds(policy.get("max_time"))
-    requested_seconds = _slurm_seconds(RESOURCE_REQUEST["walltime"])
-    if max_seconds is None:
-        pass
-    elif max_seconds < 0 or requested_seconds < 0 or requested_seconds > max_seconds:
-        failures.append("MAX_TIME_VIOLATED")
     if not _policy_allows(policy, "allow_accounts", account):
         failures.append("ACCOUNT_NOT_ALLOWED_BY_PARTITION")
     if qos is not None and not _policy_allows(policy, "allow_qos", qos):
         failures.append("QOS_NOT_ALLOWED_BY_PARTITION")
     if failures:
         raise ValueError(f"M10_REMOTE_PROFILE_UNRESOLVED: {','.join(failures)}")
+    try:
+        resolved = derive_fixed_partition_placement(
+            VisiblePartition(
+                name=name,
+                availability=view.get("availability"),
+                time_limit=view.get("time_limit"),
+                nodes=view.get("nodes"),
+                cpus_per_node=view.get("cpus_per_node"),
+                memory=view.get("memory"),
+                default=bool(view.get("default")),
+                source_file=str(view.get("source_file", "sinfo.txt")),
+                source_line=int(view.get("source_line", 1)),
+            ),
+            PartitionPolicy(
+                name=name,
+                allow_accounts=dict(policy.get("allow_accounts", {})),
+                allow_qos=dict(policy.get("allow_qos", {})),
+                default=bool(policy.get("default")),
+                state=policy.get("state"),
+                min_nodes=policy.get("min_nodes"),
+                max_nodes=policy.get("max_nodes"),
+                max_time=policy.get("max_time"),
+                source_file=str(policy.get("source_file", "scontrol_partitions.txt")),
+                source_line=int(policy.get("source_line", 1)),
+            ),
+            cpus_per_task=cpus_per_task,
+            walltime=walltime,
+        )
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"M10_REMOTE_PROFILE_UNRESOLVED: {error}") from error
+    capacity = resolved["capacity_evidence"]
     return {
-        "partition": name, "memory": f"{view['memory']}M",
-        "memory_source": {"source_file": view.get("source_file", "sinfo.txt"), "source_line": view.get("source_line", 1), "observed_mb": view["memory"]},
-        "policy_source": {"source_file": policy.get("source_file", "scontrol_partitions.txt"), "source_line": policy.get("source_line", 1)},
+        "partition": name,
+        "memory": f"{capacity['memory_mb']}M",
+        "memory_source": {
+            **capacity["sources"]["visible_partition"],
+            "observed_mb": capacity["memory_mb"],
+        },
+        "policy_source": capacity["sources"]["partition_policy"],
+        **resolved,
     }
 
 
@@ -124,7 +142,15 @@ def _candidates(data: Mapping[str, Any], visible: Mapping[str, Mapping[str, Any]
     return list(unique.values())
 
 
-def resolve(summary_path: Path, *, account: str | None = None, partition: str | None = None, qos: str | None = None) -> dict[str, Any]:
+def resolve(
+    summary_path: Path,
+    *,
+    account: str | None = None,
+    partition: str | None = None,
+    qos: str | None = None,
+    cpus_per_task: int = 1,
+    walltime: str = "00:20:00",
+) -> dict[str, Any]:
     if (account is None) != (partition is None):
         raise ValueError("M10_REMOTE_PROFILE_UNRESOLVED: --account and --partition must be supplied together")
     try:
@@ -145,7 +171,11 @@ def resolve(summary_path: Path, *, account: str | None = None, partition: str | 
     for item in candidates:
         chosen_qos = qos if qos is not None else item.get("qos")
         try:
-            placement = _placement(item["partition"], visible[item["partition"]], policies[item["partition"]], item["account"], chosen_qos)
+            placement = _placement(
+                item["partition"], visible[item["partition"]],
+                policies[item["partition"]], item["account"], chosen_qos,
+                cpus_per_task=cpus_per_task, walltime=walltime,
+            )
         except ValueError as error:
             failures.append(str(error))
             continue
@@ -164,15 +194,16 @@ def resolve(summary_path: Path, *, account: str | None = None, partition: str | 
     if chosen_qos is None and selected["account"] is None and defaults.get("qos_omission_supported") is not True:
         raise ValueError("M10_REMOTE_PROFILE_UNRESOLVED: QoS omission is not justified")
     source_files = [*selected["source_files"], placement["memory_source"]["source_file"], placement["policy_source"]["source_file"]]
+    derived = placement["derived_placement"]
     return {
-        "account": selected["account"], "partition": selected["partition"], "qos": chosen_qos, **placement, **RESOURCE_REQUEST,
+        "account": selected["account"], "partition": selected["partition"], "qos": chosen_qos, **placement, **derived,
         "association_scope": selected["association_scope"], "selection_policy": "UNIQUE_CURRENT_CLUSTER_EVIDENCE",
         "candidate_partitions": sorted(item[0]["partition"] for item in accepted), "source_files": sorted(set(str(item) for item in source_files)),
         "evidence_status_by_field": {
             "account": "OMITTED_WITH_SCHEDULER_DEFAULT_EVIDENCE" if selected["account"] is None else "OBSERVED",
             "partition": "VERIFIED_BY_CROSS_SOURCE", "qos": "OMITTED_WITH_SCHEDULER_DEFAULT_EVIDENCE" if chosen_qos is None and selected["account"] is None else ("MISSING" if chosen_qos is None else "OBSERVED"),
-            "memory": "OBSERVED", "resource_shape": "VERIFIED_FROM_CURRENT_CLUSTER_EVIDENCE",
-        }, "resource_shape_status": "VERIFIED_FROM_CURRENT_CLUSTER_EVIDENCE",
+            "memory": "OBSERVED", "resource_shape": "DERIVED_FROM_OBSERVED_CAPACITY",
+        }, "resource_shape_status": "DERIVED_FROM_CURRENT_CLUSTER_CAPABILITIES",
     }
 
 
@@ -183,10 +214,16 @@ def main() -> int:
     parser.add_argument("--account")
     parser.add_argument("--partition")
     parser.add_argument("--qos")
+    parser.add_argument("--cpus-per-task", type=int, default=1)
+    parser.add_argument("--walltime", default="00:20:00")
     args = parser.parse_args()
     if args.output.exists():
         raise ValueError(f"M10_REMOTE_PROFILE_UNRESOLVED: refusing to overwrite selection: {args.output}")
-    result = resolve(args.login_evidence, account=args.account, partition=args.partition, qos=args.qos)
+    result = resolve(
+        args.login_evidence, account=args.account, partition=args.partition,
+        qos=args.qos, cpus_per_task=args.cpus_per_task,
+        walltime=args.walltime,
+    )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
     return 0

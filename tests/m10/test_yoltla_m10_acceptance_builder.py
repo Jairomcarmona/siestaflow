@@ -23,16 +23,42 @@ from qraft.execution.srun_launcher import StepLaunchSpec
 def _selection(
     tmp_path: Path, *, qos: str | None = None,
     account: str | None = "observed-account",
+    partition: str = "observed-partition",
+    nodes: int = 2,
+    cpus_per_node: int = 32,
+    cpus_per_task: int = 1,
 ) -> Path:
+    processes_per_node = cpus_per_node // cpus_per_task
+    ntasks = nodes * processes_per_node
+    placement = {
+        "policy": "MAXIMUM_LEGAL_PLACEMENT_FIXED_PARTITION",
+        "nodes": nodes,
+        "ntasks": ntasks,
+        "cpus_per_task": cpus_per_task,
+        "processes_per_node": processes_per_node,
+        "total_cpus": nodes * cpus_per_node,
+        "walltime": "00:20:00",
+    }
     path = tmp_path / "scheduler_selection.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({
-        "account": account, "partition": "observed-partition", "qos": qos,
-        "memory": "256000M", "nodes": 2, "ntasks": 64, "cpus_per_task": 1,
-        "processes_per_node": 32, "walltime": "00:20:00",
+        "account": account, "partition": partition, "qos": qos,
+        "memory": "256000M", **placement,
+        "capacity_evidence": {
+            "partition": partition, "visible_nodes": nodes,
+            "cpus_per_node": cpus_per_node, "memory_mb": 256000,
+            "min_nodes": nodes, "max_nodes": nodes,
+            "max_time": "01:00:00", "availability": "up", "state": "UP",
+            "source_files": ["scontrol_partitions.txt", "sinfo.txt"],
+            "sources": {
+                "visible_partition": {"source_file": "sinfo.txt", "source_line": 1},
+                "partition_policy": {"source_file": "scontrol_partitions.txt", "source_line": 1},
+            },
+        },
+        "derived_placement": placement,
         "source_files": ["sacctmgr_assoc.txt", "sinfo.txt", "scontrol_partitions.txt"],
-        "evidence_status_by_field": {"account": "OMITTED_WITH_SCHEDULER_DEFAULT_EVIDENCE" if account is None else "OBSERVED", "partition": "VERIFIED_BY_CROSS_SOURCE", "qos": "MISSING" if qos is None else "OBSERVED", "memory": "OBSERVED", "resource_shape": "VERIFIED_FROM_CURRENT_CLUSTER_EVIDENCE"},
-        "resource_shape_status": "VERIFIED_FROM_CURRENT_CLUSTER_EVIDENCE",
+        "evidence_status_by_field": {"account": "OMITTED_WITH_SCHEDULER_DEFAULT_EVIDENCE" if account is None else "OBSERVED", "partition": "VERIFIED_BY_CROSS_SOURCE", "qos": "MISSING" if qos is None else "OBSERVED", "memory": "OBSERVED", "resource_shape": "DERIVED_FROM_OBSERVED_CAPACITY"},
+        "resource_shape_status": "DERIVED_FROM_CURRENT_CLUSTER_CAPABILITIES",
     }, indent=2) + "\n", encoding="utf-8")
     return path
 
@@ -44,7 +70,7 @@ def _runtime_selection(tmp_path: Path, *, python_version: str = "3.11.9", siesta
         "schema_version": "1.0", "status": "RESOLVED_FROM_CURRENT_CLUSTER_EVIDENCE",
         "python": {"requirement": ">=3.11", "selected_mechanism": mechanism, "selected_executable": "observed-python", "observed_version": python_version, "evidence_source": ["current-evidence"], "environment_setup": setup},
         "siesta": {"selected_mechanism": mechanism, "selected_executable": "observed-siesta" if siesta else "", "observed_version": "5.4", "evidence_source": ["current-evidence"], "environment_setup": ["module load observed-siesta"] if module else []},
-        "launchers": {"srun": {"required": True, "selected_executable": "observed-srun", "arguments": ["--nodes=2", "--ntasks=64", "--ntasks-per-node=32"], "evidence_source": ["current-evidence"], "environment_setup": []}},
+        "launchers": {"srun": {"required": True, "selected_executable": "observed-srun", "arguments": [], "evidence_source": ["current-evidence"], "environment_setup": []}},
     }
     if hydra:
         payload["launchers"]["hydra"] = {"required": True, "selected_executable": "observed-hydra", "arguments": [], "bootstrap": hydra_bootstrap, "evidence_source": ["current-evidence"], "environment_setup": []}
@@ -55,7 +81,7 @@ def _runtime_selection(tmp_path: Path, *, python_version: str = "3.11.9", siesta
 
 
 def _login_summary(tmp_path: Path, *, partitions: list[dict[str, object]] | None = None) -> Path:
-    partition_rows = partitions or [{"name": "observed-partition", "default": True, "nodes": 2, "cpus_per_node": 64, "memory": 192000}]
+    partition_rows = partitions or [{"name": "observed-partition", "default": True, "nodes": 2, "cpus_per_node": 32, "memory": 192000}]
     associations = []
     policies = []
     visible = []
@@ -63,7 +89,7 @@ def _login_summary(tmp_path: Path, *, partitions: list[dict[str, object]] | None
         name = str(row["name"])
         associations.append({"account": "observed-account", "partition": name, "qos": None, "scope": "EXPLICIT_PARTITION_ASSOCIATION", "source_file": "sacctmgr_assoc.txt", "source_line": number, "evidence_status": "OBSERVED", "observed_at": "2026-08-25T00:00:00Z"})
         visible.append({"name": name, "availability": "up", "time_limit": "01:00:00", "nodes": row["nodes"], "cpus_per_node": row["cpus_per_node"], "memory": row["memory"], "default": row["default"], "source_file": "sinfo.txt", "source_line": number})
-        policies.append({"name": name, "allow_accounts": {"kind": "EXPLICIT_LIST", "values": ["observed-account"]}, "allow_qos": {"kind": "ALL", "values": []}, "default": row["default"], "state": "UP", "min_nodes": 1, "max_nodes": 4, "max_time": "01:00:00", "source_file": "scontrol_partitions.txt", "source_line": number})
+        policies.append({"name": name, "allow_accounts": {"kind": "EXPLICIT_LIST", "values": ["observed-account"]}, "allow_qos": {"kind": "ALL", "values": []}, "default": row["default"], "state": "UP", "min_nodes": row.get("min_nodes", row["nodes"]), "max_nodes": row.get("max_nodes", row["nodes"]), "max_time": "01:00:00", "source_file": "scontrol_partitions.txt", "source_line": number})
     path = tmp_path / "summary.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({"eligible_associations": associations, "visible_partitions": visible, "partition_policies": policies}, indent=2) + "\n", encoding="utf-8")
@@ -236,6 +262,7 @@ def test_unresolved_bundle_has_discovery_and_no_authoritative_submit(tmp_path: P
     assert (discovery / "run_runtime_candidate_probe.sh").is_file()
     assert (discovery / "build_login_summary.py").is_file()
     assert (discovery / "resolve_m10_scheduler.py").is_file()
+    assert (discovery / "scheduler_resolution.py").is_file()
     assert (discovery / "resolve_m10_runtime.py").is_file()
     run_probe = discovery / "run_login_probe.sh"
     assert run_probe.read_bytes().startswith(b"#!/usr/bin/env bash\n")
@@ -329,9 +356,14 @@ def test_global_association_expands_only_to_current_policy_compatible_partitions
     explicit = _resolve(output / "scheduler_discovery", summary_path, selected, "--account", "vini", "--partition", "tt2d-64p", "--qos", "normal")
     assert explicit.returncode == 0, explicit.stderr
     assert json.loads(selected.read_text(encoding="utf-8"))["association_scope"] == "GLOBAL_USER_ASSOCIATION"
-    for partition, reason in (("q4d-20p", "CPUS_PER_NODE_INSUFFICIENT"), ("tt1d-128p", "MIN_NODES_VIOLATED"), ("qz2d-64p", "MAX_NODES_VIOLATED")):
-        rejected = _resolve(output / "scheduler_discovery", summary_path, tmp_path / f"{partition}.json", "--account", "vini", "--partition", partition, "--qos", "normal")
-        assert rejected.returncode != 0 and reason in rejected.stderr
+    ambiguous = _resolve(output / "scheduler_discovery", summary_path, tmp_path / "q4d.json", "--account", "vini", "--partition", "q4d-20p", "--qos", "normal")
+    assert ambiguous.returncode != 0 and "NODE_RANGE_AMBIGUOUS" in ambiguous.stderr
+    for partition, expected in (("tt1d-128p", (4, 128, 32)), ("qz2d-64p", (1, 64, 64))):
+        resolved_path = tmp_path / f"{partition}.json"
+        resolved = _resolve(output / "scheduler_discovery", summary_path, resolved_path, "--account", "vini", "--partition", partition, "--qos", "normal")
+        assert resolved.returncode == 0, resolved.stderr
+        payload = json.loads(resolved_path.read_text(encoding="utf-8"))
+        assert (payload["nodes"], payload["ntasks"], payload["processes_per_node"]) == expected
 
 
 def test_module_availability_requires_verified_runtime_probe(tmp_path: Path) -> None:
@@ -413,7 +445,9 @@ def test_self_contained_m10_resolver_uses_current_shape_and_observed_memory(tmp_
     assert payload["qos"] is None
     assert payload["memory"] == "192000M"
     assert payload["memory_source"] == {"source_file": "sinfo.txt", "source_line": 1, "observed_mb": 192000}
-    assert payload["resource_shape_status"] == "VERIFIED_FROM_CURRENT_CLUSTER_EVIDENCE"
+    assert payload["resource_shape_status"] == "DERIVED_FROM_CURRENT_CLUSTER_CAPABILITIES"
+    assert payload["capacity_evidence"]["cpus_per_node"] == 32
+    assert payload["derived_placement"]["policy"] == "MAXIMUM_LEGAL_PLACEMENT_FIXED_PARTITION"
     resolved, manifest = _build(tmp_path / "resolved", selection)
     assert manifest["scheduler_profile_status"] == "RESOLVED_FROM_CLUSTER_EVIDENCE"
     assert (resolved / "preflight" / "submit_m10_preflight.slurm").is_file()
@@ -434,16 +468,41 @@ def test_m10_resolver_requires_evidence_bound_human_selection_for_multiple_candi
     assert json.loads(selected.read_text(encoding="utf-8"))["partition"] == "second"
 
 
-def test_m10_resolver_fails_closed_for_inadequate_placement_evidence(tmp_path: Path) -> None:
+def test_m10_resolver_derives_fixed_placements_and_fails_closed(tmp_path: Path) -> None:
     output, _ = _build(tmp_path)
-    for name, row in {
-        "cpus": {"name": "small-cpu", "default": True, "nodes": 2, "cpus_per_node": 31, "memory": 64000},
-        "nodes": {"name": "small-nodes", "default": True, "nodes": 1, "cpus_per_node": 32, "memory": 64000},
-        "memory": {"name": "no-memory", "default": True, "nodes": 2, "cpus_per_node": 32, "memory": None},
-    }.items():
-        result = _resolve(output / "scheduler_discovery", _login_summary(tmp_path / name, partitions=[row]), tmp_path / f"{name}.json")
-        assert result.returncode != 0
-        assert "M10_REMOTE_PROFILE_UNRESOLVED" in result.stderr
+    for name, nodes in (("one", 1), ("four", 4)):
+        result_path = tmp_path / f"{name}.json"
+        result = _resolve(
+            output / "scheduler_discovery",
+            _login_summary(tmp_path / name, partitions=[{"name": name, "default": True, "nodes": nodes, "cpus_per_node": 20, "memory": 64000}]),
+            result_path,
+        )
+        assert result.returncode == 0, result.stderr
+        payload = json.loads(result_path.read_text(encoding="utf-8"))
+        assert (payload["nodes"], payload["ntasks"], payload["processes_per_node"]) == (nodes, nodes * 20, 20)
+
+    cpus_path = tmp_path / "cpus-per-task.json"
+    cpus = _resolve(
+        output / "scheduler_discovery",
+        _login_summary(tmp_path / "cpus", partitions=[{"name": "cpus", "default": True, "nodes": 1, "cpus_per_node": 20, "memory": 64000}]),
+        cpus_path, "--cpus-per-task", "2",
+    )
+    assert cpus.returncode == 0, cpus.stderr
+    payload = json.loads(cpus_path.read_text(encoding="utf-8"))
+    assert (payload["ntasks"], payload["cpus_per_task"], payload["processes_per_node"]) == (10, 2, 10)
+
+    overcommit = _resolve(
+        output / "scheduler_discovery",
+        _login_summary(tmp_path / "overcommit", partitions=[{"name": "overcommit", "default": True, "nodes": 1, "cpus_per_node": 20, "memory": 64000}]),
+        tmp_path / "overcommit.json", "--cpus-per-task", "21",
+    )
+    assert overcommit.returncode != 0 and "CPU_OVERCOMMIT" in overcommit.stderr
+    ambiguous = _resolve(
+        output / "scheduler_discovery",
+        _login_summary(tmp_path / "ambiguous", partitions=[{"name": "ambiguous", "default": True, "nodes": 4, "min_nodes": 1, "max_nodes": 4, "cpus_per_node": 20, "memory": 64000}]),
+        tmp_path / "ambiguous.json",
+    )
+    assert ambiguous.returncode != 0 and "NODE_RANGE_AMBIGUOUS" in ambiguous.stderr
 
 
 def test_resolved_bundle_requires_explicit_evidence_bound_selection(tmp_path: Path) -> None:
@@ -469,7 +528,7 @@ def test_resolved_bundle_uses_selection_provenance_without_qos_fallback(tmp_path
     assert "#SBATCH --output=preflight/preflight.%j.out" in preflight
     assert "#SBATCH --error=preflight/preflight.%j.err" in preflight
     assert (output / "preflight").is_dir()
-    assert "srun --nodes=2 --ntasks=64 --ntasks-per-node=32 hostname" in preflight
+    assert "srun --nodes=2 --ntasks=64 --ntasks-per-node=32 --cpus-per-task=1 hostname" in preflight
     assert "observed-python" in preflight and "observed-siesta" in preflight
 
 
@@ -484,7 +543,7 @@ def test_preflight_hydra_has_explicit_multinode_single_source_contract(tmp_path:
         runtime_path,
     )
     preflight = (output / "preflight" / "submit_m10_preflight.slurm").read_text(encoding="utf-8")
-    assert "observed-hydra -bootstrap ssh -hosts \"${M10_HOSTS[0]},${M10_HOSTS[1]}\" -np 64 -ppn 32 hostname" in preflight
+    assert 'observed-hydra -bootstrap ssh -hosts "$M10_HOST_CSV" -np 64 -ppn 32 hostname' in preflight
     assert 'evidence/hydra-placement.${SLURM_JOB_ID}.txt' in preflight
     assert "M10_PREFLIGHT_HYDRA_PLACEMENT_INVALID" in preflight
     assert "test -x /usr/bin/srun" in preflight
@@ -540,6 +599,42 @@ def test_resolved_packages_are_canonical_and_backend_equivalent(tmp_path: Path) 
         worker = (root / "scripts" / "run_worker.py").read_text(encoding="utf-8")
         assert "CanonicalController" in worker and "AllocationController.from_file" not in worker
         assert (root / "provenance" / "scheduler_selection.json").is_file()
+
+
+def test_placement_is_single_source_for_campaign_srun_hydra_and_preflight(tmp_path: Path) -> None:
+    first, _ = _build(
+        tmp_path / "one",
+        _selection(tmp_path / "one", partition="fixed-one", nodes=1, cpus_per_node=20),
+        _runtime_selection(tmp_path / "one", hydra_bootstrap="ssh"),
+    )
+    second, _ = _build(
+        tmp_path / "four",
+        _selection(tmp_path / "four", partition="fixed-four", nodes=4, cpus_per_node=20),
+        _runtime_selection(tmp_path / "four", hydra_bootstrap="ssh"),
+    )
+    first_hydra = first / "sources" / "hydra" / "campaign.json"
+    first_srun = first / "sources" / "srun" / "campaign.json"
+    hydra_campaign = json.loads(first_hydra.read_text(encoding="utf-8"))
+    srun_campaign = json.loads(first_srun.read_text(encoding="utf-8"))
+    assert hydra_campaign["resources"]["nodes"] == srun_campaign["resources"]["nodes"] == 1
+    assert hydra_campaign["resources"]["ntasks"] == srun_campaign["resources"]["ntasks"] == 20
+    assert hydra_campaign["tasks"][0]["mpi_processes"] == srun_campaign["tasks"][0]["mpi_processes"] == 20
+    assert srun_campaign["runtime"]["launcher"]["arguments"][-4:] == [
+        "--nodes=1", "--ntasks=20", "--ntasks-per-node=20", "--cpus-per-task=1",
+    ]
+    preflight = (first / "preflight" / "submit_m10_preflight.slurm").read_text(encoding="utf-8")
+    assert "#SBATCH --nodes=1" in preflight and "#SBATCH --ntasks=20" in preflight
+    assert "-np 20 -ppn 20 hostname" in preflight
+    assert "srun --nodes=1 --ntasks=20 --ntasks-per-node=20 --cpus-per-task=1 hostname" in preflight
+
+    first_plan = translate_controller_config(load_controller_config(first_hydra), root=first_hydra.parent)
+    second_hydra = second / "sources" / "hydra" / "campaign.json"
+    second_plan = translate_controller_config(load_controller_config(second_hydra), root=second_hydra.parent)
+    task = "M10_SIESTA_SMOKE"
+    assert first_plan.scientific_identities[task].fingerprint == second_plan.scientific_identities[task].fingerprint
+    assert first_plan.execution_specs[task].fingerprint != second_plan.execution_specs[task].fingerprint
+    assert first_plan.execution_specs[task].partition == "fixed-one"
+    assert second_plan.execution_specs[task].partition == "fixed-four"
 
 
 def test_continuation_and_runbook_require_a_terminal_human_barrier(tmp_path: Path) -> None:

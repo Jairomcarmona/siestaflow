@@ -84,6 +84,7 @@ class ControllerTask:
 class ControllerConfig:
     campaign_id: str
     system_id: str
+    partition: str
     nodes: int
     total_cpus: int
     max_parallel_steps: int
@@ -170,6 +171,7 @@ def load_controller_config(path: Path) -> ControllerConfig:
     for field in ("partition", "memory", "walltime"):
         source = slurm if field == "partition" else resources
         _required_text(source.get(field), field)
+    partition = _required_text(slurm.get("partition"), "partition")
     account = slurm.get("account")
     if account is not None:
         if not isinstance(account, str):
@@ -421,7 +423,7 @@ def load_controller_config(path: Path) -> ControllerConfig:
     for task in tasks:
         visit(task.task_id)
     return ControllerConfig(
-        campaign_id, system_id, nodes, total_cpus, max_parallel, margin, grace,
+        campaign_id, system_id, partition, nodes, total_cpus, max_parallel, margin, grace,
         siesta, tuple(map(str, executable_args_raw)), srun_command,
         srun_arguments, bool(runtime.get("exclusive", True)),
         {str(key): str(value) for key, value in environment_raw.items()}, tuple(tasks),

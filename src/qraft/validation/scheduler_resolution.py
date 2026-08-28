@@ -162,6 +162,123 @@ def _allows(restriction: dict[str, Any], value: str | None, *, observed: bool) -
     return False
 
 
+def derive_fixed_partition_placement(
+    visible: VisiblePartition,
+    policy: PartitionPolicy,
+    *,
+    cpus_per_task: int = 1,
+    walltime: str = "00:20:00",
+) -> dict[str, Any]:
+    """Derive the maximum legal MPI placement for a fixed-size partition.
+
+    Capacity remains evidence, while the returned placement is explicitly
+    marked as derived policy.  A node range is not guessed: callers must
+    provide a separate, evidence-bound node-selection policy for that case.
+    """
+
+    failures: list[str] = []
+    if visible.name != policy.name:
+        failures.append("PARTITION_EVIDENCE_MISMATCH")
+    if (visible.availability or "").casefold() not in {
+        "up",
+        "active",
+        "available",
+    }:
+        failures.append("PARTITION_NOT_AVAILABLE")
+    if (policy.state or "").upper() != "UP":
+        failures.append("PARTITION_NOT_UP")
+    if (
+        isinstance(cpus_per_task, bool)
+        or not isinstance(cpus_per_task, int)
+        or cpus_per_task <= 0
+    ):
+        failures.append("CPUS_PER_TASK_INVALID")
+    if (
+        not isinstance(policy.min_nodes, int)
+        or not isinstance(policy.max_nodes, int)
+        or policy.min_nodes <= 0
+        or policy.max_nodes <= 0
+    ):
+        failures.append("NODE_LIMITS_NOT_OBSERVED")
+    elif policy.min_nodes != policy.max_nodes:
+        failures.append("NODE_RANGE_AMBIGUOUS")
+    nodes = policy.min_nodes if policy.min_nodes == policy.max_nodes else None
+    if (
+        nodes is not None
+        and (not isinstance(visible.nodes, int) or visible.nodes < nodes)
+    ):
+        failures.append("VISIBLE_NODES_INSUFFICIENT")
+    if not isinstance(visible.cpus_per_node, int) or visible.cpus_per_node <= 0:
+        failures.append("CPUS_PER_NODE_NOT_OBSERVED")
+    if not isinstance(visible.memory, int) or visible.memory <= 0:
+        failures.append("MEMORY_NOT_OBSERVED")
+    requested_seconds = _seconds(walltime)
+    maximum_seconds = _seconds(policy.max_time)
+    if requested_seconds is None or requested_seconds <= 0:
+        failures.append("WALLTIME_INVALID")
+    if not isinstance(policy.max_time, str) or not policy.max_time.strip():
+        failures.append("MAX_TIME_NOT_OBSERVED")
+    elif (
+        maximum_seconds is None
+        and policy.max_time.upper() not in {"UNLIMITED", "INFINITE"}
+    ):
+        failures.append("MAX_TIME_INVALID")
+    elif maximum_seconds is not None and requested_seconds is not None and requested_seconds > maximum_seconds:
+        failures.append("MAX_TIME_VIOLATED")
+
+    processes_per_node = (
+        visible.cpus_per_node // cpus_per_task
+        if isinstance(visible.cpus_per_node, int)
+        and isinstance(cpus_per_task, int)
+        and not isinstance(cpus_per_task, bool)
+        and cpus_per_task > 0
+        else 0
+    )
+    if processes_per_node <= 0:
+        failures.append("CPU_OVERCOMMIT")
+    elif processes_per_node * cpus_per_task > visible.cpus_per_node:
+        failures.append("CPU_OVERCOMMIT")
+    if failures:
+        raise ValueError("SCHEDULER_PLACEMENT_UNRESOLVED: " + ",".join(failures))
+
+    assert nodes is not None
+    assert visible.cpus_per_node is not None
+    assert visible.memory is not None
+    return {
+        "capacity_evidence": {
+            "partition": visible.name,
+            "visible_nodes": visible.nodes,
+            "cpus_per_node": visible.cpus_per_node,
+            "memory_mb": visible.memory,
+            "min_nodes": policy.min_nodes,
+            "max_nodes": policy.max_nodes,
+            "max_time": policy.max_time,
+            "availability": visible.availability,
+            "state": policy.state,
+            "source_files": sorted({visible.source_file, policy.source_file}),
+            "sources": {
+                "visible_partition": {
+                    "source_file": visible.source_file,
+                    "source_line": visible.source_line,
+                },
+                "partition_policy": {
+                    "source_file": policy.source_file,
+                    "source_line": policy.source_line,
+                },
+            },
+        },
+        "derived_placement": {
+            "policy": "MAXIMUM_LEGAL_PLACEMENT_FIXED_PARTITION",
+            "nodes": nodes,
+            "ntasks": nodes * processes_per_node,
+            "cpus_per_task": cpus_per_task,
+            "processes_per_node": processes_per_node,
+            "total_cpus": nodes * visible.cpus_per_node,
+            "walltime": walltime,
+        },
+    }
+
+
 def resolve_scheduler_candidates(associations: Iterable[SchedulerAssociation], visible_partitions: Iterable[VisiblePartition], partition_policies: Iterable[PartitionPolicy], resource_request: ResourceRequest = ResourceRequest()) -> dict[str, Any]:
     visible = {x.name: x for x in visible_partitions}
     policies = {x.name: x for x in partition_policies}

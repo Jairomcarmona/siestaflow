@@ -41,7 +41,13 @@ python3 scheduler_discovery/build_login_summary.py \
   --runtime-probe scheduler_discovery/evidence/login_probe/runtime_candidate_probe \
   --output login_summary.json
 python3 scheduler_discovery/resolve_m10_scheduler.py \
-  --login-evidence login_summary.json --output scheduler_selection.json
+  --login-evidence login_summary.json \
+  --account <evidence-backed-account> \
+  --partition <evidence-backed-partition> \
+  --qos <evidence-backed-qos-if-required> \
+  --cpus-per-task <workflow-cpus-per-task> \
+  --walltime <workflow-walltime> \
+  --output scheduler_selection.json
 # Inspect login_summary.json and copy only its reviewed executable paths.
 # Do not omit these selections when multiple candidates are present.
 # Inspect the observed Hydra launcher mechanisms in login_summary.json. If no
@@ -64,6 +70,10 @@ cat scheduler_selection.json runtime_selection.json
 
 If scheduler evidence has multiple candidates, choose only an evidence-backed
 account/partition/QoS with the resolver’s explicit arguments. A reviewed
+fixed-size partition (`min_nodes == max_nodes`) produces the maximum legal MPI
+placement from its observed nodes and CPUs/node. A node range fails closed;
+the resolver never guesses a node count. Review `capacity_evidence` separately
+from `derived_placement` before accepting the selection. A reviewed
 runtime choice may use PATH with `environment_setup: []`, or only a verified
 module probe. Hydra is eligible only when its selected module environment
 actually exposes it and the observed help records its launcher mechanisms.
@@ -77,8 +87,9 @@ When bootstrap is not observed in the environment, a human explicitly selects
 one technically observed mechanism under an administrative policy. The policy
 may direct `-bootstrap <mechanism>` even though the technical help documented
 the mechanism through `-launcher`; its exact evidence-file SHA-256 is recorded
-in the runtime selection. That selected value then becomes the Hydra runtime
-environment and canonical ExecutionSpec fingerprint. An administrative policy
+in the runtime selection. That selected value then becomes an explicit Hydra
+launcher argument and part of the canonical ExecutionSpec fingerprint. An
+administrative policy
 that discovery cannot detect never becomes a default.
 
 **HUMAN REVIEW GATE:** transfer the exact reviewed selection files to the
@@ -94,11 +105,13 @@ python tools/build_yoltla_m10_acceptance.py `
 ## Compute-node preflight
 
 Transfer and extract the resolved bundle to the shared submission directory.
-The preflight replays the reviewed runtime selection inside a two-node batch
-allocation, verifies the shared marker and manifest on both hosts, checks the
-selected Python >=3.11 and SIESTA visibility, explicitly proves 64 `srun`
-ranks at 32 ranks/node, and runs the selected Hydra harmless hostname launch.
-It does not execute `smoke.fdf` or SIESTA.
+The preflight replays the reviewed runtime and derived placement inside the
+selected batch allocation, verifies the shared marker and manifest on every
+host, checks the selected Python >=3.11 and SIESTA visibility, proves the
+derived `srun` ranks and ranks/node, and runs the selected Hydra harmless
+hostname launch with the same placement. It does not execute `smoke.fdf` or
+SIESTA. The completed historical `tt2d-64p` 2-node, 64-rank, 32-rank/node run
+remains a baseline, not production placement authority.
 
 ```bash
 cd /path/to/qraft-m10-yoltla-bundle

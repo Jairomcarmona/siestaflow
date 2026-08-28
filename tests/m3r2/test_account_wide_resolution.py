@@ -12,7 +12,10 @@ from qraft.remote_environment import EnvironmentProbePackager
 from qraft.validation.scheduler_resolution import (
     AssociationScope,
     ResourceRequest,
+    PartitionPolicy,
+    VisiblePartition,
     apply_human_selection,
+    derive_fixed_partition_placement,
     parse_sacctmgr_associations,
     parse_scontrol_partitions,
     parse_sinfo_partitions,
@@ -116,6 +119,38 @@ def test_evidence_bound_human_selection():
     assert chosen["selection_policy"] == "HUMAN_SELECTION_EVIDENCE_BOUND"
     with pytest.raises(ValueError, match="USER_SELECTION_NOT_SUPPORTED_BY_EVIDENCE"):
         apply_human_selection(result, "a", "unobserved", "q")
+
+
+@pytest.mark.parametrize(
+    "nodes,cpus_per_node,cpus_per_task,expected_tasks,expected_ppn",
+    [(2, 32, 1, 64, 32), (1, 20, 1, 20, 20), (4, 20, 1, 80, 20), (1, 20, 2, 10, 10)],
+)
+def test_fixed_partition_placement_is_derived_from_observed_capacity(
+    nodes, cpus_per_node, cpus_per_task, expected_tasks, expected_ppn
+):
+    visible = VisiblePartition("p", "up", "01:00:00", nodes, cpus_per_node, 64000, False, "sinfo.txt", 1)
+    policy = PartitionPolicy("p", {"kind": "ALL", "values": []}, {"kind": "ALL", "values": []}, False, "UP", nodes, nodes, "01:00:00", "scontrol.txt", 1)
+    result = derive_fixed_partition_placement(visible, policy, cpus_per_task=cpus_per_task)
+    assert result["capacity_evidence"]["cpus_per_node"] == cpus_per_node
+    assert result["derived_placement"] == {
+        "policy": "MAXIMUM_LEGAL_PLACEMENT_FIXED_PARTITION",
+        "nodes": nodes,
+        "ntasks": expected_tasks,
+        "cpus_per_task": cpus_per_task,
+        "processes_per_node": expected_ppn,
+        "total_cpus": nodes * cpus_per_node,
+        "walltime": "00:20:00",
+    }
+
+
+def test_fixed_partition_placement_fails_closed_on_overcommit_and_node_range():
+    visible = VisiblePartition("p", "up", "01:00:00", 4, 20, 64000, False, "sinfo.txt", 1)
+    fixed = PartitionPolicy("p", {"kind": "ALL", "values": []}, {"kind": "ALL", "values": []}, False, "UP", 1, 1, "01:00:00", "scontrol.txt", 1)
+    with pytest.raises(ValueError, match="CPU_OVERCOMMIT"):
+        derive_fixed_partition_placement(visible, fixed, cpus_per_task=21)
+    ranged = PartitionPolicy("p", {"kind": "ALL", "values": []}, {"kind": "ALL", "values": []}, False, "UP", 1, 4, "01:00:00", "scontrol.txt", 1)
+    with pytest.raises(ValueError, match="NODE_RANGE_AMBIGUOUS"):
+        derive_fixed_partition_placement(visible, ranged)
 
 
 def test_generated_slurm_runtime_from_real_sanitized_fixture(tmp_path: Path):

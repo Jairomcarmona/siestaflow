@@ -99,7 +99,13 @@ class ControllerPackageBuilder:
                 self.repository_root / "src/qraft/core",
                 self.repository_root / "src/qraft/engines/siesta",
             )
-            for path in sorted(item for item in directory.rglob("*") if item.is_file())
+            for path in sorted(
+                item
+                for item in directory.rglob("*")
+                if item.is_file()
+                and "__pycache__" not in item.parts
+                and item.suffix != ".pyc"
+            )
         )
         standalone = (
             "src/qraft/engines/base.py",
@@ -276,7 +282,9 @@ class ControllerPackageBuilder:
             "selected_account": campaign["slurm"].get("account"),
             "selected_qos": qos,
             "selected_nodes": campaign["resources"]["nodes"],
-            "selected_total_ranks": campaign["resources"]["total_cpus"],
+            "selected_total_ranks": campaign["resources"].get(
+                "ntasks", campaign["resources"]["total_cpus"]
+            ),
             "selected_walltime": campaign["resources"]["walltime"],
         }
         if any(resolution.get(key) != value for key, value in expected.items()):
@@ -303,6 +311,20 @@ class ControllerPackageBuilder:
         siesta_executable = _directive(runtime["siesta_executable"], "siesta_executable")
         launcher = runtime.get("launcher", {})
         ppn = launcher.get("processes_per_node") if isinstance(launcher, dict) else None
+        ntasks = resources.get("ntasks", resources["total_cpus"])
+        cpus_per_task = resources.get("cpus_per_task", 1)
+        total_cpus = resources["total_cpus"]
+        for value, field in (
+            (ntasks, "resources.ntasks"),
+            (cpus_per_task, "resources.cpus_per_task"),
+            (total_cpus, "resources.total_cpus"),
+        ):
+            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+                raise ValueError(f"{field} must be a positive integer")
+        if ntasks * cpus_per_task > total_cpus:
+            raise ValueError("task placement exceeds allocated CPU capacity")
+        if ppn is not None and resources["nodes"] * ppn != ntasks:
+            raise ValueError("nodes * processes_per_node must equal ntasks")
         placement = (
             f"#SBATCH --ntasks-per-node={_directive(ppn, 'processes_per_node')}\n"
             if ppn is not None else ""
@@ -330,8 +352,8 @@ class ControllerPackageBuilder:
 #SBATCH --job-name={_directive(campaign["campaign_id"], "campaign_id")[:64]}
 #SBATCH --partition={_directive(slurm["partition"], "partition")}
 {account_directive}{qos_directive}#SBATCH --nodes={_directive(resources["nodes"], "nodes")}
-#SBATCH --ntasks={_directive(resources["total_cpus"], "total_cpus")}
-{placement}#SBATCH --cpus-per-task=1
+#SBATCH --ntasks={_directive(ntasks, "ntasks")}
+{placement}#SBATCH --cpus-per-task={_directive(cpus_per_task, "cpus_per_task")}
 #SBATCH --hint=nomultithread
 #SBATCH --mem={_directive(resources["memory"], "memory")}
 #SBATCH --time={_directive(resources["walltime"], "walltime")}
@@ -446,7 +468,7 @@ if (root/"run.lock.json").is_file():
  if isinstance(resolution,dict) and resolution.get("resolution_mode")!="PROFILE_ALREADY_RESOLVED":
   if resolution.get("human_confirmed") is not True: fail("HUMAN_CONFIRMATION_REQUIRED")
   campaign=json.loads((root/"campaign.yaml").read_text(encoding="utf-8"))
-  expected={{"selected_partition":campaign["slurm"]["partition"],"selected_account":campaign["slurm"].get("account"),"selected_qos":campaign["slurm"].get("qos"),"selected_nodes":campaign["resources"]["nodes"],"selected_total_ranks":campaign["resources"]["total_cpus"],"selected_walltime":campaign["resources"]["walltime"]}}
+  expected={{"selected_partition":campaign["slurm"]["partition"],"selected_account":campaign["slurm"].get("account"),"selected_qos":campaign["slurm"].get("qos"),"selected_nodes":campaign["resources"]["nodes"],"selected_total_ranks":campaign["resources"].get("ntasks",campaign["resources"]["total_cpus"]),"selected_walltime":campaign["resources"]["walltime"]}}
   if any(resolution.get(key)!=value for key,value in expected.items()): fail("RUN_LOCK_SUBMIT_COHERENCE_MISMATCH")
   directives={{}}
   for line in (root/"submit.slurm").read_text(encoding="utf-8").splitlines():
