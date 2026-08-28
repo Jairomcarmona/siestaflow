@@ -11,7 +11,7 @@ from zipfile import ZipFile
 REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO), str(REPO / "src")]
 
-from tools.build_yoltla_m10_acceptance import _copy_linux_text
+from tools.build_yoltla_m10_acceptance import CAMPAIGN_ID, _copy_linux_text
 from tools.build_yoltla_m10_login_summary import _hydra_launcher_mechanisms, build as build_login_summary
 from tools.resolve_yoltla_m10_runtime import resolve as resolve_runtime
 from qraft.execution.allocation_controller import load_controller_config
@@ -37,7 +37,7 @@ def _selection(
     return path
 
 
-def _runtime_selection(tmp_path: Path, *, python_version: str = "3.11.9", siesta: bool = True, hydra: bool = True, module: bool = False) -> Path:
+def _runtime_selection(tmp_path: Path, *, python_version: str = "3.11.9", siesta: bool = True, hydra: bool = True, module: bool = False, hydra_bootstrap: object = "slurm") -> Path:
     mechanism = "MODULE" if module else "PATH"
     setup = ["module load observed-python"] if module else []
     payload = {
@@ -47,7 +47,7 @@ def _runtime_selection(tmp_path: Path, *, python_version: str = "3.11.9", siesta
         "launchers": {"srun": {"required": True, "selected_executable": "observed-srun", "arguments": ["--nodes=2", "--ntasks=64", "--ntasks-per-node=32"], "evidence_source": ["current-evidence"], "environment_setup": []}},
     }
     if hydra:
-        payload["launchers"]["hydra"] = {"required": True, "selected_executable": "observed-hydra", "arguments": [], "bootstrap": "slurm", "evidence_source": ["current-evidence"], "environment_setup": []}
+        payload["launchers"]["hydra"] = {"required": True, "selected_executable": "observed-hydra", "arguments": [], "bootstrap": hydra_bootstrap, "evidence_source": ["current-evidence"], "environment_setup": []}
     path = tmp_path / "runtime_selection.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
@@ -170,6 +170,60 @@ def _build(tmp_path: Path, selection: Path | None = None, runtime: Path | None =
     result = subprocess.run(command, cwd=REPO, env=env, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     return output, json.loads(result.stdout)
+
+
+def _build_result(tmp_path: Path, selection: Path, runtime: Path) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy(); env["PYTHONPATH"] = str(REPO / "src")
+    return subprocess.run(
+        [
+            sys.executable, "tools/build_yoltla_m10_acceptance.py",
+            "--output", str(tmp_path / "m10"),
+            "--scheduler-selection", str(selection),
+            "--runtime-selection", str(runtime),
+        ],
+        cwd=REPO, env=env, capture_output=True, text=True,
+    )
+
+
+def test_m10_hydra_bootstrap_is_explicit_and_only_in_launcher_contract(
+    tmp_path: Path,
+) -> None:
+    output, _ = _build(
+        tmp_path,
+        _selection(tmp_path),
+        _runtime_selection(tmp_path, hydra_bootstrap="ssh"),
+    )
+    hydra_source = output / "sources" / "hydra"
+    hydra_campaign = json.loads((hydra_source / "campaign.json").read_text())
+    srun_campaign = json.loads(
+        (output / "sources" / "srun" / "campaign.json").read_text()
+    )
+    assert hydra_campaign["runtime"]["launcher"]["bootstrap"] == "ssh"
+    assert "I_MPI_HYDRA_BOOTSTRAP" not in hydra_campaign["runtime"]["environment"]
+    assert "I_MPI_HYDRA_BOOTSTRAP" not in (output / "packages" / "hydra" / CAMPAIGN_ID / "submit.slurm").read_text()
+    assert "bootstrap" not in srun_campaign["runtime"]["launcher"]
+    assert "FI_PSM3_UUID" not in json.dumps(hydra_campaign)
+    execution = translate_controller_config(
+        load_controller_config(hydra_source / "campaign.json"), root=hydra_source
+    ).execution_specs["M10_SIESTA_SMOKE"]
+    assert execution.launcher_arguments == ("-bootstrap", "ssh")
+    builder_source = (REPO / "tools" / "build_yoltla_m10_acceptance.py").read_text()
+    assert 'get("bootstrap", "evidence-bound")' not in builder_source
+    assert '"bootstrap": "evidence-bound"' not in builder_source
+
+
+def test_m10_hydra_builder_rejects_missing_or_empty_bootstrap(tmp_path: Path) -> None:
+    for name, bootstrap in (("missing", None), ("empty", "")):
+        root = tmp_path / name
+        selection = _selection(root)
+        runtime = _runtime_selection(root, hydra_bootstrap=bootstrap)
+        if bootstrap is None:
+            data = json.loads(runtime.read_text())
+            data["launchers"]["hydra"].pop("bootstrap")
+            runtime.write_text(json.dumps(data), encoding="utf-8")
+        result = _build_result(root, selection, runtime)
+        assert result.returncode != 0
+        assert "invalid launchers.hydra.bootstrap" in result.stderr
 
 
 def test_unresolved_bundle_has_discovery_and_no_authoritative_submit(tmp_path: Path) -> None:

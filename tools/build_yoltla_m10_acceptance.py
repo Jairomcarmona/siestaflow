@@ -107,6 +107,14 @@ def _runtime_commands(value: object, field: str) -> list[str]:
     return list(value)
 
 
+def _hydra_bootstrap(value: object) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(
+            "M10_RUNTIME_PROFILE_UNRESOLVED: invalid launchers.hydra.bootstrap"
+        )
+    return value.strip()
+
+
 def _load_runtime_selection(path: Path) -> dict[str, Any]:
     """Load only a reviewed, evidence-bound M10 runtime selection."""
 
@@ -145,6 +153,8 @@ def _load_runtime_selection(path: Path) -> dict[str, Any]:
         _runtime_commands(payload.get("environment_setup", []), f"launchers.{name}.environment_setup")
         if not payload.get("evidence_source"):
             raise ValueError(f"M10_RUNTIME_PROFILE_UNRESOLVED: missing {name} evidence")
+        if name == "hydra":
+            _hydra_bootstrap(payload.get("bootstrap"))
     srun_args = result["launchers"]["srun"]["arguments"]
     for required in ("--nodes=2", "--ntasks=64", "--ntasks-per-node=32"):
         if required not in srun_args:
@@ -190,12 +200,11 @@ def _siesta_campaign(repository: Path, selection: Mapping[str, Any], runtime: Ma
     launcher_data: dict[str, Any] = {
         "kind": launcher, "command": [selected_launcher["selected_executable"]],
         "arguments": selected_launcher["arguments"],
-        "bootstrap": selected_launcher.get("bootstrap", "evidence-bound"),
         "processes_per_node": RESOURCE_SHAPE["processes_per_node"],
     }
-    runtime_environment = {"OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1", "MKL_NUM_THREADS": "1"}
     if launcher == "hydra":
-        runtime_environment["I_MPI_HYDRA_BOOTSTRAP"] = str(selected_launcher["bootstrap"])
+        launcher_data["bootstrap"] = _hydra_bootstrap(selected_launcher.get("bootstrap"))
+    runtime_environment = {"OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1", "MKL_NUM_THREADS": "1"}
     campaign = {
         "schema_version": "2.0", "campaign_id": CAMPAIGN_ID, "system_id": SYSTEM_ID,
         "classification": ["NON_SCIENTIFIC_TECHNICAL_ACCEPTANCE", "ENERGY_INTERPRETATION_FORBIDDEN"],
@@ -219,7 +228,7 @@ def _continuation_campaign(selection: Mapping[str, Any], runtime: Mapping[str, A
         "schema_version": "2.0", "campaign_id": CONTINUATION_CAMPAIGN_ID, "system_id": "M10_ALLOCATION_CONTINUATION_TECHNICAL",
         "classification": ["NON_SCIENTIFIC_TECHNICAL_ACCEPTANCE", "ENERGY_INTERPRETATION_FORBIDDEN"], "slurm": _slurm(selection),
         "resources": {"nodes": 2, "total_cpus": 64, "memory": selection["memory"], "walltime": "00:03:00", "max_parallel_steps": 1, "shutdown_margin_seconds": CONTINUATION_SHUTDOWN_MARGIN_SECONDS, "termination_grace_seconds": 10},
-        "runtime": {"module_commands": _runtime_environment(runtime, "srun"), "siesta_executable": runtime["python"]["selected_executable"], "executable_arguments": [], "launcher": {"kind": "srun", "command": [runtime["launchers"]["srun"]["selected_executable"]], "arguments": runtime["launchers"]["srun"]["arguments"], "bootstrap": "evidence-bound", "processes_per_node": 32}, "exclusive": True, "environment": {}},
+        "runtime": {"module_commands": _runtime_environment(runtime, "srun"), "siesta_executable": runtime["python"]["selected_executable"], "executable_arguments": [], "launcher": {"kind": "srun", "command": [runtime["launchers"]["srun"]["selected_executable"]], "arguments": runtime["launchers"]["srun"]["arguments"], "processes_per_node": 32}, "exclusive": True, "environment": {}},
         "tasks": [
             {"task_id": "STAGE_A", "command": [runtime["python"]["selected_executable"], "-c", "from pathlib import Path; import time; time.sleep(4); Path('stage_a.complete').write_text('complete\\n', encoding='utf-8')"], "estimated_runtime_seconds": CONTINUATION_STAGE_A_ESTIMATE_SECONDS, **task_base},
             {"task_id": "STAGE_B", "command": [runtime["python"]["selected_executable"], "-c", "from pathlib import Path; import time; time.sleep(2); Path('stage_b.complete').write_text('complete\\n', encoding='utf-8')"], "depends_on": ["STAGE_A"], "estimated_runtime_seconds": CONTINUATION_STAGE_B_ESTIMATE_SECONDS, **task_base},
