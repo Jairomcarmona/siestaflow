@@ -63,12 +63,12 @@ def _selection(
     return path
 
 
-def _runtime_selection(tmp_path: Path, *, python_version: str = "3.11.9", siesta: bool = True, hydra: bool = True, module: bool = False, hydra_bootstrap: object = "slurm") -> Path:
+def _runtime_selection(tmp_path: Path, *, python_version: str = "3.11.9", siesta: bool = True, hydra: bool = True, module: bool = False, hydra_bootstrap: object = "slurm", selected_python: str = "observed-python", observed_python_path: str = "/opt/observed/python3") -> Path:
     mechanism = "MODULE" if module else "PATH"
     setup = ["module load observed-python"] if module else []
     payload = {
         "schema_version": "1.0", "status": "RESOLVED_FROM_CURRENT_CLUSTER_EVIDENCE",
-        "python": {"requirement": ">=3.11", "selected_mechanism": mechanism, "selected_executable": "observed-python", "observed_version": python_version, "evidence_source": ["current-evidence"], "environment_setup": setup},
+        "python": {"requirement": ">=3.11", "selected_mechanism": mechanism, "selected_executable": selected_python, "observed_path": observed_python_path, "observed_version": python_version, "evidence_source": ["current-evidence"], "environment_setup": setup},
         "siesta": {"selected_mechanism": mechanism, "selected_executable": "observed-siesta" if siesta else "", "observed_version": "5.4", "evidence_source": ["current-evidence"], "environment_setup": ["module load observed-siesta"] if module else []},
         "launchers": {"srun": {"required": True, "selected_executable": "observed-srun", "arguments": [], "evidence_source": ["current-evidence"], "environment_setup": []}},
     }
@@ -236,6 +236,57 @@ def test_m10_hydra_bootstrap_is_explicit_and_only_in_launcher_contract(
     builder_source = (REPO / "tools" / "build_yoltla_m10_acceptance.py").read_text()
     assert 'get("bootstrap", "evidence-bound")' not in builder_source
     assert '"bootstrap": "evidence-bound"' not in builder_source
+
+
+def test_m10_controller_package_uses_the_observed_python_path(tmp_path: Path) -> None:
+    def build_with_python(root: Path, observed_python_path: str):
+        output, _ = _build(
+            root,
+            _selection(root),
+            _runtime_selection(
+                root,
+                hydra_bootstrap="ssh",
+                selected_python="python3",
+                observed_python_path=observed_python_path,
+            ),
+        )
+        source = output / "sources" / "hydra"
+        campaign = json.loads((source / "campaign.json").read_text(encoding="utf-8"))
+        plan = translate_controller_config(
+            load_controller_config(source / "campaign.json"), root=source
+        )
+        execution = plan.execution_specs["M10_SIESTA_SMOKE"]
+        submit = (
+            output / "packages" / "hydra" / CAMPAIGN_ID / "submit.slurm"
+        ).read_text(encoding="utf-8")
+        return campaign, plan.scientific_identities["M10_SIESTA_SMOKE"], execution, submit
+
+    first_path = "/evidence/python/3.12/bin/python3"
+    second_path = "/evidence/alternate-python/bin/python3"
+    first_campaign, first_identity, first_execution, first_submit = build_with_python(
+        tmp_path / "first", first_path
+    )
+    second_campaign, second_identity, second_execution, second_submit = build_with_python(
+        tmp_path / "second", second_path
+    )
+
+    for campaign, execution, submit, expected_path in (
+        (first_campaign, first_execution, first_submit, first_path),
+        (second_campaign, second_execution, second_submit, second_path),
+    ):
+        assert campaign["runtime"]["environment"]["QRAFT_PYTHON"] == expected_path
+        assert execution.environment["QRAFT_PYTHON"] == expected_path
+        assert "python3() {" not in json.dumps(campaign)
+        assert f"export QRAFT_PYTHON={expected_path}" in submit
+        assert '"$QRAFT_PYTHON" verify_package.py' in submit
+        assert 'exec "$QRAFT_PYTHON" scripts/run_worker.py campaign.yaml "$ROOT"' in submit
+        assert "python3() {" not in submit
+        assert "python3 verify_package.py" not in submit
+        assert "exec python3 scripts/run_worker.py" not in submit
+
+    assert first_identity.fingerprint == second_identity.fingerprint
+    assert first_execution.fingerprint != second_execution.fingerprint
+    assert "/LUSTRE" not in (REPO / "tools" / "build_yoltla_m10_acceptance.py").read_text(encoding="utf-8")
 
 
 def test_m10_hydra_builder_rejects_missing_or_empty_bootstrap(tmp_path: Path) -> None:

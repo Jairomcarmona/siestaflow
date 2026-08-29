@@ -147,7 +147,9 @@ def test_controller_package_is_reproducible_and_cleanly_verifies(tmp_path: Path)
     submit = (root / "submit.slurm").read_text()
     assert "QRAFT_SIESTA_MODULE_LOAD_WARNING" in submit
     assert "siesta --version" not in submit
-    assert "python3 scripts/run_worker.py" in submit
+    assert "export QRAFT_PYTHON=python3" in submit
+    assert '"$QRAFT_PYTHON" verify_package.py' in submit
+    assert 'exec "$QRAFT_PYTHON" scripts/run_worker.py campaign.yaml "$ROOT"' in submit
     assert submit.count("#SBATCH --account=vini") == 1
     assert submit.index("export OMP_NUM_THREADS=1") < submit.index("command -v siesta")
 

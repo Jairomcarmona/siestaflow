@@ -172,6 +172,8 @@ def _load_runtime_selection(path: Path) -> dict[str, Any]:
         if payload.get("selected_mechanism") not in {"PATH", "MODULE", "OTHER_EVIDENCE_BOUND"}:
             raise ValueError(f"M10_RUNTIME_PROFILE_UNRESOLVED: invalid {component} mechanism")
         _runtime_text(payload.get("selected_executable"), f"{component}.selected_executable")
+        if component == "python":
+            _selected_python_path({"python": payload})
         _runtime_text(payload.get("observed_version"), f"{component}.observed_version")
         _runtime_commands(payload.get("environment_setup", []), f"{component}.environment_setup")
         if not payload.get("evidence_source"):
@@ -243,13 +245,20 @@ def _runtime_setup(runtime: Mapping[str, Any], launcher: str | None = None) -> l
     return commands
 
 
-def _runtime_environment(runtime: Mapping[str, Any], launcher: str | None = None) -> list[str]:
-    commands = _runtime_setup(runtime, launcher)
-    # Controller packages invoke their embedded worker as python3.  This shell
-    # function makes that invocation the reviewed executable, without assuming
-    # that a cluster's login default is suitable.
-    commands.append(f"python3() {{ {shlex.quote(runtime['python']['selected_executable'])} \"$@\"; }}")
-    return commands
+def _selected_python_path(runtime: Mapping[str, Any]) -> str:
+    value = runtime["python"].get("observed_path")
+    if (
+        not isinstance(value, str)
+        or not value.startswith("/")
+        or value != value.strip()
+        or "\x00" in value
+        or "\n" in value
+        or "\r" in value
+    ):
+        raise ValueError(
+            "M10_RUNTIME_PROFILE_UNRESOLVED: Python observed_path must be an absolute executable path"
+        )
+    return value
 
 
 def _siesta_campaign(repository: Path, selection: Mapping[str, Any], runtime: Mapping[str, Any], launcher: str, source: Path) -> Path:
@@ -266,13 +275,18 @@ def _siesta_campaign(repository: Path, selection: Mapping[str, Any], runtime: Ma
     }
     if launcher == "hydra":
         launcher_data["bootstrap"] = _hydra_bootstrap(selected_launcher.get("bootstrap"))
-    runtime_environment = {"OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1", "MKL_NUM_THREADS": "1"}
+    runtime_environment = {
+        "QRAFT_PYTHON": _selected_python_path(runtime),
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
+    }
     campaign = {
         "schema_version": "2.0", "campaign_id": CAMPAIGN_ID, "system_id": SYSTEM_ID,
         "classification": ["NON_SCIENTIFIC_TECHNICAL_ACCEPTANCE", "ENERGY_INTERPRETATION_FORBIDDEN"],
         "slurm": _slurm(selection),
         "resources": {"nodes": placement["nodes"], "total_cpus": placement["total_cpus"], "ntasks": placement["ntasks"], "cpus_per_task": placement["cpus_per_task"], "memory": selection["memory"], "walltime": placement["walltime"], "max_parallel_steps": 1, "shutdown_margin_seconds": 120, "termination_grace_seconds": 30},
-        "runtime": {"module_commands": _runtime_environment(runtime, launcher), "siesta_executable": runtime["siesta"]["selected_executable"], "executable_arguments": [], "launcher": launcher_data, "exclusive": True, "environment": runtime_environment},
+        "runtime": {"module_commands": _runtime_setup(runtime, launcher), "siesta_executable": runtime["siesta"]["selected_executable"], "executable_arguments": [], "launcher": launcher_data, "exclusive": True, "environment": runtime_environment},
         "tasks": [{"task_id": "M10_SIESTA_SMOKE", "input": "input/smoke.fdf", "input_hashes": hashes, "required_artifacts": [], "mpi_processes": placement["ntasks"], "cpus_per_process": placement["cpus_per_task"], "nodes": placement["nodes"], "estimated_runtime_seconds": 600, "max_attempts": 1, "require_scf_converged": True}],
     }
     path = source / "campaign.json"
@@ -291,7 +305,7 @@ def _continuation_campaign(selection: Mapping[str, Any], runtime: Mapping[str, A
         "schema_version": "2.0", "campaign_id": CONTINUATION_CAMPAIGN_ID, "system_id": "M10_ALLOCATION_CONTINUATION_TECHNICAL",
         "classification": ["NON_SCIENTIFIC_TECHNICAL_ACCEPTANCE", "ENERGY_INTERPRETATION_FORBIDDEN"], "slurm": _slurm(selection),
         "resources": {"nodes": placement["nodes"], "total_cpus": placement["total_cpus"], "ntasks": placement["ntasks"], "cpus_per_task": placement["cpus_per_task"], "memory": selection["memory"], "walltime": "00:03:00", "max_parallel_steps": 1, "shutdown_margin_seconds": CONTINUATION_SHUTDOWN_MARGIN_SECONDS, "termination_grace_seconds": 10},
-        "runtime": {"module_commands": _runtime_environment(runtime, "srun"), "siesta_executable": runtime["python"]["selected_executable"], "executable_arguments": [], "launcher": {"kind": "srun", "command": [runtime["launchers"]["srun"]["selected_executable"]], "arguments": _srun_arguments(runtime, placement), "processes_per_node": placement["processes_per_node"]}, "exclusive": True, "environment": {}},
+        "runtime": {"module_commands": _runtime_setup(runtime, "srun"), "siesta_executable": runtime["python"]["selected_executable"], "executable_arguments": [], "launcher": {"kind": "srun", "command": [runtime["launchers"]["srun"]["selected_executable"]], "arguments": _srun_arguments(runtime, placement), "processes_per_node": placement["processes_per_node"]}, "exclusive": True, "environment": {"QRAFT_PYTHON": _selected_python_path(runtime)}},
         "tasks": [
             {"task_id": "STAGE_A", "command": [runtime["python"]["selected_executable"], "-c", "from pathlib import Path; import time; time.sleep(4); Path('stage_a.complete').write_text('complete\\n', encoding='utf-8')"], "estimated_runtime_seconds": CONTINUATION_STAGE_A_ESTIMATE_SECONDS, **task_base},
             {"task_id": "STAGE_B", "command": [runtime["python"]["selected_executable"], "-c", "from pathlib import Path; import time; time.sleep(2); Path('stage_b.complete').write_text('complete\\n', encoding='utf-8')"], "depends_on": ["STAGE_A"], "estimated_runtime_seconds": CONTINUATION_STAGE_B_ESTIMATE_SECONDS, **task_base},

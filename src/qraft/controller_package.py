@@ -332,10 +332,20 @@ class ControllerPackageBuilder:
         environment = runtime.get("environment", {})
         if not isinstance(environment, dict):
             raise ValueError("runtime.environment must be a mapping")
+        python_executable = str(environment.get("QRAFT_PYTHON", "python3")).strip()
+        if (
+            not python_executable
+            or "\x00" in python_executable
+            or "\n" in python_executable
+            or "\r" in python_executable
+        ):
+            raise ValueError("runtime QRAFT_PYTHON must be a non-empty executable path")
         environment_lines: list[str] = []
         for name, value in environment.items():
             if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", str(name)):
                 raise ValueError(f"unsafe environment variable name: {name}")
+            if name == "QRAFT_PYTHON":
+                continue
             environment_lines.append(f"export {name}={shlex.quote(str(value))}")
         environment_text = "\n".join(environment_lines) or ": # no environment overrides"
         signal_seconds = int(resources["shutdown_margin_seconds"])
@@ -365,14 +375,19 @@ ROOT="$(cd "${{SLURM_SUBMIT_DIR:?SLURM_SUBMIT_DIR required}}" && pwd -P)"
 cd "$ROOT"
 {module_lines}
 {environment_text}
+export QRAFT_PYTHON={shlex.quote(python_executable)}
 if ! command -v {siesta_executable} >/dev/null 2>&1; then
   echo "QRAFT_SIESTA_EXECUTABLE_UNAVAILABLE: {siesta_executable}" >&2
   exit 127
 fi
 export PYTHONPATH="$ROOT/runtime"
 export PYTHONDONTWRITEBYTECODE=1
-python3 verify_package.py
-exec python3 scripts/run_worker.py campaign.yaml "$ROOT"
+if ! command -v "$QRAFT_PYTHON" >/dev/null 2>&1; then
+  echo "QRAFT_SELECTED_PYTHON_UNAVAILABLE: $QRAFT_PYTHON" >&2
+  exit 127
+fi
+"$QRAFT_PYTHON" verify_package.py
+exec "$QRAFT_PYTHON" scripts/run_worker.py campaign.yaml "$ROOT"
 """
 
     @staticmethod
