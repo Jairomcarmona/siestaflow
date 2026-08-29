@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import signal
 import subprocess
 import threading
@@ -24,6 +25,26 @@ def _positive_int(value: str | None, name: str) -> int:
     return parsed
 
 
+def parse_slurm_tasks_per_node(value: str) -> tuple[int, ...]:
+    """Expand Slurm counts such as ``20(x4),16,8(x2)`` exactly."""
+
+    text = str(value).strip()
+    if not text:
+        raise ValueError("missing or invalid SLURM value: SLURM_TASKS_PER_NODE")
+    expanded: list[int] = []
+    for raw in text.split(","):
+        token = raw.strip()
+        match = re.fullmatch(r"([1-9][0-9]*)(?:\(x([1-9][0-9]*)\))?", token, re.I)
+        if match is None:
+            raise ValueError(
+                "missing or invalid SLURM value: SLURM_TASKS_PER_NODE"
+            )
+        tasks = int(match.group(1))
+        repeat = int(match.group(2) or 1)
+        expanded.extend([tasks] * repeat)
+    return tuple(expanded)
+
+
 @dataclass(frozen=True)
 class SlurmEnvironment:
     """Allocation identity and capacity derived only from the process environment."""
@@ -35,6 +56,7 @@ class SlurmEnvironment:
     nodes: int
     ntasks: int
     cpus_per_task: int
+    tasks_per_node: tuple[int, ...] = ()
     node_list_expression: str | None = None
     declared_hostnames: tuple[str, ...] = ()
 
@@ -60,6 +82,12 @@ class SlurmEnvironment:
         ntasks = _positive_int(env.get("SLURM_NTASKS"), "SLURM_NTASKS")
         cpus_per_task = _positive_int(env.get("SLURM_CPUS_PER_TASK", "1"), "SLURM_CPUS_PER_TASK")
         total_cpus = ntasks * cpus_per_task
+        tasks_per_node_raw = str(env.get("SLURM_TASKS_PER_NODE", "")).strip()
+        tasks_per_node = (
+            parse_slurm_tasks_per_node(tasks_per_node_raw)
+            if tasks_per_node_raw
+            else ()
+        )
         node_list = str(env.get("SLURM_JOB_NODELIST", "")).strip() or None
         explicit_hosts = tuple(
             item.strip()
@@ -72,7 +100,7 @@ class SlurmEnvironment:
             )
         return cls(
             job_id, submit_dir, end_time, total_cpus, nodes, ntasks,
-            cpus_per_task, node_list, explicit_hosts,
+            cpus_per_task, tasks_per_node, node_list, explicit_hosts,
         )
 
     def remaining_seconds(self, *, now: float | None = None) -> float:
@@ -84,6 +112,44 @@ class SlurmEnvironment:
             raise ValueError(f"configured nodes exceed allocation: {nodes}>{self.nodes}")
         if total_cpus > self.total_cpus:
             raise ValueError(f"configured CPUs exceed allocation: {total_cpus}>{self.total_cpus}")
+
+    def validate_exact_placement(
+        self,
+        *,
+        nodes: int,
+        ntasks: int,
+        cpus_per_task: int,
+        tasks_per_node: int,
+        hosts: tuple[str, ...] | None = None,
+    ) -> tuple[str, ...]:
+        """Validate the granted allocation exactly before any engine launch."""
+
+        resolved_hosts = self.resolve_hostnames() if hosts is None else tuple(hosts)
+        expected_distribution = tuple([int(tasks_per_node)] * int(nodes))
+        mismatches: list[str] = []
+        if self.nodes != nodes:
+            mismatches.append(f"nodes expected={nodes} actual={self.nodes}")
+        if self.ntasks != ntasks:
+            mismatches.append(f"ntasks expected={ntasks} actual={self.ntasks}")
+        if self.cpus_per_task != cpus_per_task:
+            mismatches.append(
+                "cpus_per_task "
+                f"expected={cpus_per_task} actual={self.cpus_per_task}"
+            )
+        if self.tasks_per_node != expected_distribution:
+            mismatches.append(
+                "tasks_per_node "
+                f"expected={expected_distribution} actual={self.tasks_per_node}"
+            )
+        if len(resolved_hosts) != nodes or len(set(resolved_hosts)) != nodes:
+            mismatches.append(
+                f"hosts expected={nodes} actual={len(set(resolved_hosts))}"
+            )
+        if mismatches:
+            raise ValueError(
+                "ALLOCATION_PLACEMENT_MISMATCH: " + "; ".join(mismatches)
+            )
+        return resolved_hosts
 
     def resolve_hostnames(
         self,

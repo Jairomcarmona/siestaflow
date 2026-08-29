@@ -70,6 +70,7 @@ class ControllerPackageBuilder:
         "src/qraft/execution/direct_launcher.py",
         "src/qraft/execution/hydra_launcher.py",
         "src/qraft/execution/openmpi_launcher.py",
+        "src/qraft/execution/placement_validation.py",
         "src/qraft/execution/slurm_environment.py",
         "src/qraft/execution/srun_launcher.py",
         "src/qraft/engines/siesta/models.py",

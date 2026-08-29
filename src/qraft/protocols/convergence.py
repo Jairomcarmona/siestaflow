@@ -247,7 +247,11 @@ class ConvergenceProtocol:
         registry = CapabilityRegistry()
         register_siesta_engine(registry)
         registry.freeze()
-        composition = compose_runtime(execution, max_parallel_steps=1)
+        composition = compose_runtime(
+            execution,
+            max_parallel_steps=1,
+            placement_probe_root=root,
+        )
         runtime_result = CompiledWorkflowRuntime(
             workflow=compilation.compiled,
             registry=registry,

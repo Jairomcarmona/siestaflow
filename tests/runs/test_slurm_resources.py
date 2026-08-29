@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -18,8 +19,10 @@ from qraft.slurm_resources import (
 
 from test_prepared_run import _profile, _sources
 from qraft.execution_profile import SlurmExecutionProfile
-from qraft.run_inspection import RunInspector
-from qraft.workflows import WorkflowCompiler, load_run_lock, write_workflow_lock
+from qraft.execution.allocation_controller import load_controller_config
+from qraft.execution.legacy_translation import translate_controller_config
+from qraft.validation.scheduler_resolution import DerivedPlacement
+from qraft.workflows import WorkflowCompiler, write_workflow_lock
 
 
 SJSTAT_FIXTURE = Path(__file__).parents[1] / "fixtures" / "slurm" / "yoltla_sjstat_c.txt"
@@ -168,7 +171,7 @@ def test_partial_discovery_keeps_unknown_authorization_reviewable(tmp_path: Path
     assert diagnostics and sinfo[0]["partition"] == "part" and not node_diagnostics and nodes[0]["node"] == "n1"
 
 
-def test_candidate_requires_confirmation_and_produces_distinct_packages(tmp_path: Path) -> None:
+def test_snapshot_candidate_cannot_authorize_a_new_package(tmp_path: Path) -> None:
     source = tmp_path / "source"; source.mkdir()
     definition = _sources(source)
     compilation = WorkflowCompiler().compile(definition)
@@ -181,25 +184,11 @@ def test_candidate_requires_confirmation_and_produces_distinct_packages(tmp_path
         variant["qos"] = None
     snapshot = tmp_path / "snapshot.json"; write_snapshot(snapshot_data, snapshot)
     common = ["run", "prepare", str(lock), "--source-root", str(source), "--profile", str(profile), "--snapshot", str(snapshot)]
-    assert main([*common, "--candidate", "alpha:1", "--output", str(tmp_path / "no-confirm"), "--run-id", "no-confirm", "--json"]) == 2
-    assert main([*common, "--candidate", "alpha:1", "--confirm", "--output", str(tmp_path / "out-a"), "--run-id", "resolved-a", "--json"]) == 0
-    assert main([*common, "--candidate", "beta:1", "--confirm", "--output", str(tmp_path / "out-b"), "--run-id", "resolved-b", "--json"]) == 0
-    package_a, package_b = tmp_path / "out-a" / "resolved-a", tmp_path / "out-b" / "resolved-b"
-    _, run_a = load_run_lock(package_a / "run.lock.json")
-    _, run_b = load_run_lock(package_b / "run.lock.json")
-    assert run_a.workflow_lock_sha256 == run_b.workflow_lock_sha256
-    assert run_a.envelope().content_sha256 != run_b.envelope().content_sha256
-    assert (tmp_path / "out-a" / "resolved-a.zip").read_bytes() != (tmp_path / "out-b" / "resolved-b.zip").read_bytes()
-    assert "#SBATCH --partition=alpha" in (package_a / "submit.slurm").read_text(encoding="utf-8")
-    assert "#SBATCH --partition=beta" in (package_b / "submit.slurm").read_text(encoding="utf-8")
-    assert (package_a / "protected" / "parent" / "fdf" / "parent.fdf").read_bytes() == (package_b / "protected" / "parent" / "fdf" / "parent.fdf").read_bytes()
-    assert json.loads((package_a / "campaign.yaml").read_text()) ["tasks"][1]["transfers"] == json.loads((package_b / "campaign.yaml").read_text())["tasks"][1]["transfers"]
-    assert RunInspector().inspect(package_a).status == "PREPARED_RUN_VERIFIED"
-    resolution = json.loads((package_a / "run.lock.json").read_text())["payload"]["metadata"]["execution_resolution"]
-    assert {"ACCOUNT_AUTHORIZATION_UNKNOWN", "QOS_AUTHORIZATION_UNKNOWN"}.issubset(resolution["pending_fields"])
+    assert main([*common, "--candidate", "alpha:1", "--confirm", "--output", str(tmp_path / "out"), "--run-id", "historical", "--json"]) == 2
+    assert not (tmp_path / "out").exists()
 
 
-def test_manual_compatible_remap_preserves_workflow_rank_count(tmp_path: Path) -> None:
+def test_snapshot_manual_override_cannot_authorize_a_new_package(tmp_path: Path) -> None:
     source = tmp_path / "source"; source.mkdir()
     definition = _sources(source)
     compilation = WorkflowCompiler().compile(definition)
@@ -209,11 +198,64 @@ def test_manual_compatible_remap_preserves_workflow_rank_count(tmp_path: Path) -
     write_snapshot({"schema_version": "1.0", "scheduler": "slurm", "cluster_id": "x", "observed_at": "2026-08-01T00:00:00Z", "sources": [], "diagnostics": [], "partitions": [{"variant_id": "p:1", "name": "p", "walltime": "01:00:00", "min_nodes": 4, "max_nodes": 4, "usable_nodes": 4, "idle_nodes": 4, "cpus_per_node": 20, "memory_mb": 8192, "features": ["tested"], "accounts": ["vini"], "qos": ["normal"]}]}, snapshot)
     evidence = tmp_path / "compatibility.json"
     evidence.write_text(json.dumps({"schema_version": "1.0", "compatible_features": ["tested"], "incompatible_features": ["other"]}), encoding="utf-8")
-    assert main(["run", "prepare", str(lock), "--source-root", str(source), "--profile", str(profile), "--snapshot", str(snapshot), "--compatibility-evidence", str(evidence), "--partition", "p", "--nodes", "4", "--ranks-per-node", "1", "--account", "vini", "--qos", "normal", "--walltime", "00:30:00", "--required-feature", "tested", "--confirm", "--output", str(tmp_path / "out"), "--run-id", "remap", "--json"]) == 0
-    package = tmp_path / "out" / "remap"
-    campaign = json.loads((package / "campaign.yaml").read_text())
-    assert all(item["nodes"] == 4 and item["mpi_processes"] == 4 for item in campaign["tasks"])
-    assert (package / "execution-compatibility.json").is_file()
+    assert main(["run", "prepare", str(lock), "--source-root", str(source), "--profile", str(profile), "--snapshot", str(snapshot), "--compatibility-evidence", str(evidence), "--partition", "p", "--nodes", "4", "--ranks-per-node", "1", "--account", "vini", "--qos", "normal", "--walltime", "00:30:00", "--required-feature", "tested", "--confirm", "--output", str(tmp_path / "out"), "--run-id", "remap", "--json"]) == 2
+    assert not (tmp_path / "out").exists()
+
+
+def test_live_prepare_materializes_derived_placement_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    compilation = WorkflowCompiler().compile(_sources(source))
+    assert compilation.valid
+    lock = tmp_path / "workflow.lock.json"
+    write_workflow_lock(compilation, lock)
+    profile = _profile(tmp_path)
+    placement = DerivedPlacement(
+        partition="partition_beta",
+        nodes=4,
+        tasks_per_node=16,
+        ntasks=64,
+        cpus_per_task=2,
+        safe_cpus_per_node=32,
+        total_allocated_cpus=128,
+        walltime="00:20:00",
+    )
+    selection = SimpleNamespace(
+        placement=placement,
+        provenance=lambda: {
+            "authority": "LIVE_SLURM_SELECTION_EVIDENCE",
+            "runtime_authority_for_future_runs": False,
+            "derived_placement": placement.to_dict(),
+        },
+    )
+    service = SimpleNamespace(select=lambda **_kwargs: selection)
+    monkeypatch.setattr(
+        "qraft.cli.LiveSlurmPlacementService.discover",
+        staticmethod(lambda: service),
+    )
+    output = tmp_path / "output"
+    assert main([
+        "run", "prepare", str(lock), "--source-root", str(source),
+        "--profile", str(profile), "--partition", "partition_beta",
+        "--account", "research_account", "--qos", "normal",
+        "--cpus-per-task", "2", "--walltime", "00:20:00", "--confirm",
+        "--output", str(output), "--run-id", "live-derived", "--json",
+    ]) == 0
+    campaign_path = next(output.rglob("campaign.yaml"))
+    config = load_controller_config(campaign_path)
+    assert (config.nodes, config.ntasks, config.cpus_per_task) == (4, 64, 2)
+    assert config.total_cpus == 128 and config.processes_per_node == 16
+    assert all(
+        (task.nodes, task.mpi_processes, task.cpus_per_process) == (4, 64, 2)
+        for task in config.tasks
+    )
+    plan = translate_controller_config(config, root=campaign_path.parent)
+    assert all(
+        (spec.nodes, spec.mpi_ranks, spec.cpus_per_rank) == (4, 64, 2)
+        for spec in plan.execution_specs.values()
+    )
 
 
 def test_manual_selection_requires_live_capacity_and_complete_partition_constraints(tmp_path: Path) -> None:

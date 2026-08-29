@@ -10,6 +10,7 @@ from typing import Mapping
 
 from ..core import ExecutionSpec
 from .adapters import launcher_registry
+from .placement_validation import probe_launcher_placement
 from .resource_coordinator import RuntimeAllocation
 from .slurm_environment import SlurmEnvironment
 from .srun_launcher import StepLauncher
@@ -28,6 +29,7 @@ def compose_runtime(
     *,
     max_parallel_steps: int = 1,
     environment: Mapping[str, str] | None = None,
+    placement_probe_root: Path | None = None,
 ) -> RuntimeComposition:
     """Compose registered launch infrastructure without scientific policy."""
 
@@ -51,15 +53,34 @@ def compose_runtime(
             "SLURM_JOB_END_TIME", str(time.time() + execution.walltime_seconds)
         )
         slurm = SlurmEnvironment.from_mapping(values)
-        slurm.validate_capacity(
-            nodes=execution.nodes, total_cpus=execution.allocated_cpus
-        )
+        if placement_probe_root is None:
+            raise ValueError(
+                "exact Slurm placement requires an evidence root"
+            )
     if adapter.requires_allocation and slurm is None:
         raise ValueError(
             f"{adapter.name} launcher requires an active "
             f"{adapter.scheduler.upper()} allocation"
         )
-    hosts = slurm.resolve_hostnames()[: execution.nodes] if slurm and adapter.requires_hosts else ()
+    hosts = (
+        slurm.resolve_hostnames()
+        if slurm and (adapter.requires_hosts or placement_probe_root is not None)
+        else ()
+    )
+    if slurm is not None and placement_probe_root is not None:
+        slurm.validate_exact_placement(
+            nodes=execution.nodes,
+            ntasks=execution.mpi_ranks,
+            cpus_per_task=execution.cpus_per_rank,
+            tasks_per_node=execution.ranks_per_node,
+            hosts=hosts,
+        )
+        probe_launcher_placement(
+            launcher=launcher,
+            execution=execution,
+            hosts=hosts,
+            root=placement_probe_root,
+        )
     return RuntimeComposition(
         launcher=launcher,
         allocation=RuntimeAllocation(

@@ -12,15 +12,122 @@ import json
 import re
 import shutil
 import subprocess
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Protocol, Sequence
 
 from .contracts import contract_sha256
+from .validation.scheduler_resolution import (
+    DerivedPlacement,
+    NodeCapability,
+    PartitionPolicy,
+    ResourceRequest,
+    SchedulerAssociation,
+    VisiblePartition,
+    derive_partition_placement,
+    model_dicts,
+    parse_sacctmgr_associations as parse_live_associations,
+    parse_scontrol_partitions as parse_live_partition_policies,
+    parse_sinfo_node_capabilities,
+    parse_sinfo_partitions as parse_live_visible_partitions,
+)
 
 
 SNAPSHOT_SCHEMA_VERSION = "1.0"
 _WALLTIME = re.compile(r"^(?:(?P<days>[0-9]+)-)?(?P<hours>[0-9]{1,2}):(?P<minutes>[0-9]{2}):(?P<seconds>[0-9]{2})$")
+
+
+@dataclass(frozen=True)
+class SlurmCommandOutput:
+    argv: tuple[str, ...]
+    returncode: int
+    stdout: str
+    stderr: str = ""
+
+
+class SlurmCommandRunner(Protocol):
+    def run(self, command: Sequence[str]) -> SlurmCommandOutput: ...
+
+
+class SubprocessSlurmCommandRunner:
+    """Injectable read-only command boundary for production Slurm discovery."""
+
+    def __init__(self, *, timeout_seconds: float = 30.0) -> None:
+        self.timeout_seconds = float(timeout_seconds)
+
+    def run(self, command: Sequence[str]) -> SlurmCommandOutput:
+        argv = tuple(map(str, command))
+        result = subprocess.run(
+            argv,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=self.timeout_seconds,
+        )
+        return SlurmCommandOutput(
+            argv=argv,
+            returncode=int(result.returncode),
+            stdout=result.stdout,
+            stderr=result.stderr,
+        )
+
+
+@dataclass(frozen=True)
+class LiveSlurmEvidence:
+    observed_at: str
+    visible_partitions: tuple[VisiblePartition, ...]
+    partition_policies: tuple[PartitionPolicy, ...]
+    associations: tuple[SchedulerAssociation, ...]
+    node_capabilities: tuple[NodeCapability, ...]
+    commands: tuple[SlurmCommandOutput, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": "1.0",
+            "authority": "LIVE_SLURM_DISCOVERY",
+            "observed_at": self.observed_at,
+            "commands": [
+                {
+                    "argv": list(item.argv),
+                    "returncode": item.returncode,
+                    "stdout_sha256": hashlib.sha256(
+                        item.stdout.encode("utf-8")
+                    ).hexdigest(),
+                }
+                for item in self.commands
+            ],
+            "visible_partitions": model_dicts(self.visible_partitions),
+            "partition_policies": model_dicts(self.partition_policies),
+            "associations": model_dicts(self.associations),
+            "node_capabilities": model_dicts(self.node_capabilities),
+        }
+
+
+@dataclass(frozen=True)
+class LiveSlurmSelection:
+    evidence: LiveSlurmEvidence
+    association: SchedulerAssociation
+    resource_request: ResourceRequest
+    partition: str
+    placement: DerivedPlacement
+
+    def provenance(self) -> dict[str, Any]:
+        return {
+            "schema_version": "1.0",
+            "authority": "LIVE_SLURM_SELECTION_EVIDENCE",
+            "runtime_authority_for_future_runs": False,
+            "observed_at": self.evidence.observed_at,
+            "sources": self.evidence.to_dict(),
+            "association": asdict(self.association),
+            "resource_request": asdict(self.resource_request),
+            "human_selection": {
+                "partition": self.partition,
+                "nodes": self.resource_request.nodes,
+                "explicit": True,
+            },
+            "derived_placement": self.placement.to_dict(),
+        }
 
 
 def utc_now() -> str:
@@ -234,6 +341,214 @@ def validate_snapshot(snapshot: Mapping[str, Any]) -> None:
     for item in snapshot["partitions"]:
         if not isinstance(item, Mapping) or not item.get("variant_id") or not item.get("name"):
             raise ValueError("snapshot partition variant is invalid")
+
+
+def discover_live_slurm(
+    *,
+    runner: SlurmCommandRunner | None = None,
+    user: str | None = None,
+    observed_at: str | None = None,
+) -> LiveSlurmEvidence:
+    """Query live Slurm through the injectable read-only command boundary."""
+
+    selected_runner = runner or SubprocessSlurmCommandRunner()
+    selected_user = str(user or getpass.getuser()).strip()
+    if not selected_user:
+        raise ValueError("LIVE_SLURM_DISCOVERY_UNRESOLVED: user is required")
+    commands = (
+        ("sinfo", "-h", "-o", "%P|%a|%l|%D|%c|%m"),
+        ("sinfo", "-N", "-h", "-o", "%N|%P|%c|%m|%t"),
+        ("scontrol", "show", "partition", "-o"),
+        (
+            "sacctmgr",
+            "-n",
+            "-P",
+            "show",
+            "assoc",
+            f"user={selected_user}",
+            "format=Account,Partition,QOS",
+        ),
+    )
+    outputs = tuple(selected_runner.run(command) for command in commands)
+    failed = [item for item in outputs if item.returncode != 0]
+    if failed:
+        commands_failed = ",".join(item.argv[0] for item in failed)
+        raise ValueError(
+            "LIVE_SLURM_DISCOVERY_UNRESOLVED: command failed: "
+            f"{commands_failed}"
+        )
+
+    observed = observed_at or utc_now()
+    visible, diagnostics = parse_live_visible_partitions(
+        outputs[0].stdout, "sinfo"
+    )
+    nodes, node_diagnostics = parse_sinfo_node_capabilities(
+        outputs[1].stdout, "sinfo -N"
+    )
+    policies, policy_diagnostics = parse_live_partition_policies(
+        outputs[2].stdout, "scontrol show partition"
+    )
+    associations, association_diagnostics = parse_live_associations(
+        outputs[3].stdout,
+        "sacctmgr show assoc",
+        observed_at=observed,
+    )
+    all_diagnostics = [
+        *diagnostics,
+        *node_diagnostics,
+        *policy_diagnostics,
+        *association_diagnostics,
+    ]
+    if all_diagnostics:
+        codes = ",".join(sorted({str(item["code"]) for item in all_diagnostics}))
+        raise ValueError(
+            "LIVE_SLURM_DISCOVERY_UNRESOLVED: invalid command output: "
+            f"{codes}"
+        )
+    return LiveSlurmEvidence(
+        observed_at=observed,
+        visible_partitions=tuple(visible),
+        partition_policies=tuple(policies),
+        associations=tuple(associations),
+        node_capabilities=tuple(nodes),
+        commands=outputs,
+    )
+
+
+class LiveSlurmPlacementService:
+    """Canonical application service for live human-selected placement."""
+
+    def __init__(self, evidence: LiveSlurmEvidence) -> None:
+        self.evidence = evidence
+
+    @classmethod
+    def discover(
+        cls,
+        *,
+        runner: SlurmCommandRunner | None = None,
+        user: str | None = None,
+        observed_at: str | None = None,
+    ) -> "LiveSlurmPlacementService":
+        return cls(discover_live_slurm(
+            runner=runner,
+            user=user,
+            observed_at=observed_at,
+        ))
+
+    def _association(
+        self, partition: str, request: ResourceRequest
+    ) -> SchedulerAssociation:
+        def qos_allows(item: SchedulerAssociation) -> bool:
+            if request.qos is None:
+                return item.qos is None
+            return request.qos in {
+                value.strip()
+                for value in str(item.qos or "").split(",")
+                if value.strip()
+            }
+
+        matches = [
+            item
+            for item in self.evidence.associations
+            if item.evidence_status == "OBSERVED"
+            and item.account == request.account
+            and qos_allows(item)
+            and item.partition in {None, partition}
+        ]
+        explicit = [item for item in matches if item.partition == partition]
+        selected = explicit or [item for item in matches if item.partition is None]
+        unique = {
+            (item.account, item.partition, item.qos, item.scope)
+            for item in selected
+        }
+        if not selected or len(unique) != 1:
+            raise ValueError(
+                "SCHEDULER_PLACEMENT_UNRESOLVED: USER_ASSOCIATION_NOT_UNIQUE"
+            )
+        return selected[0]
+
+    def select(
+        self,
+        *,
+        partition: str,
+        resource_request: ResourceRequest,
+    ) -> LiveSlurmSelection:
+        name = str(partition).strip()
+        if not name:
+            raise ValueError("MANUAL_PARTITION_SELECTION_REQUIRED")
+        visible = [
+            item for item in self.evidence.visible_partitions if item.name == name
+        ]
+        policies = [
+            item for item in self.evidence.partition_policies if item.name == name
+        ]
+        if len(visible) != 1 or len(policies) != 1:
+            raise ValueError(
+                "SCHEDULER_PLACEMENT_UNRESOLVED: "
+                "PARTITION_EVIDENCE_NOT_UNIQUE"
+            )
+        association = self._association(name, resource_request)
+        placement = derive_partition_placement(
+            visible[0],
+            policies[0],
+            self.evidence.node_capabilities,
+            association,
+            resource_request,
+        )
+        return LiveSlurmSelection(
+            evidence=self.evidence,
+            association=association,
+            resource_request=resource_request,
+            partition=name,
+            placement=placement,
+        )
+
+    def show_resources(
+        self, *, resource_request: ResourceRequest
+    ) -> tuple[dict[str, Any], ...]:
+        """Report live compatibility without choosing or ranking a partition."""
+
+        names = sorted({item.name for item in self.evidence.partition_policies})
+        options: list[dict[str, Any]] = []
+        for name in names:
+            try:
+                selection = self.select(
+                    partition=name,
+                    resource_request=resource_request,
+                )
+            except ValueError as error:
+                text = str(error)
+                status = (
+                    "MANUAL_NODE_SELECTION_REQUIRED"
+                    if "MANUAL_NODE_SELECTION_REQUIRED" in text
+                    else "NOT_SELECTABLE"
+                )
+                options.append({
+                    "partition": name,
+                    "status": status,
+                    "reason": text,
+                    "derived_placement": None,
+                })
+            else:
+                options.append({
+                    "partition": name,
+                    "status": "SELECTABLE",
+                    "reason": "STATIC_POLICY_COMPATIBILITY",
+                    "derived_placement": selection.placement.to_dict(),
+                })
+        return tuple(options)
+
+
+def write_live_selection_provenance(
+    selection: LiveSlurmSelection, path: Path
+) -> str:
+    payload = selection.provenance()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, sort_keys=True, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    return sha256_file(path)
 
 
 def discover_snapshot(*, cluster_id: str, observed_at: str | None = None) -> dict[str, Any]:

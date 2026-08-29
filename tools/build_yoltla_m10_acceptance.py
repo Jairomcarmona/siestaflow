@@ -208,13 +208,10 @@ def _load_runtime_selection(path: Path) -> dict[str, Any]:
 
 
 def _srun_arguments(runtime: Mapping[str, Any], placement: Mapping[str, Any]) -> list[str]:
-    return [
-        *runtime["launchers"]["srun"]["arguments"],
-        f"--nodes={placement['nodes']}",
-        f"--ntasks={placement['ntasks']}",
-        f"--ntasks-per-node={placement['processes_per_node']}",
-        f"--cpus-per-task={placement['cpus_per_task']}",
-    ]
+    # Placement is carried by campaign resources -> ExecutionSpec ->
+    # StepLaunchSpec.  Launcher arguments contain launcher policy only.
+    del placement
+    return list(runtime["launchers"]["srun"]["arguments"])
 
 
 def _slurm(selection: Mapping[str, Any]) -> dict[str, str]:

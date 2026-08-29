@@ -195,7 +195,8 @@ launcher_registry.register(RegisteredLauncher(
     version_arguments=(), probe_required=False,
 ))
 launcher_registry.register(RegisteredLauncher(
-    "srun", ("srun",), _srun, scheduler="slurm", preview_builder=_preview_srun
+    "srun", ("srun",), _srun, scheduler="slurm", requires_allocation=True,
+    preview_builder=_preview_srun
 ))
 launcher_registry.register(RegisteredLauncher(
     "hydra", ("mpiexec.hydra",), _hydra, scheduler="slurm",

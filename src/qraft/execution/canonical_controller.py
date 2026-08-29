@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Mapping
 
 from ..contracts import CapabilityRegistry
+from ..core import ExecutionSpec
 from ..filesystem import RealFileSystem
 from .adapters import launcher_registry
 from .allocation_controller_compat import (
@@ -19,6 +20,7 @@ from .capability_plugins import register_generic_command, register_siesta_engine
 from .capability_runtime import CompiledWorkflowRuntime, WorkflowRuntimeResult
 from .direct_launcher import DirectLauncher
 from .legacy_translation import CanonicalLegacyPlan, translate_controller_config
+from .placement_validation import probe_launcher_placement
 from .resource_coordinator import RuntimeAllocation
 from .slurm_environment import ShutdownRequest, SignalHandlers, SlurmEnvironment
 from .srun_launcher import StepLauncher
@@ -51,6 +53,7 @@ class CanonicalController:
         self.plan: CanonicalLegacyPlan | None = None
         self.runtime: CompiledWorkflowRuntime | None = None
         self.result: WorkflowRuntimeResult | None = None
+        self._validated_hosts: tuple[str, ...] = ()
 
     @classmethod
     def from_file(
@@ -81,27 +84,63 @@ class CanonicalController:
         )
 
     def _allocation(self) -> RuntimeAllocation:
-        self.slurm.validate_capacity(
-            nodes=self.config.nodes, total_cpus=self.config.total_cpus
-        )
-        hosts = (
-            self.slurm.resolve_hostnames()
-            if self.launcher_adapter.requires_hosts
-            else ()
-        )
+        if not self._validated_hosts:
+            raise ValueError("ALLOCATION_PLACEMENT_MISMATCH: placement gate not run")
         return RuntimeAllocation(
             total_cpus=self.config.total_cpus,
             total_nodes=self.config.nodes,
             max_parallel_steps=self.config.max_parallel_steps,
-            hosts=hosts,
+            hosts=self._validated_hosts,
             shutdown_margin_seconds=self.config.shutdown_margin_seconds,
             termination_grace_seconds=self.config.termination_grace_seconds,
             allocation_id=self.slurm.job_id,
             remaining_time=self.slurm.remaining_seconds,
         )
 
+    def _placement_execution(self) -> ExecutionSpec:
+        if self.config.processes_per_node is None or self.config.ntasks is None:
+            raise ValueError(
+                "ALLOCATION_PLACEMENT_MISMATCH: campaign placement is incomplete"
+            )
+        if self.config.nodes * self.config.processes_per_node != self.config.ntasks:
+            raise ValueError(
+                "ALLOCATION_PLACEMENT_MISMATCH: campaign placement is inconsistent"
+            )
+        return ExecutionSpec(
+            partition=self.config.partition,
+            nodes=self.config.nodes,
+            mpi_ranks=self.config.ntasks,
+            cpus_per_rank=self.config.cpus_per_task,
+            memory_mb=None,
+            launcher=self.config.launcher_kind,
+            executable="hostname",
+            walltime_seconds=1,
+            environment=self.config.environment,
+            launcher_command=self.config.srun_command,
+            launcher_arguments=self.config.srun_arguments,
+        )
+
+    def _validate_runtime_placement(self) -> None:
+        execution = self._placement_execution()
+        hosts = self.slurm.resolve_hostnames()
+        self.slurm.validate_exact_placement(
+            nodes=execution.nodes,
+            ntasks=execution.mpi_ranks,
+            cpus_per_task=execution.cpus_per_rank,
+            tasks_per_node=execution.ranks_per_node,
+            hosts=hosts,
+        )
+        probe_launcher_placement(
+            launcher=self.launcher,
+            execution=execution,
+            hosts=hosts,
+            root=self.root,
+        )
+        self._validated_hosts = hosts
+
     def run(self, *, install_signal_handlers: bool = True) -> ExecutionStatus:
         self.plan = translate_controller_config(self.config, root=self.root)
+        self._validate_runtime_placement()
         registry = CapabilityRegistry()
         register_siesta_engine(registry)
         register_generic_command(registry)

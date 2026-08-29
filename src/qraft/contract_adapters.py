@@ -215,6 +215,7 @@ def step_launch_spec_from_execution_request(
         environment=request.environment,
         hosts=hosts,
         processes_per_node=request.resources.processes_per_node,
+        nodes=request.resources.nodes,
     )
 
 

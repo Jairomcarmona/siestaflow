@@ -43,6 +43,7 @@ from .run_inspection import RunInspector
 from .run_preparation import RunPreparer, RunPreparationRequest
 from .execution_profile import SlurmExecutionProfile
 from .slurm_resources import (
+    LiveSlurmPlacementService,
     build_snapshot,
     discover_snapshot,
     load_snapshot,
@@ -51,8 +52,10 @@ from .slurm_resources import (
     sha256_file,
     utc_now,
     walltime_seconds,
+    write_live_selection_provenance,
     write_snapshot,
 )
+from .validation.scheduler_resolution import ResourceRequest as SlurmResourceRequest
 from .workflows import (
     WorkflowCompiler,
     render_workflow_graph,
@@ -385,6 +388,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_prepare.add_argument("--partition")
     run_prepare.add_argument("--nodes", type=int)
     run_prepare.add_argument("--ranks-per-node", type=int)
+    run_prepare.add_argument("--cpus-per-task", type=int, default=1)
     run_prepare.add_argument("--account")
     run_prepare.add_argument("--qos")
     run_prepare.add_argument("--walltime")
@@ -405,6 +409,25 @@ def build_parser() -> argparse.ArgumentParser:
     run_discover.add_argument("--cluster-id", required=True)
     run_discover.add_argument("--output", type=Path, required=True)
     run_discover.add_argument("--json", action="store_true")
+    run_resources = prepared_run_sub.add_parser(
+        "resources", help="show live Slurm resources without selecting one"
+    )
+    run_resources.add_argument("--account", required=True)
+    run_resources.add_argument("--qos", required=True)
+    run_resources.add_argument("--cpus-per-task", type=int, default=1)
+    run_resources.add_argument("--walltime", default="00:20:00")
+    run_resources.add_argument("--json", action="store_true")
+    run_placement = prepared_run_sub.add_parser(
+        "placement", help="derive one explicit live Slurm placement"
+    )
+    run_placement.add_argument("--partition", required=True)
+    run_placement.add_argument("--nodes", type=int)
+    run_placement.add_argument("--account", required=True)
+    run_placement.add_argument("--qos", required=True)
+    run_placement.add_argument("--cpus-per-task", type=int, default=1)
+    run_placement.add_argument("--walltime", default="00:20:00")
+    run_placement.add_argument("--output", type=Path, required=True)
+    run_placement.add_argument("--json", action="store_true")
     run_import = prepared_run_sub.add_parser(
         "snapshot-import", help="import saved read-only scheduler command output"
     )
@@ -843,6 +866,40 @@ def _dispatch(args: argparse.Namespace) -> int:
         )
         return 0
     if args.domain == "run":
+        if args.action in {"resources", "placement"}:
+            service = LiveSlurmPlacementService.discover()
+            request = SlurmResourceRequest(
+                nodes=(args.nodes if args.action == "placement" else None),
+                cpus_per_task=args.cpus_per_task,
+                walltime=args.walltime,
+                account=args.account,
+                qos=args.qos,
+            )
+            if args.action == "resources":
+                _emit({
+                    "status": "LIVE_SLURM_RESOURCES",
+                    "observed_at": service.evidence.observed_at,
+                    "authority": "STATIC_POLICY_COMPATIBILITY",
+                    "current_queue_load_authority": False,
+                    "partitions": service.show_resources(
+                        resource_request=request
+                    ),
+                    "partition_selected": False,
+                }, args.json)
+                return 0
+            selection = service.select(
+                partition=args.partition,
+                resource_request=request,
+            )
+            digest = write_live_selection_provenance(selection, args.output)
+            _emit({
+                "status": "LIVE_SLURM_PLACEMENT_SELECTED",
+                "output": str(args.output.resolve()),
+                "sha256": digest,
+                "placement": selection.placement.to_dict(),
+                "historical_snapshot_runtime_authority": False,
+            }, args.json)
+            return 0
         if args.action == "discover":
             snapshot = discover_snapshot(cluster_id=args.cluster_id)
             digest = write_snapshot(snapshot, args.output)
@@ -868,17 +925,35 @@ def _dispatch(args: argparse.Namespace) -> int:
             result = resolve_candidates(profile=SlurmExecutionProfile.load(args.profile), snapshot=snapshot)
             result["workflow_lock_path"] = str(args.workflow.resolve())
             result["snapshot_sha256"] = sha256_file(args.snapshot)
+            result["runtime_authority_for_future_runs"] = False
+            result["selection_requires_fresh_live_discovery"] = True
             _emit(result, args.json)
             return 0
         if args.action == "prepare":
+            if args.snapshot is not None or args.candidate is not None:
+                raise ValueError(
+                    "historical Slurm snapshots are provenance only; "
+                    "new execution selection requires live --partition discovery"
+                )
             profile = SlurmExecutionProfile.load(args.profile)
             manual = (args.partition, args.nodes, args.ranks_per_node, args.account, args.qos, args.walltime)
+            live_selection_requested = (
+                args.partition is not None
+                and args.snapshot is None
+                and args.candidate is None
+            )
             if args.candidate and any(item is not None for item in manual):
                 raise ValueError("candidate selection and manual resource overrides are exclusive")
-            if any(item is not None for item in manual) and not all(item is not None for item in manual):
+            if (
+                not live_selection_requested
+                and any(item is not None for item in manual)
+                and not all(item is not None for item in manual)
+            ):
                 raise ValueError("manual selection requires partition, nodes, ranks-per-node, account, qos, and walltime")
             resolved_profile = None
             resolution = None
+            live_provenance = None
+            derived_placement = None
             if args.candidate:
                 if args.snapshot is None:
                     raise ValueError("candidate selection requires --snapshot")
@@ -905,6 +980,51 @@ def _dispatch(args: argparse.Namespace) -> int:
                               "selected_total_ranks": resources["total_ranks"], "selected_walltime": resources["walltime"], "selected_features": resources["features"],
                               "selection_status": chosen["recommendation"], "selection_reason": chosen["ranking_reason"], "human_confirmed": True,
                               "resolution_timestamp": utc_now(), "pending_fields": sorted(set(pending_fields))}
+            elif live_selection_requested:
+                if not args.confirm:
+                    raise ValueError("live partition selection requires explicit --confirm")
+                if args.ranks_per_node is not None:
+                    raise ValueError(
+                        "live placement derives ranks-per-node; do not provide it"
+                    )
+                service = LiveSlurmPlacementService.discover()
+                live_request = SlurmResourceRequest(
+                    nodes=args.nodes,
+                    cpus_per_task=args.cpus_per_task,
+                    walltime=args.walltime or profile.walltime,
+                    account=args.account or profile.account,
+                    qos=args.qos or profile.qos,
+                )
+                selected = service.select(
+                    partition=args.partition,
+                    resource_request=live_request,
+                )
+                placement = selected.placement
+                derived_placement = placement
+                resolved_profile = profile.resolved(
+                    partition=placement.partition,
+                    account=str(live_request.account),
+                    qos=str(live_request.qos),
+                    nodes=placement.nodes,
+                    ranks_per_node=placement.tasks_per_node,
+                    walltime=placement.walltime,
+                    cpus_per_task=placement.cpus_per_task,
+                )
+                live_provenance = selected.provenance()
+                resolution = {
+                    **live_provenance,
+                    "resolution_mode": "LIVE_SLURM_HUMAN_SELECTION",
+                    "human_confirmed": True,
+                    "selected_partition": placement.partition,
+                    "selected_account": live_request.account,
+                    "selected_qos": live_request.qos,
+                    "selected_nodes": placement.nodes,
+                    "selected_ranks_per_node": placement.tasks_per_node,
+                    "selected_total_ranks": placement.ntasks,
+                    "selected_walltime": placement.walltime,
+                    "selection_status": "HUMAN_SELECTION_SUPPORTED_BY_LIVE_EVIDENCE",
+                    "pending_fields": [],
+                }
             elif all(item is not None for item in manual):
                 if not args.confirm:
                     raise ValueError("manual resource selection requires explicit --confirm")
@@ -954,6 +1074,8 @@ def _dispatch(args: argparse.Namespace) -> int:
                     execution_resolution=resolution,
                     cluster_snapshot=args.snapshot,
                     compatibility_evidence=args.compatibility_evidence,
+                    live_slurm_provenance=live_provenance,
+                    derived_placement=derived_placement,
                 )
             )
             _emit(result, args.json)

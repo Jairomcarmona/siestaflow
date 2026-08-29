@@ -419,8 +419,12 @@ class ElectronicPropertiesProtocol:
         registry = CapabilityRegistry()
         register_siesta_electronic_properties(registry)
         registry.freeze()
-        composition = compose_runtime(execution, max_parallel_steps=3)
         root = Path(runs_root).resolve()
+        composition = compose_runtime(
+            execution,
+            max_parallel_steps=3,
+            placement_probe_root=root,
+        )
         runtime = CompiledWorkflowRuntime(
             workflow=prepared.compiled, registry=registry, root=root / "runtime", source_root=prepared.source_root,
             scientific_identities=prepared.identities, execution_specs=execution,

@@ -207,7 +207,11 @@ class GroundStateProtocol:
         if not compiled.valid or compiled.compiled is None:
             raise ValueError("M6 final-SCF workflow compilation failed")
         registry = CapabilityRegistry(); register_siesta_engine(registry); registry.freeze()
-        composition = compose_runtime(execution, max_parallel_steps=1)
+        composition = compose_runtime(
+            execution,
+            max_parallel_steps=1,
+            placement_probe_root=root,
+        )
         identity = build_scientific_identity(fdf, pseudo_manifest=pseudo_manifest)
         requested_spin = magnetic_spin_from_fdf(fdf)
         soc_evidence = (

@@ -479,7 +479,7 @@ def test_hydra_requires_one_explicit_bootstrap_argument_pair(tmp_path: Path):
     spec = StepLaunchSpec(
         "u-site-1", "attempt-0001", tmp_path, source,
         tmp_path / "out", tmp_path / "err", 40, 1, "siesta",
-        hosts=("tt1", "tt2"), processes_per_node=20,
+        hosts=("tt1", "tt2"), processes_per_node=20, nodes=2,
     )
     with pytest.raises(ValueError, match="bootstrap"):
         HydraLauncher()
@@ -586,15 +586,23 @@ def test_hydra_bootstrap_is_materialized_in_execution_spec_and_canonical_launche
     assert canonical.launcher.arguments == ("-bootstrap", "slurm")
 
 
-def test_runtime_composition_hydra_uses_execution_spec_arguments(tmp_path: Path) -> None:
+def test_runtime_composition_hydra_uses_execution_spec_arguments(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     execution = ExecutionSpec(
         partition="test", nodes=1, mpi_ranks=20, cpus_per_rank=1,
         memory_mb=None, launcher="hydra", executable="siesta", walltime_seconds=60,
         launcher_arguments=("-bootstrap", "ssh"),
     )
     env = environment(tmp_path, "hydra-compose", total_cpus=20)
-    env.update({"QRAFT_HOSTS": "tt76"})
-    composition = compose_runtime(execution, environment=env)
+    env.update({"QRAFT_HOSTS": "tt76", "SLURM_TASKS_PER_NODE": "20"})
+    monkeypatch.setattr(
+        "qraft.execution.runtime_composition.probe_launcher_placement",
+        lambda **_kwargs: {"status": "PASS"},
+    )
+    composition = compose_runtime(
+        execution, environment=env, placement_probe_root=tmp_path / "probe"
+    )
     assert isinstance(composition.launcher, HydraLauncher)
     assert composition.launcher.arguments == execution.launcher_arguments
 

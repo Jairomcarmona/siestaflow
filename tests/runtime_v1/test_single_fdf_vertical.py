@@ -419,10 +419,12 @@ def test_active_slurm_capacity_and_partition_fail_closed(
     monkeypatch.setenv("SLURM_NTASKS", "4")
     monkeypatch.setenv("SLURM_CPUS_PER_TASK", "1")
     monkeypatch.setenv("SLURM_NNODES", "1")
+    monkeypatch.setenv("SLURM_TASKS_PER_NODE", "4")
+    monkeypatch.setenv("QRAFT_HOSTS", "node-a")
     execution, _ = resolve_execution_spec(
         overrides={"partition": "p4", "mpi_ranks": 8, "launcher": "srun", "executable": "siesta"}
     )
-    with pytest.raises(ValueError, match="exceed allocation"):
+    with pytest.raises(ValueError, match="ALLOCATION_PLACEMENT_MISMATCH"):
         single_fdf._launch(execution, spec)
 
     partition_mismatch, _ = resolve_execution_spec(

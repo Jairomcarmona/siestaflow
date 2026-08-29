@@ -19,6 +19,7 @@ from .controller_package import ControllerPackageBuilder
 from .engines.siesta.fdf_parser import FDFParser
 from .execution_profile import SlurmExecutionProfile, _walltime_seconds
 from .siesta_validation import SiestaContextualValidator
+from .validation.scheduler_resolution import DerivedPlacement
 from .workflows import load_workflow_lock
 
 
@@ -104,6 +105,8 @@ class RunPreparationRequest:
     execution_resolution: Mapping[str, Any] | None = None
     cluster_snapshot: Path | None = None
     compatibility_evidence: Path | None = None
+    live_slurm_provenance: Mapping[str, Any] | None = None
+    derived_placement: DerivedPlacement | None = None
 
 
 @dataclass(frozen=True)
@@ -162,6 +165,30 @@ class RunPreparer:
 
         envelope, workflow = load_workflow_lock(lock_path)
         profile = request.resolved_profile or SlurmExecutionProfile.load(profile_path)
+        if request.derived_placement is not None:
+            placement = request.derived_placement
+            actual = (
+                profile.partition,
+                profile.nodes,
+                profile.processes_per_node,
+                profile.ntasks,
+                profile.cpus_per_task,
+                profile.total_cpus,
+                profile.walltime,
+            )
+            expected = (
+                placement.partition,
+                placement.nodes,
+                placement.tasks_per_node,
+                placement.ntasks,
+                placement.cpus_per_task,
+                placement.total_allocated_cpus,
+                placement.walltime,
+            )
+            if actual != expected:
+                raise ValueError(
+                    "resolved profile and DerivedPlacement disagree"
+                )
         resolution = dict(request.execution_resolution or {
             "resolution_mode": "PROFILE_ALREADY_RESOLVED",
             "human_confirmed": None,
@@ -205,6 +232,7 @@ class RunPreparer:
             profile,
             artifacts,
             resolved_sources,
+            derived_placement=request.derived_placement,
         )
         self._validate_initial_launch_budget(campaign, profile)
         campaign_bytes = _json_bytes(campaign)
@@ -264,6 +292,10 @@ class RunPreparer:
                 if not evidence_path.is_file():
                     raise ValueError(f"compatibility evidence is missing: {evidence_path}")
                 provenance["execution-compatibility.json"] = evidence_path
+            if request.live_slurm_provenance is not None:
+                live_path = staging / "live-slurm-selection.json"
+                live_path.write_bytes(_json_bytes(request.live_slurm_provenance))
+                provenance["live-slurm-selection.json"] = live_path
             package = ControllerPackageBuilder(self.repository_root).build(
                 campaign_path,
                 request.output_root,
@@ -694,6 +726,7 @@ class RunPreparer:
         profile: SlurmExecutionProfile,
         artifacts: Mapping[str, Any],
         resolved_sources: Mapping[str, Path],
+        derived_placement: DerivedPlacement | None = None,
     ) -> tuple[dict[str, Any], dict[str, Path]]:
         tasks: list[dict[str, Any]] = []
         protected: dict[str, Path] = {}
@@ -772,6 +805,11 @@ class RunPreparer:
                 resources["walltime_seconds"],
                 field=f"{task.task_id}.walltime_seconds",
             )
+            if derived_placement is not None:
+                nodes = derived_placement.nodes
+                ranks = derived_placement.ntasks
+                ppn = derived_placement.tasks_per_node
+                cpus = derived_placement.cpus_per_task
             if nodes > profile.nodes or ranks * cpus > profile.total_cpus:
                 raise ValueError(
                     f"task exceeds execution allocation: {task.task_id}"
@@ -790,7 +828,7 @@ class RunPreparer:
                 # a full-allocation run may remap the same rank count across
                 # the resolved Slurm allocation without changing the DAG.
                 nodes = profile.nodes
-            if cpus != 1:
+            if derived_placement is None and cpus != 1:
                 raise ValueError(
                     "prepared Slurm packages currently require "
                     f"cpus_per_process=1: {task.task_id}"
@@ -887,6 +925,8 @@ class RunPreparer:
             "resources": {
                 "nodes": profile.nodes,
                 "total_cpus": profile.total_cpus,
+                "ntasks": profile.ntasks,
+                "cpus_per_task": profile.cpus_per_task,
                 "memory": profile.memory,
                 "walltime": profile.walltime,
                 "max_parallel_steps": profile.max_parallel_steps,

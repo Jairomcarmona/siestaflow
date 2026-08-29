@@ -64,6 +64,22 @@ def test_profile_is_strict_and_hash_stable(tmp_path: Path) -> None:
     assert first.nodes * int(first.processes_per_node or 0) == first.total_cpus
 
 
+def test_resolved_profile_preserves_derived_cpu_geometry(tmp_path: Path) -> None:
+    profile = SlurmExecutionProfile.load(_write(tmp_path, _value())).resolved(
+        partition="partition_beta",
+        account="research_account",
+        qos="normal",
+        nodes=4,
+        ranks_per_node=16,
+        cpus_per_task=2,
+        walltime="01:00:00",
+    )
+    assert profile.ntasks == 64
+    assert profile.total_cpus == 128
+    assert profile.cpus_per_task == 2
+    assert profile.processes_per_node == 16
+
+
 def test_profile_rejects_arbitrary_shell_commands(tmp_path: Path) -> None:
     value = _value()
     value["runtime"]["module_commands"] = ["curl https://example.invalid"]

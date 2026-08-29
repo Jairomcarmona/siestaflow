@@ -674,9 +674,8 @@ def test_placement_is_single_source_for_campaign_srun_hydra_and_preflight(tmp_pa
     assert hydra_campaign["resources"]["nodes"] == srun_campaign["resources"]["nodes"] == 1
     assert hydra_campaign["resources"]["ntasks"] == srun_campaign["resources"]["ntasks"] == 20
     assert hydra_campaign["tasks"][0]["mpi_processes"] == srun_campaign["tasks"][0]["mpi_processes"] == 20
-    assert srun_campaign["runtime"]["launcher"]["arguments"][-4:] == [
-        "--nodes=1", "--ntasks=20", "--ntasks-per-node=20", "--cpus-per-task=1",
-    ]
+    # Placement is carried once by resources/ExecutionSpec; the adapter renders it.
+    assert srun_campaign["runtime"]["launcher"]["arguments"] == []
     preflight = (first / "preflight" / "submit_m10_preflight.slurm").read_text(encoding="utf-8")
     assert "#SBATCH --nodes=1" in preflight and "#SBATCH --ntasks=20" in preflight
     assert "-np 20 -ppn 20 hostname" in preflight
@@ -820,7 +819,7 @@ def test_hydra_policy_materializes_command_and_execution_fingerprint(tmp_path: P
     assert first_plan.execution_specs[task_id].fingerprint != second_plan.execution_specs[task_id].fingerprint
     assert first_plan.scientific_identities[task_id].fingerprint == second_plan.scientific_identities[task_id].fingerprint
     command = HydraLauncher(command=first_config.srun_command, arguments=first_config.srun_arguments).build_command(
-        StepLaunchSpec(task_id=task_id, attempt_id="test", workdir=first_root, input_path=first_root / "input" / "smoke.fdf", stdout_path=first_root / "out", stderr_path=first_root / "err", mpi_processes=64, cpus_per_process=1, executable=first_config.siesta_executable, hosts=("node-a", "node-b"), processes_per_node=32)
+        StepLaunchSpec(task_id=task_id, attempt_id="test", workdir=first_root, input_path=first_root / "input" / "smoke.fdf", stdout_path=first_root / "out", stderr_path=first_root / "err", mpi_processes=64, cpus_per_process=1, executable=first_config.siesta_executable, hosts=("node-a", "node-b"), processes_per_node=32, nodes=2)
     )
     assert command[command.index("-bootstrap") + 1] == "ssh"
     assert command.count("-bootstrap") == 1

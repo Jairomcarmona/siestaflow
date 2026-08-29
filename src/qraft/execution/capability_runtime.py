@@ -1109,6 +1109,7 @@ class CompiledWorkflowRuntime:
                     environment=execution_spec.environment,
                     hosts=hosts,
                     processes_per_node=execution_spec.ranks_per_node,
+                    nodes=execution_spec.nodes,
                 )
             )
             attempt = self._finalize_attempt(

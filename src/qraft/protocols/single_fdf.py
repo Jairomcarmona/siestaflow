@@ -50,6 +50,7 @@ from ..engines.siesta.output_parser import SiestaOutputParser
 from ..execution.adapters import launcher_registry
 from ..execution.capability_plugins import SIESTA_ENGINE_CAPABILITY, register_siesta_engine
 from ..execution.capability_runtime import CompiledWorkflowRuntime
+from ..execution.placement_validation import probe_launcher_placement
 from ..execution.runtime_composition import compose_runtime
 from ..execution.slurm_environment import SlurmEnvironment
 from ..execution.srun_launcher import StepLaunchSpec, StepOutcome
@@ -582,9 +583,6 @@ def _active_slurm(execution: ExecutionSpec) -> SlurmEnvironment | None:
         "SLURM_JOB_END_TIME", str(time.time() + execution.walltime_seconds)
     )
     slurm = SlurmEnvironment.from_mapping(values)
-    slurm.validate_capacity(
-        nodes=execution.nodes, total_cpus=execution.allocated_cpus
-    )
     return slurm
 
 
@@ -597,20 +595,36 @@ def _launch(execution: ExecutionSpec, spec: StepLaunchSpec) -> StepOutcome:
         raise ValueError(
             f"{adapter.name} launcher requires an active {adapter.scheduler.upper()} allocation"
         )
+    launcher = adapter.create(
+        command=execution.launcher_command,
+        arguments=execution.launcher_arguments,
+    )
     launch_spec = spec
+    if slurm is not None:
+        hosts = slurm.resolve_hostnames()
+        slurm.validate_exact_placement(
+            nodes=execution.nodes,
+            ntasks=execution.mpi_ranks,
+            cpus_per_task=execution.cpus_per_rank,
+            tasks_per_node=execution.ranks_per_node,
+            hosts=hosts,
+        )
+        probe_launcher_placement(
+            launcher=launcher,
+            execution=execution,
+            hosts=hosts,
+            root=spec.workdir,
+        )
     if adapter.requires_hosts:
         assert slurm is not None
         launch_spec = StepLaunchSpec(
             **{
                 **asdict(spec),
-                "hosts": slurm.resolve_hostnames()[: execution.nodes],
+                "hosts": hosts,
                 "processes_per_node": execution.ranks_per_node,
+                "nodes": execution.nodes,
             }
         )
-    launcher = adapter.create(
-        command=execution.launcher_command,
-        arguments=execution.launcher_arguments,
-    )
     return launcher.launch(launch_spec)
 
 
@@ -997,6 +1011,8 @@ def _execute_fdf_plan_legacy(
                 executable=execution.executable,
                 executable_arguments=execution.executable_arguments,
                 environment=execution.environment,
+                processes_per_node=execution.ranks_per_node,
+                nodes=execution.nodes,
             )
             outcome = _launch(execution, launch_spec)
         else:
@@ -1351,12 +1367,16 @@ def execute_fdf_plan(
     registry = CapabilityRegistry()
     register_siesta_engine(registry)
     registry.freeze()
-    composition = compose_runtime(execution, max_parallel_steps=1)
     runtime_key = _canonical_sha({
         "scientific": plan["scientific_identity"]["fingerprint"],
         "execution": execution.fingerprint,
     })[:16]
     runtime_root = resolved_runs / "runtime" / runtime_key
+    composition = compose_runtime(
+        execution,
+        max_parallel_steps=1,
+        placement_probe_root=runtime_root,
+    )
     runtime_result = CompiledWorkflowRuntime(
         workflow=workflow,
         registry=registry,

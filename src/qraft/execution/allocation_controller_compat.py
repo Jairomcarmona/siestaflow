@@ -100,6 +100,8 @@ class ControllerConfig:
     launcher_kind: str = "srun"
     launcher_bootstrap: str = ""
     processes_per_node: int | None = None
+    ntasks: int | None = None
+    cpus_per_task: int = 1
 
 
 def _sha_file(path: Path) -> str:
@@ -184,6 +186,14 @@ def load_controller_config(path: Path) -> ControllerConfig:
         _required_text(qos, "qos")
     nodes = _positive_int(resources.get("nodes"), "resources.nodes")
     total_cpus = _positive_int(resources.get("total_cpus"), "resources.total_cpus")
+    ntasks = _positive_int(
+        resources.get("ntasks", total_cpus), "resources.ntasks"
+    )
+    cpus_per_task = _positive_int(
+        resources.get("cpus_per_task", 1), "resources.cpus_per_task"
+    )
+    if ntasks * cpus_per_task > total_cpus:
+        raise ValueError("resources placement exceeds total_cpus")
     max_parallel = _positive_int(resources.get("max_parallel_steps"), "resources.max_parallel_steps")
     margin = _nonnegative_float(resources.get("shutdown_margin_seconds"), "resources.shutdown_margin_seconds")
     grace = _nonnegative_float(resources.get("termination_grace_seconds"), "resources.termination_grace_seconds")
@@ -232,6 +242,11 @@ def load_controller_config(path: Path) -> ControllerConfig:
                 "Hydra bootstrap must be supplied only by runtime.launcher.bootstrap"
             )
         srun_arguments = (*srun_arguments, "-bootstrap", launcher_bootstrap)
+    if processes_per_node is not None and nodes * processes_per_node != ntasks:
+        raise ValueError(
+            "campaign placement mismatch: "
+            f"{ntasks} != {nodes}*{processes_per_node}"
+        )
     tasks_raw = data.get("tasks")
     if not isinstance(tasks_raw, list) or not tasks_raw:
         raise ValueError("at least one task is required")
@@ -427,7 +442,8 @@ def load_controller_config(path: Path) -> ControllerConfig:
         siesta, tuple(map(str, executable_args_raw)), srun_command,
         srun_arguments, bool(runtime.get("exclusive", True)),
         {str(key): str(value) for key, value in environment_raw.items()}, tuple(tasks),
-        launcher_kind, launcher_bootstrap, processes_per_node,
+        launcher_kind, launcher_bootstrap, processes_per_node, ntasks,
+        cpus_per_task,
     )
 
 
@@ -892,6 +908,12 @@ class AllocationController:
         primary: Path,
         hosts: tuple[str, ...] = (),
     ) -> tuple[StepOutcome | None, str | None]:
+        selected_nodes = task.nodes or 1
+        selected_ppn = self.config.processes_per_node
+        if selected_ppn is None and task.mpi_processes % selected_nodes == 0:
+            # Schema-1 compatibility translation only. New production
+            # campaigns carry the authoritative processes_per_node explicitly.
+            selected_ppn = task.mpi_processes // selected_nodes
         spec = StepLaunchSpec(
             task.task_id, attempt_id, attempt, primary, attempt / "stdout.txt", attempt / "stderr.txt",
             task.mpi_processes, task.cpus_per_process,
@@ -901,7 +923,7 @@ class AllocationController:
                 if task.task_kind == "gate" else self.config.executable_arguments
             ),
             self.config.environment,
-            hosts, self.config.processes_per_node,
+            hosts, selected_ppn, selected_nodes,
         )
         try:
             self._verify_transfers_before_launch(task, attempt)

@@ -60,6 +60,10 @@ class HydraLauncher:
             raise ValueError("MPI processes and CPUs per process must be positive")
         if not spec.hosts:
             raise ValueError("Hydra requires an explicit non-empty host allocation")
+        if spec.nodes is None or spec.nodes != len(spec.hosts):
+            raise ValueError(
+                "Hydra placement nodes must equal the explicit host allocation"
+            )
         ppn = spec.processes_per_node
         if ppn is None or ppn <= 0:
             raise ValueError("Hydra requires a positive processes_per_node")

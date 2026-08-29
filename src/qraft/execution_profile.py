@@ -49,6 +49,7 @@ class SlurmExecutionProfile:
     environment: Mapping[str, str]
     max_attempts: int
     require_scf_converged: bool
+    cpus_per_task: int = 1
     schema_version: str = "1.0"
     target: str = "slurm"
 
@@ -63,6 +64,7 @@ class SlurmExecutionProfile:
         for name in (
             "nodes",
             "total_cpus",
+            "cpus_per_task",
             "max_parallel_steps",
             "max_attempts",
         ):
@@ -99,10 +101,14 @@ class SlurmExecutionProfile:
                 self.processes_per_node,
                 "processes_per_node",
             )
-            if self.nodes * self.processes_per_node != self.total_cpus:
+            requested_cpus = (
+                self.nodes * self.processes_per_node * self.cpus_per_task
+            )
+            unused_cpus = self.total_cpus - requested_cpus
+            if unused_cpus < 0 or unused_cpus >= self.nodes * self.cpus_per_task:
                 raise ValueError(
                     f"{self.launcher_kind} allocation requires nodes * processes_per_node "
-                    "to equal total_cpus"
+                    "* cpus_per_task to be the maximum legal placement"
                 )
         elif self.processes_per_node is not None:
             _positive_integer(
@@ -136,9 +142,7 @@ class SlurmExecutionProfile:
         runtime = _mapping(data["runtime"], "runtime")
         policy = _mapping(data["task_policy"], "task_policy")
         _exact_fields(slurm, {"partition", "account", "qos"}, "slurm")
-        _exact_fields(
-            allocation,
-            {
+        allocation_fields = {
                 "nodes",
                 "total_cpus",
                 "memory",
@@ -146,9 +150,10 @@ class SlurmExecutionProfile:
                 "max_parallel_steps",
                 "shutdown_margin_seconds",
                 "termination_grace_seconds",
-            },
-            "allocation",
-        )
+        }
+        if "cpus_per_task" in allocation:
+            allocation_fields.add("cpus_per_task")
+        _exact_fields(allocation, allocation_fields, "allocation")
         _exact_fields(
             runtime,
             {
@@ -216,6 +221,10 @@ class SlurmExecutionProfile:
             total_cpus=_integer(
                 allocation["total_cpus"], "allocation.total_cpus"
             ),
+            cpus_per_task=_integer(
+                allocation.get("cpus_per_task", 1),
+                "allocation.cpus_per_task",
+            ),
             memory=str(allocation["memory"]),
             walltime=str(allocation["walltime"]),
             max_parallel_steps=_integer(
@@ -262,6 +271,7 @@ class SlurmExecutionProfile:
             "allocation": {
                 "nodes": self.nodes,
                 "total_cpus": self.total_cpus,
+                "cpus_per_task": self.cpus_per_task,
                 "memory": self.memory,
                 "walltime": self.walltime,
                 "max_parallel_steps": self.max_parallel_steps,
@@ -303,12 +313,9 @@ class SlurmExecutionProfile:
         nodes: int,
         ranks_per_node: int,
         walltime: str,
+        cpus_per_task: int = 1,
     ) -> "SlurmExecutionProfile":
         """Return an immutable run-specific profile without changing science."""
-        if launcher_registry.require(self.launcher_kind).requires_processes_per_node:
-            processes_per_node: int | None = ranks_per_node
-        else:
-            processes_per_node = self.processes_per_node
         return replace(
             self,
             profile_id=f"{self.profile_id}-resolved",
@@ -316,10 +323,17 @@ class SlurmExecutionProfile:
             account=account,
             qos=qos,
             nodes=nodes,
-            total_cpus=nodes * ranks_per_node,
+            total_cpus=nodes * ranks_per_node * cpus_per_task,
             walltime=walltime,
-            processes_per_node=processes_per_node,
+            processes_per_node=ranks_per_node,
+            cpus_per_task=cpus_per_task,
         )
+
+    @property
+    def ntasks(self) -> int:
+        if self.processes_per_node is not None:
+            return self.nodes * self.processes_per_node
+        return self.total_cpus // self.cpus_per_task
 
 
 def _validate_module_command(command: str) -> None:

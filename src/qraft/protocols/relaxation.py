@@ -50,7 +50,11 @@ class RelaxationProtocol:
         if not compilation.valid or compilation.compiled is None:
             raise ValueError("M5 workflow compilation failed")
         registry = CapabilityRegistry(); register_siesta_relax(registry); registry.freeze()
-        composition = compose_runtime(execution, max_parallel_steps=1)
+        composition = compose_runtime(
+            execution,
+            max_parallel_steps=1,
+            placement_probe_root=root,
+        )
         runtime = CompiledWorkflowRuntime(workflow=compilation.compiled, registry=registry, root=root, source_root=root, scientific_identities={"relax": build_scientific_identity(fdf, pseudo_manifest=pseudo_manifest)}, execution_specs=execution, launcher=composition.launcher, allocation=composition.allocation, force_new_attempts=force_new_attempt).run()
         attempt = runtime.attempts.get("relax")
         if attempt is None:

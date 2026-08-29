@@ -26,6 +26,7 @@ class StepLaunchSpec:
     environment: Mapping[str, str] | None = None
     hosts: tuple[str, ...] = ()
     processes_per_node: int | None = None
+    nodes: int | None = None
 
     @property
     def allocated_cpus(self) -> int:
@@ -74,6 +75,20 @@ class SrunLauncher:
             raise ValueError("srun_command must contain at least one non-empty argument")
         self.srun_command = tuple(map(str, srun_command))
         self.srun_arguments = tuple(map(str, srun_arguments))
+        placement_options = (
+            "--nodes",
+            "--ntasks",
+            "--ntasks-per-node",
+            "--cpus-per-task",
+        )
+        if any(
+            argument == option or argument.startswith(f"{option}=")
+            for argument in self.srun_arguments
+            for option in placement_options
+        ):
+            raise ValueError(
+                "srun placement arguments must come from StepLaunchSpec"
+            )
         self.exclusive = bool(exclusive)
         self._popen_factory = popen_factory
         self._active: dict[str, _ActiveProcess] = {}
@@ -82,10 +97,24 @@ class SrunLauncher:
     def build_command(self, spec: StepLaunchSpec) -> tuple[str, ...]:
         if spec.mpi_processes <= 0 or spec.cpus_per_process <= 0:
             raise ValueError("MPI processes and CPUs per process must be positive")
+        if spec.nodes is None or spec.nodes <= 0:
+            raise ValueError("srun requires explicit placement nodes")
+        if spec.processes_per_node is None or spec.processes_per_node <= 0:
+            raise ValueError("srun requires explicit processes_per_node")
+        if spec.mpi_processes != spec.nodes * spec.processes_per_node:
+            raise ValueError(
+                "srun placement mismatch: "
+                f"{spec.mpi_processes} != {spec.nodes}*{spec.processes_per_node}"
+            )
         command = [*self.srun_command, *self.srun_arguments]
         if self.exclusive and "--exclusive" not in command:
             command.append("--exclusive")
-        command.extend((f"--ntasks={spec.mpi_processes}", f"--cpus-per-task={spec.cpus_per_process}"))
+        command.extend((
+            f"--nodes={spec.nodes}",
+            f"--ntasks={spec.mpi_processes}",
+            f"--ntasks-per-node={spec.processes_per_node}",
+            f"--cpus-per-task={spec.cpus_per_process}",
+        ))
         command.extend((spec.executable, *spec.executable_arguments))
         return tuple(command)
 
