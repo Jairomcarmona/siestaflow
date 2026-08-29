@@ -1,7 +1,12 @@
 # ADR-0002 — Resolución flexible y confirmada de recursos Slurm
 
-Estado: `Accepted`
+Estado: `Superseded`
 Fecha: `2026-08-01`
+
+Reemplazado operativamente para nuevas ejecuciones por
+[ADR-0004 — Contrato live Slurm a DerivedPlacement](0004-live-slurm-placement-contract.md).
+Los snapshots descritos aquí siguen siendo evidencia reproducible, pero no son
+autoridad para el estado actual ni para nuevas selecciones.
 
 ## Contexto
 
