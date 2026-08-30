@@ -412,8 +412,8 @@ def build_parser() -> argparse.ArgumentParser:
     run_resources = prepared_run_sub.add_parser(
         "resources", help="show live Slurm resources without selecting one"
     )
-    run_resources.add_argument("--account", required=True)
-    run_resources.add_argument("--qos", required=True)
+    run_resources.add_argument("--account")
+    run_resources.add_argument("--qos")
     run_resources.add_argument("--cpus-per-task", type=int, default=1)
     run_resources.add_argument("--walltime", default="00:20:00")
     run_resources.add_argument("--json", action="store_true")
@@ -422,8 +422,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run_placement.add_argument("--partition", required=True)
     run_placement.add_argument("--nodes", type=int)
-    run_placement.add_argument("--account", required=True)
-    run_placement.add_argument("--qos", required=True)
+    run_placement.add_argument("--account")
+    run_placement.add_argument("--qos")
     run_placement.add_argument("--cpus-per-task", type=int, default=1)
     run_placement.add_argument("--walltime", default="00:20:00")
     run_placement.add_argument("--output", type=Path, required=True)
@@ -546,7 +546,8 @@ def main(argv: list[str] | None = None) -> int:
 
         return run_repl()
     legacy_run_actions = {
-        "prepare", "candidates", "discover", "snapshot-import",
+        "prepare", "candidates", "discover", "resources", "placement",
+        "snapshot-import",
         "inspect", "status", "resume",
     }
     domain_index = 0

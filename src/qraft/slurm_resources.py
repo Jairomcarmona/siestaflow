@@ -12,7 +12,7 @@ import json
 import re
 import shutil
 import subprocess
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, Protocol, Sequence
@@ -31,6 +31,7 @@ from .validation.scheduler_resolution import (
     parse_scontrol_partitions as parse_live_partition_policies,
     parse_sinfo_node_capabilities,
     parse_sinfo_partitions as parse_live_visible_partitions,
+    allows_restriction,
 )
 
 
@@ -125,6 +126,10 @@ class LiveSlurmSelection:
                 "partition": self.partition,
                 "nodes": self.resource_request.nodes,
                 "explicit": True,
+            },
+            "resolved_selection": {
+                "account": self.resource_request.account,
+                "qos": self.resource_request.qos,
             },
             "derived_placement": self.placement.to_dict(),
         }
@@ -435,37 +440,189 @@ class LiveSlurmPlacementService:
             observed_at=observed_at,
         ))
 
-    def _association(
-        self, partition: str, request: ResourceRequest
-    ) -> SchedulerAssociation:
-        def qos_allows(item: SchedulerAssociation) -> bool:
-            if request.qos is None:
-                return item.qos is None
-            return request.qos in {
-                value.strip()
-                for value in str(item.qos or "").split(",")
-                if value.strip()
-            }
+    @staticmethod
+    def _qos_values(item: SchedulerAssociation) -> set[str]:
+        return {
+            value.strip()
+            for value in str(item.qos or "").split(",")
+            if value.strip()
+        }
 
+    @staticmethod
+    def _partition_associations(
+        partition: str, associations: Sequence[SchedulerAssociation]
+    ) -> list[SchedulerAssociation]:
         matches = [
             item
-            for item in self.evidence.associations
+            for item in associations
             if item.evidence_status == "OBSERVED"
-            and item.account == request.account
-            and qos_allows(item)
             and item.partition in {None, partition}
         ]
-        explicit = [item for item in matches if item.partition == partition]
-        selected = explicit or [item for item in matches if item.partition is None]
-        unique = {
-            (item.account, item.partition, item.qos, item.scope)
-            for item in selected
-        }
-        if not selected or len(unique) != 1:
+        return matches
+
+    def _association(
+        self,
+        partition: str,
+        policy: PartitionPolicy,
+        request: ResourceRequest,
+    ) -> tuple[SchedulerAssociation, ResourceRequest]:
+        candidates = self._partition_associations(
+            partition, self.evidence.associations
+        )
+        if request.account is not None:
+            accounts = {request.account}
+        else:
+            accounts = {
+                str(item.account)
+                for item in candidates
+                if item.account is not None
+                and allows_restriction(
+                    policy.allow_accounts, item.account, observed=True
+                )
+            }
+            if not accounts:
+                raise ValueError(
+                    "SCHEDULER_PLACEMENT_UNRESOLVED: "
+                    "ACCOUNT_ASSOCIATION_NOT_OBSERVED"
+                )
+            if len(accounts) != 1:
+                raise ValueError(
+                    "ACCOUNT_SELECTION_REQUIRED"
+                )
+        account = next(iter(accounts))
+        account_matches = [
+            item for item in candidates if item.account == account
+        ]
+        explicit = [
+            item for item in account_matches if item.partition == partition
+        ]
+        account_candidates = explicit or [
+            item for item in account_matches if item.partition is None
+        ]
+        if not account_candidates:
             raise ValueError(
-                "SCHEDULER_PLACEMENT_UNRESOLVED: USER_ASSOCIATION_NOT_UNIQUE"
+                "SCHEDULER_PLACEMENT_UNRESOLVED: "
+                "ACCOUNT_ASSOCIATION_NOT_OBSERVED"
             )
-        return selected[0]
+        if request.qos is not None:
+            qos = request.qos
+            if not any(qos in self._qos_values(item) for item in account_candidates):
+                raise ValueError(
+                    "SCHEDULER_PLACEMENT_UNRESOLVED: "
+                    "QOS_ASSOCIATION_NOT_OBSERVED"
+                )
+        else:
+            qoses = {
+                qos
+                for item in account_candidates
+                for qos in self._qos_values(item)
+                if allows_restriction(policy.allow_qos, qos, observed=True)
+            }
+            if len(qoses) > 1:
+                raise ValueError("QOS_SELECTION_REQUIRED")
+            if len(qoses) == 1:
+                qos = next(iter(qoses))
+            elif (
+                all(item.qos is None for item in account_candidates)
+                and policy.allow_qos["kind"] in {"ALL", "N/A"}
+            ):
+                qos = None
+            else:
+                raise ValueError(
+                    "SCHEDULER_PLACEMENT_UNRESOLVED: "
+                    "QOS_ASSOCIATION_NOT_OBSERVED"
+                )
+        association = next(
+            item for item in account_candidates
+            if qos is None or qos in self._qos_values(item)
+        )
+        return (
+            replace(association, account=account, qos=qos),
+            replace(request, account=account, qos=qos),
+        )
+
+    def _normalized_visible_partition(
+        self,
+        partition: str,
+        rows: Sequence[VisiblePartition],
+    ) -> VisiblePartition:
+        """Bind aggregate ``sinfo`` visibility to node-level evidence.
+
+        Aggregate rows can be split by Slurm state.  Their node counts are not
+        capacity authority: the unique ``sinfo -N`` node set is authoritative.
+        """
+
+        availability = {item.availability for item in rows}
+        time_limits = {item.time_limit for item in rows}
+        if len(availability) != 1 or len(time_limits) != 1:
+            raise ValueError(
+                "SCHEDULER_PLACEMENT_UNRESOLVED: "
+                "AGGREGATE_PARTITION_EVIDENCE_CONTRADICTORY"
+            )
+        capabilities = [
+            item for item in self.evidence.node_capabilities
+            if item.partition == partition
+        ]
+        by_node: dict[str, NodeCapability] = {}
+        for item in capabilities:
+            previous = by_node.get(item.node)
+            if previous is not None and (
+                previous.cpus_per_node != item.cpus_per_node
+                or previous.memory_mb != item.memory_mb
+            ):
+                raise ValueError(
+                    "SCHEDULER_PLACEMENT_UNRESOLVED: "
+                    "CONTRADICTORY_NODE_CAPABILITY"
+                )
+            by_node[item.node] = item
+        if not by_node:
+            raise ValueError(
+                "SCHEDULER_PLACEMENT_UNRESOLVED: "
+                "NODE_CAPABILITY_EVIDENCE_MISSING"
+            )
+        cpu_values = {item.cpus_per_node for item in by_node.values()}
+        memory_values = {item.memory_mb for item in by_node.values()}
+        aggregate_cpus = {
+            item.cpus_per_node for item in rows
+            if item.cpus_per_node is not None
+        }
+        aggregate_memory = {
+            item.memory for item in rows if item.memory is not None
+        }
+        if (
+            len(aggregate_cpus) > 1
+            or len(aggregate_memory) > 1
+            or (
+                len(cpu_values) == 1
+                and aggregate_cpus
+                and aggregate_cpus != cpu_values
+            )
+            or (
+                len(memory_values) == 1
+                and aggregate_memory
+                and aggregate_memory != memory_values
+            )
+        ):
+            raise ValueError(
+                "SCHEDULER_PLACEMENT_UNRESOLVED: "
+                "AGGREGATE_NODE_CAPABILITY_MISMATCH"
+            )
+        exemplar = rows[0]
+        return VisiblePartition(
+            name=partition,
+            availability=exemplar.availability,
+            time_limit=exemplar.time_limit,
+            nodes=len(by_node),
+            cpus_per_node=(
+                next(iter(cpu_values)) if len(cpu_values) == 1 else None
+            ),
+            memory=(
+                next(iter(memory_values)) if len(memory_values) == 1 else None
+            ),
+            default=any(item.default for item in rows),
+            source_file=exemplar.source_file,
+            source_line=min(item.source_line for item in rows),
+        )
 
     def select(
         self,
@@ -482,23 +639,26 @@ class LiveSlurmPlacementService:
         policies = [
             item for item in self.evidence.partition_policies if item.name == name
         ]
-        if len(visible) != 1 or len(policies) != 1:
+        if not visible or len(policies) != 1:
             raise ValueError(
                 "SCHEDULER_PLACEMENT_UNRESOLVED: "
                 "PARTITION_EVIDENCE_NOT_UNIQUE"
             )
-        association = self._association(name, resource_request)
+        normalized_visible = self._normalized_visible_partition(name, visible)
+        association, resolved_request = self._association(
+            name, policies[0], resource_request
+        )
         placement = derive_partition_placement(
-            visible[0],
+            normalized_visible,
             policies[0],
             self.evidence.node_capabilities,
             association,
-            resource_request,
+            resolved_request,
         )
         return LiveSlurmSelection(
             evidence=self.evidence,
             association=association,
-            resource_request=resource_request,
+            resource_request=resolved_request,
             partition=name,
             placement=placement,
         )

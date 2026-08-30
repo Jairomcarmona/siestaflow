@@ -249,7 +249,9 @@ def _seconds(value: str | None) -> int | None:
     return days * 86400 + hours * 3600 + minutes * 60 + seconds
 
 
-def _allows(restriction: dict[str, Any], value: str | None, *, observed: bool) -> bool:
+def allows_restriction(
+    restriction: dict[str, Any], value: str | None, *, observed: bool
+) -> bool:
     if not observed:
         return False
     kind = restriction["kind"]
@@ -258,6 +260,12 @@ def _allows(restriction: dict[str, Any], value: str | None, *, observed: bool) -
     if kind == "EXPLICIT_LIST":
         return value in restriction["values"] if value else False
     return False
+
+
+def _allows(restriction: dict[str, Any], value: str | None, *, observed: bool) -> bool:
+    """Backward-compatible local alias for existing resolution paths."""
+
+    return allows_restriction(restriction, value, observed=observed)
 
 
 def _association_qos_allows(observed_qos: str | None, requested_qos: str | None) -> bool:

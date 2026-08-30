@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from qraft.controller_package import ControllerPackageBuilder
+from qraft.cli import build_parser, main
 from qraft.core import ExecutionSpec, ScientificIdentity
 from qraft.execution.allocation_controller import ControllerConfig
 from qraft.execution.canonical_controller import CanonicalController
@@ -93,8 +94,10 @@ class FakeSlurmRunner:
         return SlurmCommandOutput(argv, 0, text)
 
 
-def _service(**kwargs) -> tuple[LiveSlurmPlacementService, FakeSlurmRunner]:
-    runner = FakeSlurmRunner(_slurm_outputs(**kwargs))
+def _service(
+    *, outputs: dict[str, str] | None = None, **kwargs
+) -> tuple[LiveSlurmPlacementService, FakeSlurmRunner]:
+    runner = FakeSlurmRunner(outputs or _slurm_outputs(**kwargs))
     evidence = discover_live_slurm(
         runner=runner,
         user="researcher",
@@ -140,9 +143,9 @@ def test_live_policy_rejects_invalid_association_and_down_partition():
     assert options["partition_alpha"]["status"] == "SELECTABLE"
     assert options["partition_gamma"]["status"] == "MANUAL_NODE_SELECTION_REQUIRED"
     assert options["partition_heterogeneous"]["status"] == "NOT_SELECTABLE"
-    with pytest.raises(ValueError, match="USER_ASSOCIATION_NOT_UNIQUE"):
+    with pytest.raises(ValueError, match="ACCOUNT_ASSOCIATION_NOT_OBSERVED"):
         service.select(partition="partition_alpha", resource_request=_request(account="other"))
-    with pytest.raises(ValueError, match="USER_ASSOCIATION_NOT_UNIQUE"):
+    with pytest.raises(ValueError, match="QOS_ASSOCIATION_NOT_OBSERVED"):
         service.select(partition="partition_alpha", resource_request=_request(qos="other"))
     with pytest.raises(ValueError, match="PARTITION_NOT_AVAILABLE|PARTITION_NOT_UP"):
         service.select(partition="partition_down", resource_request=_request())
@@ -186,6 +189,120 @@ def test_unsafe_capacity_walltime_and_overcommit_fail_closed():
             partition="partition_alpha",
             resource_request=_request(cpus_per_task=21),
         )
+
+
+def test_multi_row_sinfo_uses_unique_node_level_capacity() -> None:
+    outputs = _slurm_outputs()
+    alpha_rows = (
+        "partition_alpha|up|01:00:00|2|20|64000\n"
+        "partition_alpha|up|01:00:00|2|20|64000"
+    )
+    outputs["sinfo"] = outputs["sinfo"].replace(
+        "partition_alpha|up|01:00:00|4|20|64000", alpha_rows
+    )
+    service, _ = _service(outputs=outputs)
+    visible = service._normalized_visible_partition(
+        "partition_alpha",
+        [
+            item for item in service.evidence.visible_partitions
+            if item.name == "partition_alpha"
+        ],
+    )
+    assert visible.nodes == 4 and visible.cpus_per_node == 20
+    placement = service.select(
+        partition="partition_alpha", resource_request=_request()
+    ).placement
+    assert (placement.nodes, placement.safe_cpus_per_node, placement.ntasks) == (
+        1, 20, 20,
+    )
+
+
+def test_node_level_duplicate_is_deduplicated_but_contradiction_fails() -> None:
+    outputs = _slurm_outputs()
+    outputs["nodes"] += "partition_alpha-node1|partition_alpha|20|64000|up\n"
+    service, _ = _service(outputs=outputs)
+    assert service.select(
+        partition="partition_alpha", resource_request=_request()
+    ).placement.safe_cpus_per_node == 20
+
+    outputs["nodes"] += "partition_alpha-node1|partition_alpha|32|64000|up\n"
+    contradictory, _ = _service(outputs=outputs)
+    with pytest.raises(ValueError, match="CONTRADICTORY_NODE_CAPABILITY"):
+        contradictory.select(
+            partition="partition_alpha", resource_request=_request()
+        )
+
+
+def test_live_association_resolves_only_unique_account_and_qos() -> None:
+    outputs = _slurm_outputs()
+    outputs["associations"] = "research_account||normal\n"
+    service, _ = _service(outputs=outputs)
+    selection = service.select(
+        partition="partition_alpha",
+        resource_request=_request(account=None, qos=None),
+    )
+    assert selection.resource_request.account == "research_account"
+    assert selection.resource_request.qos == "normal"
+    assert selection.provenance()["resolved_selection"] == {
+        "account": "research_account", "qos": "normal",
+    }
+
+    outputs["associations"] = "research_account||\n"
+    no_qos, _ = _service(outputs=outputs)
+    assert no_qos.select(
+        partition="partition_alpha",
+        resource_request=_request(account=None, qos=None),
+    ).resource_request.qos is None
+
+    outputs["associations"] = "account_one||normal\naccount_two||normal\n"
+    ambiguous_accounts, _ = _service(outputs=outputs)
+    with pytest.raises(ValueError, match="ACCOUNT_SELECTION_REQUIRED"):
+        ambiguous_accounts.select(
+            partition="partition_alpha",
+            resource_request=_request(account=None, qos="normal"),
+        )
+
+
+def test_live_qos_requires_explicit_selection_only_when_ambiguous() -> None:
+    outputs = _slurm_outputs()
+    outputs["associations"] = "research_account||normal,high\n"
+    service, _ = _service(outputs=outputs)
+    with pytest.raises(ValueError, match="QOS_SELECTION_REQUIRED"):
+        service.select(
+            partition="partition_alpha",
+            resource_request=_request(account="research_account", qos=None),
+        )
+    assert service.select(
+        partition="partition_alpha",
+        resource_request=_request(account="research_account", qos="normal"),
+    ).resource_request.qos == "normal"
+    with pytest.raises(ValueError, match="QOS_ASSOCIATION_NOT_OBSERVED"):
+        service.select(
+            partition="partition_alpha",
+            resource_request=_request(account="research_account", qos="other"),
+        )
+
+
+def test_cli_resources_and_placement_do_not_require_account_or_qos(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    parser = build_parser()
+    resources = parser.parse_args(["run", "resources"])
+    placement = parser.parse_args([
+        "run", "placement", "--partition", "partition_alpha", "--output", "x",
+    ])
+    assert (resources.account, resources.qos) == (None, None)
+    assert (placement.account, placement.qos) == (None, None)
+    outputs = _slurm_outputs()
+    outputs["associations"] = "research_account||normal\n"
+    service, _ = _service(outputs=outputs)
+    monkeypatch.setattr(
+        "qraft.cli.LiveSlurmPlacementService.discover",
+        staticmethod(lambda: service),
+    )
+    assert main(["run", "resources", "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["partitions"] and payload["partition_selected"] is False
 
 
 def _campaign(placement, launcher="hydra"):
