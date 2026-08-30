@@ -133,6 +133,155 @@ def _load_scheduler_selection(path: Path) -> dict[str, Any]:
     return result
 
 
+def _live_placement_value(
+    placement: Mapping[str, Any], legacy_field: str, live_field: str,
+) -> int:
+    """Read one placement value without translating live provenance to legacy."""
+
+    value = placement.get(live_field, placement.get(legacy_field))
+    return _positive_int(value, f"derived_placement.{live_field}")
+
+
+def _live_node_memory(
+    sources: Mapping[str, Any], partition: str, placement: Mapping[str, Any],
+) -> int:
+    """Bind campaign memory to homogeneous node-level live evidence."""
+
+    capabilities = sources.get("node_capabilities")
+    if not isinstance(capabilities, list):
+        raise ValueError(
+            "M10_REMOTE_PROFILE_UNRESOLVED: live node capability evidence is missing"
+        )
+    by_node: dict[str, tuple[int, int]] = {}
+    for item in capabilities:
+        if not isinstance(item, Mapping) or item.get("partition") != partition:
+            continue
+        node = item.get("node")
+        if not isinstance(node, str) or not node.strip():
+            raise ValueError(
+                "M10_REMOTE_PROFILE_UNRESOLVED: invalid live node capability name"
+            )
+        capacity = (
+            _positive_int(item.get("cpus_per_node"), "node_capabilities.cpus_per_node"),
+            _positive_int(item.get("memory_mb"), "node_capabilities.memory_mb"),
+        )
+        previous = by_node.get(node)
+        if previous is not None and previous != capacity:
+            raise ValueError(
+                "M10_REMOTE_PROFILE_UNRESOLVED: contradictory live node capability evidence"
+            )
+        by_node[node] = capacity
+    if not by_node:
+        raise ValueError(
+            "M10_REMOTE_PROFILE_UNRESOLVED: live node capability evidence is missing"
+        )
+    if len(by_node) < _positive_int(placement.get("nodes"), "derived_placement.nodes"):
+        raise ValueError(
+            "M10_REMOTE_PROFILE_UNRESOLVED: live node capability evidence is insufficient"
+        )
+    cpu_values = {capacity[0] for capacity in by_node.values()}
+    memory_values = {capacity[1] for capacity in by_node.values()}
+    if len(cpu_values) != 1 or len(memory_values) != 1:
+        raise ValueError(
+            "M10_REMOTE_PROFILE_UNRESOLVED: live node capability evidence is heterogeneous"
+        )
+    observed_cpus = next(iter(cpu_values))
+    if observed_cpus != _positive_int(
+        placement.get("safe_cpus_per_node"),
+        "derived_placement.safe_cpus_per_node",
+    ):
+        raise ValueError(
+            "M10_REMOTE_PROFILE_UNRESOLVED: live node CPU capacity disagrees with derived placement"
+        )
+    return next(iter(memory_values))
+
+
+def _load_live_slurm_selection(
+    path: Path,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], Mapping[str, Any]]:
+    """Validate ADR-0004 provenance without resolving or recalculating placement."""
+
+    if not path.is_file():
+        raise ValueError(f"M10_REMOTE_PROFILE_UNRESOLVED: selection file missing: {path}")
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        raise ValueError(
+            "M10_REMOTE_PROFILE_UNRESOLVED: live Slurm selection is not JSON"
+        ) from error
+    if not isinstance(data, dict) or data.get("authority") != "LIVE_SLURM_SELECTION_EVIDENCE":
+        raise ValueError("M10_REMOTE_PROFILE_UNRESOLVED: live Slurm selection is invalid")
+    if data.get("runtime_authority_for_future_runs") is not False:
+        raise ValueError(
+            "M10_REMOTE_PROFILE_UNRESOLVED: live Slurm selection authority is invalid"
+        )
+    observed_at = data.get("observed_at")
+    if not isinstance(observed_at, str) or not observed_at.strip():
+        raise ValueError("M10_REMOTE_PROFILE_UNRESOLVED: live observation time is missing")
+    human = data.get("human_selection")
+    resolved = data.get("resolved_selection")
+    sources = data.get("sources")
+    placement_value = data.get("derived_placement")
+    if not all(isinstance(item, Mapping) for item in (human, resolved, sources, placement_value)):
+        raise ValueError("M10_REMOTE_PROFILE_UNRESOLVED: live Slurm selection is incomplete")
+    if sources.get("authority") != "LIVE_SLURM_DISCOVERY":
+        raise ValueError("M10_REMOTE_PROFILE_UNRESOLVED: live Slurm source evidence is invalid")
+    if human.get("explicit") is not True:
+        raise ValueError("M10_REMOTE_PROFILE_UNRESOLVED: live partition selection is not explicit")
+    partition = _required_scheduler_text(human.get("partition"), "human_selection.partition")
+    if placement_value.get("partition") != partition:
+        raise ValueError(
+            "M10_REMOTE_PROFILE_UNRESOLVED: human partition disagrees with derived placement"
+        )
+    account_value = resolved.get("account")
+    qos_value = resolved.get("qos")
+    account = (
+        _required_scheduler_text(account_value, "resolved_selection.account")
+        if account_value is not None else None
+    )
+    qos = (
+        _required_scheduler_text(qos_value, "resolved_selection.qos")
+        if qos_value is not None else None
+    )
+    placement = dict(placement_value)
+    for field in (
+        "nodes", "tasks_per_node", "ntasks", "cpus_per_task",
+        "safe_cpus_per_node", "total_allocated_cpus",
+    ):
+        _positive_int(placement.get(field), f"derived_placement.{field}")
+    walltime = placement.get("walltime")
+    if not isinstance(walltime, str) or not walltime.strip():
+        raise ValueError("M10_REMOTE_PROFILE_UNRESOLVED: invalid derived_placement.walltime")
+    if placement["ntasks"] != placement["nodes"] * placement["tasks_per_node"]:
+        raise ValueError("M10_REMOTE_PROFILE_UNRESOLVED: inconsistent live derived placement")
+    if placement["tasks_per_node"] * placement["cpus_per_task"] > placement["safe_cpus_per_node"]:
+        raise ValueError("M10_REMOTE_PROFILE_UNRESOLVED: live derived placement CPU overcommit")
+    if placement["total_allocated_cpus"] != placement["nodes"] * placement["safe_cpus_per_node"]:
+        raise ValueError("M10_REMOTE_PROFILE_UNRESOLVED: live derived placement total CPU mismatch")
+    commands = sources.get("commands")
+    if not isinstance(commands, list) or not commands:
+        raise ValueError("M10_REMOTE_PROFILE_UNRESOLVED: live source command evidence is missing")
+    for command in commands:
+        if (
+            not isinstance(command, Mapping)
+            or not isinstance(command.get("argv"), list)
+            or command.get("returncode") != 0
+            or not isinstance(command.get("stdout_sha256"), str)
+            or not re.fullmatch(r"[0-9a-f]{64}", command["stdout_sha256"])
+        ):
+            raise ValueError(
+                "M10_REMOTE_PROFILE_UNRESOLVED: live source command evidence is invalid"
+            )
+    memory_mb = _live_node_memory(sources, partition, placement)
+    scheduler = {
+        "partition": partition,
+        "account": account,
+        "qos": qos,
+        "memory": f"{memory_mb}M",
+    }
+    return scheduler, placement, dict(data), sources
+
+
 def _runtime_text(value: object, field: str) -> str:
     if not isinstance(value, str) or not _SAFE.fullmatch(value):
         raise ValueError(f"M10_RUNTIME_PROFILE_UNRESOLVED: invalid {field}")
@@ -258,9 +407,18 @@ def _selected_python_path(runtime: Mapping[str, Any]) -> str:
     return value
 
 
-def _siesta_campaign(repository: Path, selection: Mapping[str, Any], runtime: Mapping[str, Any], launcher: str, source: Path) -> Path:
+def _siesta_campaign(
+    repository: Path, selection: Mapping[str, Any], runtime: Mapping[str, Any],
+    launcher: str, source: Path, *, placement: Mapping[str, Any] | None = None,
+) -> Path:
     hashes = _fixture(repository, source)
-    placement = _resolved_placement(selection)
+    placement = _resolved_placement(selection) if placement is None else placement
+    processes_per_node = _live_placement_value(
+        placement, "processes_per_node", "tasks_per_node"
+    )
+    total_cpus = _live_placement_value(
+        placement, "total_cpus", "total_allocated_cpus"
+    )
     selected_launcher = runtime["launchers"][launcher]
     launcher_data: dict[str, Any] = {
         "kind": launcher, "command": [selected_launcher["selected_executable"]],
@@ -268,7 +426,7 @@ def _siesta_campaign(repository: Path, selection: Mapping[str, Any], runtime: Ma
             _srun_arguments(runtime, placement)
             if launcher == "srun" else selected_launcher["arguments"]
         ),
-        "processes_per_node": placement["processes_per_node"],
+        "processes_per_node": processes_per_node,
     }
     if launcher == "hydra":
         launcher_data["bootstrap"] = _hydra_bootstrap(selected_launcher.get("bootstrap"))
@@ -282,7 +440,7 @@ def _siesta_campaign(repository: Path, selection: Mapping[str, Any], runtime: Ma
         "schema_version": "2.0", "campaign_id": CAMPAIGN_ID, "system_id": SYSTEM_ID,
         "classification": ["NON_SCIENTIFIC_TECHNICAL_ACCEPTANCE", "ENERGY_INTERPRETATION_FORBIDDEN"],
         "slurm": _slurm(selection),
-        "resources": {"nodes": placement["nodes"], "total_cpus": placement["total_cpus"], "ntasks": placement["ntasks"], "cpus_per_task": placement["cpus_per_task"], "memory": selection["memory"], "walltime": placement["walltime"], "max_parallel_steps": 1, "shutdown_margin_seconds": 120, "termination_grace_seconds": 30},
+        "resources": {"nodes": placement["nodes"], "total_cpus": total_cpus, "ntasks": placement["ntasks"], "cpus_per_task": placement["cpus_per_task"], "memory": selection["memory"], "walltime": placement["walltime"], "max_parallel_steps": 1, "shutdown_margin_seconds": 120, "termination_grace_seconds": 30},
         "runtime": {"module_commands": _runtime_setup(runtime, launcher), "siesta_executable": runtime["siesta"]["selected_executable"], "executable_arguments": [], "launcher": launcher_data, "exclusive": True, "environment": runtime_environment},
         "tasks": [{"task_id": "M10_SIESTA_SMOKE", "input": "input/smoke.fdf", "input_hashes": hashes, "required_artifacts": [], "mpi_processes": placement["ntasks"], "cpus_per_process": placement["cpus_per_task"], "nodes": placement["nodes"], "estimated_runtime_seconds": 600, "max_attempts": 1, "require_scf_converged": True}],
     }
@@ -291,8 +449,18 @@ def _siesta_campaign(repository: Path, selection: Mapping[str, Any], runtime: Ma
     return path
 
 
-def _continuation_campaign(selection: Mapping[str, Any], runtime: Mapping[str, Any], source: Path) -> Path:
-    placement = _resolved_placement(selection)
+def _continuation_campaign(
+    selection: Mapping[str, Any], runtime: Mapping[str, Any], source: Path,
+    *, placement: Mapping[str, Any] | None = None,
+) -> Path:
+    derived_placement_supplied = placement is not None
+    placement = _resolved_placement(selection) if placement is None else placement
+    processes_per_node = _live_placement_value(
+        placement, "processes_per_node", "tasks_per_node"
+    )
+    total_cpus = _live_placement_value(
+        placement, "total_cpus", "total_allocated_cpus"
+    )
     (source / "input").mkdir(parents=True)
     input_path = source / "input" / "continuation-input.json"
     _write_json(input_path, {"classification": "NON_SCIENTIFIC_TECHNICAL_ACCEPTANCE", "purpose": "M10 allocation continuation"})
@@ -301,8 +469,8 @@ def _continuation_campaign(selection: Mapping[str, Any], runtime: Mapping[str, A
     campaign = {
         "schema_version": "2.0", "campaign_id": CONTINUATION_CAMPAIGN_ID, "system_id": "M10_ALLOCATION_CONTINUATION_TECHNICAL",
         "classification": ["NON_SCIENTIFIC_TECHNICAL_ACCEPTANCE", "ENERGY_INTERPRETATION_FORBIDDEN"], "slurm": _slurm(selection),
-        "resources": {"nodes": placement["nodes"], "total_cpus": placement["total_cpus"], "ntasks": placement["ntasks"], "cpus_per_task": placement["cpus_per_task"], "memory": selection["memory"], "walltime": "00:03:00", "max_parallel_steps": 1, "shutdown_margin_seconds": CONTINUATION_SHUTDOWN_MARGIN_SECONDS, "termination_grace_seconds": 10},
-        "runtime": {"module_commands": _runtime_setup(runtime, "srun"), "siesta_executable": runtime["python"]["selected_executable"], "executable_arguments": [], "launcher": {"kind": "srun", "command": [runtime["launchers"]["srun"]["selected_executable"]], "arguments": _srun_arguments(runtime, placement), "processes_per_node": placement["processes_per_node"]}, "exclusive": True, "environment": {"QRAFT_PYTHON": _selected_python_path(runtime)}},
+        "resources": {"nodes": placement["nodes"], "total_cpus": total_cpus, "ntasks": placement["ntasks"], "cpus_per_task": placement["cpus_per_task"], "memory": selection["memory"], "walltime": placement["walltime"] if derived_placement_supplied else "00:03:00", "max_parallel_steps": 1, "shutdown_margin_seconds": CONTINUATION_SHUTDOWN_MARGIN_SECONDS, "termination_grace_seconds": 10},
+        "runtime": {"module_commands": _runtime_setup(runtime, "srun"), "siesta_executable": runtime["python"]["selected_executable"], "executable_arguments": [], "launcher": {"kind": "srun", "command": [runtime["launchers"]["srun"]["selected_executable"]], "arguments": _srun_arguments(runtime, placement), "processes_per_node": processes_per_node}, "exclusive": True, "environment": {"QRAFT_PYTHON": _selected_python_path(runtime)}},
         "tasks": [
             {"task_id": "STAGE_A", "command": [runtime["python"]["selected_executable"], "-c", "from pathlib import Path; import time; time.sleep(4); Path('stage_a.complete').write_text('complete\\n', encoding='utf-8')"], "estimated_runtime_seconds": CONTINUATION_STAGE_A_ESTIMATE_SECONDS, **task_base},
             {"task_id": "STAGE_B", "command": [runtime["python"]["selected_executable"], "-c", "from pathlib import Path; import time; time.sleep(2); Path('stage_b.complete').write_text('complete\\n', encoding='utf-8')"], "depends_on": ["STAGE_A"], "estimated_runtime_seconds": CONTINUATION_STAGE_B_ESTIMATE_SECONDS, **task_base},
@@ -332,8 +500,14 @@ def _equivalence(hydra: Path, srun: Path) -> dict[str, Any]:
     return payload
 
 
-def _preflight_script(selection: Mapping[str, Any], runtime: Mapping[str, Any]) -> str:
-    placement = _resolved_placement(selection)
+def _preflight_script(
+    selection: Mapping[str, Any], runtime: Mapping[str, Any],
+    *, placement: Mapping[str, Any] | None = None,
+) -> str:
+    placement = _resolved_placement(selection) if placement is None else placement
+    processes_per_node = _live_placement_value(
+        placement, "processes_per_node", "tasks_per_node"
+    )
     qos = f"#SBATCH --qos={selection['qos']}\n" if selection.get("qos") is not None else ""
     account = f"#SBATCH --account={selection['account']}\n" if selection.get("account") is not None else ""
     setup = "\n".join(_runtime_setup(runtime, "srun"))
@@ -359,7 +533,7 @@ def _preflight_script(selection: Mapping[str, Any], runtime: Mapping[str, Any]) 
                 "-np",
                 str(placement["ntasks"]),
                 "-ppn",
-                str(placement["processes_per_node"]),
+                str(processes_per_node),
                 "hostname",
             ]
         )
@@ -372,9 +546,9 @@ def _preflight_script(selection: Mapping[str, Any], runtime: Mapping[str, Any]) 
 #SBATCH --partition={selection['partition']}
 {account}{qos}#SBATCH --nodes={placement['nodes']}
 #SBATCH --ntasks={placement['ntasks']}
-#SBATCH --ntasks-per-node={placement['processes_per_node']}
+#SBATCH --ntasks-per-node={processes_per_node}
 #SBATCH --cpus-per-task={placement['cpus_per_task']}
-#SBATCH --time=00:05:00
+#SBATCH --time={placement['walltime']}
 #SBATCH --output=preflight/preflight.%j.out
 #SBATCH --error=preflight/preflight.%j.err
 set -euo pipefail
@@ -390,7 +564,7 @@ printf 'QRAFT M10 shared filesystem marker\\n' > "$MARKER"
   M10_HOST_CSV="$(IFS=,; echo "${{M10_HOSTS[*]}}")"
   validate_placement() {{
     local evidence_file="$1" failure_code="$2"
-    awk -v expected_nodes={placement['nodes']} -v expected_ppn={placement['processes_per_node']} -v expected_tasks={placement['ntasks']} '
+    awk -v expected_nodes={placement['nodes']} -v expected_ppn={processes_per_node} -v expected_tasks={placement['ntasks']} '
       {{ if ($1 != expected_ppn) exit 2; rows += 1; tasks += $1 }}
       END {{ if (rows != expected_nodes || tasks != expected_tasks) exit 3 }}
     ' "$evidence_file" || {{ echo "$failure_code" >&2; exit 1; }}
@@ -406,7 +580,7 @@ printf 'QRAFT M10 shared filesystem marker\\n' > "$MARKER"
   env | LC_ALL=C sort | grep '^SLURM_' || true
   export M10_SHARED_MARKER="$MARKER" M10_SHARED_MANIFEST="$MANIFEST"
   srun --nodes={placement['nodes']} --ntasks={placement['nodes']} --ntasks-per-node=1 --cpus-per-task=1 bash -c 'set -eu; printf "host=%s path=%s marker_sha256=%s manifest_sha256=%s\\n" "$(hostname -f 2>/dev/null || hostname)" "$M10_SHARED_MARKER" "$(sha256sum "$M10_SHARED_MARKER" | awk "{{print \\$1}}")" "$(sha256sum "$M10_SHARED_MANIFEST" | awk "{{print \\$1}}")"'
-  srun --nodes={placement['nodes']} --ntasks={placement['ntasks']} --ntasks-per-node={placement['processes_per_node']} --cpus-per-task={placement['cpus_per_task']} hostname | LC_ALL=C sort | uniq -c | tee "evidence/srun-placement.${{SLURM_JOB_ID}}.txt"
+  srun --nodes={placement['nodes']} --ntasks={placement['ntasks']} --ntasks-per-node={processes_per_node} --cpus-per-task={placement['cpus_per_task']} hostname | LC_ALL=C sort | uniq -c | tee "evidence/srun-placement.${{SLURM_JOB_ID}}.txt"
   validate_placement "evidence/srun-placement.${{SLURM_JOB_ID}}.txt" M10_PREFLIGHT_SRUN_PLACEMENT_INVALID{hydra_check}
 }} 2>&1 | tee "evidence/preflight.${{SLURM_JOB_ID}}.txt"
 """
@@ -479,25 +653,146 @@ def _resolved(repository: Path, output: Path, selection_path: Path, runtime_path
     return manifest
 
 
-def build_bundle(repository: Path, output: Path, *, scheduler_selection: Path | None = None, runtime_selection: Path | None = None) -> dict[str, Any]:
+def _resolved_live(
+    repository: Path, output: Path, live_selection_path: Path, runtime_path: Path,
+) -> dict[str, Any]:
+    scheduler, placement, live_selection, sources = _load_live_slurm_selection(
+        live_selection_path
+    )
+    runtime = _load_runtime_selection(runtime_path)
+    if (
+        not isinstance(runtime["launchers"].get("hydra"), Mapping)
+        or runtime["launchers"]["hydra"].get("required") is False
+    ):
+        raise ValueError(
+            "M10_RUNTIME_PROFILE_UNRESOLVED: resolved M10 bundle requires reviewed Hydra acceptance"
+        )
+    provenance = output / "provenance"
+    provenance.mkdir()
+    copied_live = provenance / "live-slurm-selection.json"
+    copied_runtime = provenance / "runtime_selection.json"
+    shutil.copy2(live_selection_path, copied_live)
+    shutil.copy2(runtime_path, copied_runtime)
+    sources_root = output / "sources"
+    hydra = _siesta_campaign(
+        repository, scheduler, runtime, "hydra", sources_root / "hydra",
+        placement=placement,
+    )
+    srun = _siesta_campaign(
+        repository, scheduler, runtime, "srun", sources_root / "srun",
+        placement=placement,
+    )
+    continuation = _continuation_campaign(
+        scheduler, runtime, sources_root / "continuation", placement=placement,
+    )
+    packages = output / "packages"
+    packages.mkdir()
+    builder = ControllerPackageBuilder(repository)
+    provenance_files = {
+        "provenance/live-slurm-selection.json": copied_live,
+        "provenance/runtime_selection.json": copied_runtime,
+    }
+    results = {
+        "hydra": builder.build(
+            hydra, packages / "hydra", provenance_files=provenance_files
+        ).__dict__,
+        "srun": builder.build(
+            srun, packages / "srun", provenance_files=provenance_files
+        ).__dict__,
+        "continuation": builder.build(
+            continuation, packages / "continuation", provenance_files=provenance_files
+        ).__dict__,
+    }
+    equivalence = _equivalence(hydra, srun)
+    _write_json(output / "backend_equivalence.json", equivalence)
+    preflight = output / "preflight"
+    preflight.mkdir()
+    _write_linux_text(
+        preflight / "submit_m10_preflight.slurm",
+        _preflight_script(scheduler, runtime, placement=placement),
+    )
+    manifest = {
+        "schema_version": "1.0",
+        "scheduler_profile_status": "RESOLVED_FROM_LIVE_SLURM_SELECTION",
+        "runtime_profile_status": "RESOLVED_FROM_CLUSTER_EVIDENCE",
+        "derived_placement": placement,
+        "live_slurm_selection": {
+            "relative_path": "provenance/live-slurm-selection.json",
+            "sha256": _sha(copied_live),
+            "observed_at": live_selection["observed_at"],
+            "account": scheduler["account"],
+            "partition": scheduler["partition"],
+            "qos": scheduler["qos"],
+            "source_command_evidence": sources["commands"],
+            "node_capability_evidence_count": len(sources["node_capabilities"]),
+        },
+        "runtime_selection": {
+            "relative_path": "provenance/runtime_selection.json",
+            "sha256": _sha(copied_runtime),
+            "python_requirement": runtime["python"]["requirement"],
+            "environment_setup": [
+                *runtime["python"]["environment_setup"],
+                *runtime["siesta"]["environment_setup"],
+            ],
+        },
+        "packages": results,
+        "backend_equivalence": equivalence,
+        "continuation_external_allocations": {
+            "first_seconds": 60,
+            "second_seconds": 180,
+            "same_package_root_and_config": True,
+        },
+        "execution_authority": "ControllerPackageBuilder -> CanonicalController -> CompiledWorkflowRuntime",
+        "remote_execution_status": "PENDING_REMOTE",
+    }
+    _write_json(output / "bundle_manifest.json", manifest)
+    return manifest
+
+
+def build_bundle(
+    repository: Path, output: Path, *, scheduler_selection: Path | None = None,
+    live_slurm_selection: Path | None = None, runtime_selection: Path | None = None,
+) -> dict[str, Any]:
     repository, output = repository.resolve(), output.resolve()
     if output.exists():
         raise FileExistsError(f"refusing to overwrite M10 bundle: {output}")
     output.mkdir(parents=True)
-    if scheduler_selection is None and runtime_selection is None:
+    if (
+        scheduler_selection is None
+        and live_slurm_selection is None
+        and runtime_selection is None
+    ):
         return _unresolved(repository, output)
-    if scheduler_selection is None or runtime_selection is None:
-        raise ValueError("M10_REMOTE_PROFILE_UNRESOLVED: resolved bundle requires scheduler_selection.json and runtime_selection.json")
+    if scheduler_selection is not None and live_slurm_selection is not None:
+        raise ValueError(
+            "M10_REMOTE_PROFILE_UNRESOLVED: select either legacy scheduler evidence or live Slurm evidence"
+        )
+    if runtime_selection is None:
+        raise ValueError(
+            "M10_REMOTE_PROFILE_UNRESOLVED: resolved bundle requires runtime_selection.json"
+        )
+    if live_slurm_selection is not None:
+        return _resolved_live(
+            repository, output, live_slurm_selection.resolve(), runtime_selection.resolve()
+        )
+    if scheduler_selection is None:
+        raise ValueError(
+            "M10_REMOTE_PROFILE_UNRESOLVED: resolved bundle requires scheduler_selection.json or live-slurm-selection.json"
+        )
     return _resolved(repository, output, scheduler_selection.resolve(), runtime_selection.resolve())
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--scheduler-selection", type=Path)
+    parser.add_argument(
+        "--scheduler-selection", type=Path,
+        help="legacy M10 scheduler evidence; not current runtime authority",
+    )
+    parser.add_argument("--live-slurm-selection", type=Path)
     parser.add_argument("--runtime-selection", type=Path)
     args = parser.parse_args()
-    print(json.dumps(build_bundle(Path(__file__).resolve().parents[1], args.output, scheduler_selection=args.scheduler_selection, runtime_selection=args.runtime_selection), sort_keys=True))
+    print(json.dumps(build_bundle(Path(__file__).resolve().parents[1], args.output, scheduler_selection=args.scheduler_selection, live_slurm_selection=args.live_slurm_selection, runtime_selection=args.runtime_selection), sort_keys=True))
     return 0
 
 

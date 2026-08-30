@@ -63,6 +63,64 @@ def _selection(
     return path
 
 
+def _live_slurm_selection(
+    tmp_path: Path, *, partition: str = "partition_alpha", nodes: int = 2,
+    tasks_per_node: int = 20, ntasks: int = 40, cpus_per_task: int = 1,
+    safe_cpus_per_node: int = 20, total_allocated_cpus: int = 40,
+    memory_mb: int = 64000,
+) -> Path:
+    placement = {
+        "partition": partition,
+        "nodes": nodes,
+        "tasks_per_node": tasks_per_node,
+        "ntasks": ntasks,
+        "cpus_per_task": cpus_per_task,
+        "safe_cpus_per_node": safe_cpus_per_node,
+        "total_allocated_cpus": total_allocated_cpus,
+        "walltime": "00:20:00",
+        "policy": "MAXIMUM_LEGAL_PLACEMENT_EXPLICIT_NODES",
+    }
+    capabilities = [
+        {
+            "node": f"{partition}-node{number}",
+            "partition": partition,
+            "cpus_per_node": safe_cpus_per_node,
+            "memory_mb": memory_mb,
+            "state": "up",
+            "source_file": "sinfo-N.txt",
+            "source_line": number,
+        }
+        for number in range(1, nodes + 1)
+    ]
+    path = tmp_path / "live-slurm-selection.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({
+        "schema_version": "1.0",
+        "authority": "LIVE_SLURM_SELECTION_EVIDENCE",
+        "runtime_authority_for_future_runs": False,
+        "observed_at": "2026-08-29T00:00:00Z",
+        "sources": {
+            "schema_version": "1.0",
+            "authority": "LIVE_SLURM_DISCOVERY",
+            "observed_at": "2026-08-29T00:00:00Z",
+            "commands": [
+                {"argv": ["sinfo", "-N"], "returncode": 0, "stdout_sha256": "a" * 64},
+                {"argv": ["scontrol", "show", "partition"], "returncode": 0, "stdout_sha256": "b" * 64},
+            ],
+            "visible_partitions": [{"name": partition}],
+            "partition_policies": [{"name": partition}],
+            "associations": [{"account": "account_alpha", "partition": partition, "qos": "qos_alpha"}],
+            "node_capabilities": capabilities,
+        },
+        "association": {"account": "account_alpha", "partition": partition, "qos": "qos_alpha"},
+        "resource_request": {"nodes": nodes, "cpus_per_task": cpus_per_task, "walltime": "00:20:00", "account": "account_alpha", "qos": "qos_alpha"},
+        "human_selection": {"partition": partition, "nodes": nodes, "explicit": True},
+        "resolved_selection": {"account": "account_alpha", "qos": "qos_alpha"},
+        "derived_placement": placement,
+    }, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
 def _runtime_selection(tmp_path: Path, *, python_version: str = "3.11.9", siesta: bool = True, hydra: bool = True, module: bool = False, hydra_bootstrap: object = "slurm", selected_python: str = "observed-python", observed_python_path: str = "/opt/observed/python3") -> Path:
     mechanism = "MODULE" if module else "PATH"
     setup = ["module load observed-python"] if module else []
@@ -205,6 +263,39 @@ def _build_result(tmp_path: Path, selection: Path, runtime: Path) -> subprocess.
             sys.executable, "tools/build_yoltla_m10_acceptance.py",
             "--output", str(tmp_path / "m10"),
             "--scheduler-selection", str(selection),
+            "--runtime-selection", str(runtime),
+        ],
+        cwd=REPO, env=env, capture_output=True, text=True,
+    )
+
+
+def _build_live(
+    tmp_path: Path, selection: Path, runtime: Path | None = None,
+) -> tuple[Path, dict[str, object]]:
+    output = tmp_path / "m10"
+    env = os.environ.copy(); env["PYTHONPATH"] = str(REPO / "src")
+    result = subprocess.run(
+        [
+            sys.executable, "tools/build_yoltla_m10_acceptance.py",
+            "--output", str(output),
+            "--live-slurm-selection", str(selection),
+            "--runtime-selection", str(runtime or _runtime_selection(tmp_path, hydra_bootstrap="ssh")),
+        ],
+        cwd=REPO, env=env, capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    return output, json.loads(result.stdout)
+
+
+def _build_live_result(
+    tmp_path: Path, selection: Path, runtime: Path,
+) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy(); env["PYTHONPATH"] = str(REPO / "src")
+    return subprocess.run(
+        [
+            sys.executable, "tools/build_yoltla_m10_acceptance.py",
+            "--output", str(tmp_path / "m10"),
+            "--live-slurm-selection", str(selection),
             "--runtime-selection", str(runtime),
         ],
         cwd=REPO, env=env, capture_output=True, text=True,
@@ -689,6 +780,110 @@ def test_placement_is_single_source_for_campaign_srun_hydra_and_preflight(tmp_pa
     assert first_plan.execution_specs[task].fingerprint != second_plan.execution_specs[task].fingerprint
     assert first_plan.execution_specs[task].partition == "fixed-one"
     assert second_plan.execution_specs[task].partition == "fixed-four"
+
+
+def test_live_slurm_selection_builds_without_legacy_scheduler_selection(
+    tmp_path: Path,
+) -> None:
+    live = _live_slurm_selection(tmp_path)
+    runtime = _runtime_selection(tmp_path, hydra_bootstrap="ssh")
+    output, manifest = _build_live(
+        tmp_path, live, runtime
+    )
+    selected = manifest["live_slurm_selection"]
+    assert "scheduler_selection" not in manifest
+    assert selected["partition"] == "partition_alpha"
+    assert selected["account"] == "account_alpha"
+    assert selected["qos"] == "qos_alpha"
+    assert selected["sha256"] == sha256(live.read_bytes()).hexdigest()
+    assert selected["source_command_evidence"] == json.loads(
+        live.read_text(encoding="utf-8")
+    )["sources"]["commands"]
+    assert (output / "provenance" / "live-slurm-selection.json").read_bytes() == live.read_bytes()
+    assert (output / "provenance" / "runtime_selection.json").is_file()
+    assert manifest["runtime_selection"]["sha256"] == sha256(runtime.read_bytes()).hexdigest()
+    assert not list(output.rglob("scheduler_selection.json"))
+    for package in manifest["packages"].values():
+        root = Path(package["destination"])
+        assert (root / "provenance" / "live-slurm-selection.json").is_file()
+        assert not (root / "provenance" / "scheduler_selection.json").exists()
+
+
+def test_live_derived_placement_drives_all_m10_outputs(tmp_path: Path) -> None:
+    first, first_manifest = _build_live(
+        tmp_path / "a",
+        _live_slurm_selection(
+            tmp_path / "a", partition="partition_alpha", nodes=2,
+            tasks_per_node=20, ntasks=40, safe_cpus_per_node=20,
+            total_allocated_cpus=40, memory_mb=64000,
+        ),
+        _runtime_selection(tmp_path / "a", hydra_bootstrap="ssh"),
+    )
+    second, second_manifest = _build_live(
+        tmp_path / "b",
+        _live_slurm_selection(
+            tmp_path / "b", partition="partition_beta", nodes=4,
+            tasks_per_node=32, ntasks=128, safe_cpus_per_node=32,
+            total_allocated_cpus=128, memory_mb=128000,
+        ),
+        _runtime_selection(tmp_path / "b", hydra_bootstrap="ssh"),
+    )
+    for output, manifest, expected in (
+        (first, first_manifest, ("partition_alpha", 2, 20, 40, 40, "64000M")),
+        (second, second_manifest, ("partition_beta", 4, 32, 128, 128, "128000M")),
+    ):
+        partition, nodes, tasks_per_node, ntasks, total_cpus, memory = expected
+        placement = manifest["derived_placement"]
+        assert placement["partition"] == partition
+        assert (placement["nodes"], placement["tasks_per_node"], placement["ntasks"], placement["total_allocated_cpus"]) == (nodes, tasks_per_node, ntasks, total_cpus)
+        for launcher in ("hydra", "srun"):
+            campaign = json.loads(
+                (output / "sources" / launcher / "campaign.json").read_text(encoding="utf-8")
+            )
+            assert campaign["slurm"]["partition"] == partition
+            assert campaign["resources"] == {
+                "nodes": nodes, "total_cpus": total_cpus, "ntasks": ntasks,
+                "cpus_per_task": 1, "memory": memory, "walltime": "00:20:00",
+                "max_parallel_steps": 1, "shutdown_margin_seconds": 120,
+                "termination_grace_seconds": 30,
+            }
+            assert campaign["runtime"]["launcher"]["processes_per_node"] == tasks_per_node
+            assert campaign["tasks"][0]["mpi_processes"] == ntasks
+        continuation = json.loads(
+            (output / "sources" / "continuation" / "campaign.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        assert continuation["resources"] == {
+            "nodes": nodes, "total_cpus": total_cpus, "ntasks": ntasks,
+            "cpus_per_task": 1, "memory": memory, "walltime": "00:20:00",
+            "max_parallel_steps": 1, "shutdown_margin_seconds": 10,
+            "termination_grace_seconds": 10,
+        }
+        assert continuation["runtime"]["launcher"]["processes_per_node"] == tasks_per_node
+        preflight = (output / "preflight" / "submit_m10_preflight.slurm").read_text(encoding="utf-8")
+        assert f"#SBATCH --partition={partition}" in preflight
+        assert f"#SBATCH --nodes={nodes}" in preflight
+        assert f"#SBATCH --ntasks={ntasks}" in preflight
+        assert f"#SBATCH --ntasks-per-node={tasks_per_node}" in preflight
+        assert "#SBATCH --time=00:20:00" in preflight
+        assert f"-np {ntasks} -ppn {tasks_per_node} hostname" in preflight
+        assert f"srun --nodes={nodes} --ntasks={ntasks} --ntasks-per-node={tasks_per_node} --cpus-per-task=1 hostname" in preflight
+    assert first_manifest["backend_equivalence"]["scientific_identity_equal"]
+    assert first_manifest["backend_equivalence"]["execution_spec_different"]
+    assert first_manifest["backend_equivalence"]["hydra_execution_spec_sha256"] != second_manifest["backend_equivalence"]["hydra_execution_spec_sha256"]
+
+
+def test_live_slurm_selection_rejects_heterogeneous_node_memory(tmp_path: Path) -> None:
+    live = _live_slurm_selection(tmp_path)
+    payload = json.loads(live.read_text(encoding="utf-8"))
+    payload["sources"]["node_capabilities"][1]["memory_mb"] = 128000
+    live.write_text(json.dumps(payload), encoding="utf-8")
+    result = _build_live_result(
+        tmp_path, live, _runtime_selection(tmp_path, hydra_bootstrap="ssh")
+    )
+    assert result.returncode != 0
+    assert "live node capability evidence is heterogeneous" in result.stderr
 
 
 def test_continuation_and_runbook_require_a_terminal_human_barrier(tmp_path: Path) -> None:
