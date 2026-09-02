@@ -34,9 +34,24 @@ class OpenMpiLauncher:
             raise ValueError("MPI processes and CPUs per process must be positive")
         command = [*self.command, *self.arguments, "-np", str(spec.mpi_processes)]
         if spec.hosts:
-            command.extend(("--host", ",".join(spec.hosts)))
-            if spec.processes_per_node:
-                command.extend(("--map-by", f"ppr:{spec.processes_per_node}:node"))
+            if any(not str(host).strip() for host in spec.hosts):
+                raise ValueError("Open MPI hosts must be non-empty")
+            if spec.nodes is None or spec.nodes != len(spec.hosts):
+                raise ValueError(
+                    "Open MPI placement nodes must equal the explicit host allocation"
+                )
+            ppn = spec.processes_per_node
+            if ppn is None or ppn <= 0:
+                raise ValueError("Open MPI requires a positive processes_per_node")
+            if spec.mpi_processes != len(spec.hosts) * ppn:
+                raise ValueError(
+                    "Open MPI placement mismatch: "
+                    f"{spec.mpi_processes} ranks != {len(spec.hosts)} hosts * {ppn} ppn"
+                )
+            command.extend((
+                "--host", ",".join(f"{host}:{ppn}" for host in spec.hosts),
+                "--map-by", f"ppr:{ppn}:node",
+            ))
         command.extend((spec.executable, *spec.executable_arguments))
         return tuple(command)
 
