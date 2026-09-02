@@ -382,12 +382,10 @@ class CompiledWorkflowRuntime:
         return tuple(sorted(affected))
 
     def _remaining_allocation_allows(self, task: WorkflowTaskNode) -> bool:
-        estimate = float(
-            task.resources.get(
-                "estimated_runtime_seconds",
-                self.execution_specs[task.task_id].walltime_seconds,
-            )
-        )
+        estimate_value = task.resources.get("estimated_runtime_seconds")
+        if estimate_value is None:
+            return True
+        estimate = float(estimate_value)
         if estimate < 0:
             raise ValueError("estimated_runtime_seconds cannot be negative")
         required = estimate + self.allocation.shutdown_margin_seconds

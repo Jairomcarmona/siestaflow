@@ -528,7 +528,11 @@ def test_host_leases_are_exclusive_and_released(tmp_path: Path):
 
 
 def test_walltime_stop_is_resumable_and_completed_work_reuses(tmp_path: Path):
-    compiled = workflow(tmp_path, (node("A"),))
+    task = node("A")
+    compiled = workflow(tmp_path, (replace(
+        task,
+        resources={**task.resources, "estimated_runtime_seconds": 60},
+    ),))
     blocked_launcher = RecordingLauncher()
     first = CompiledWorkflowRuntime(
         workflow=compiled,
@@ -579,6 +583,30 @@ def test_walltime_stop_is_resumable_and_completed_work_reuses(tmp_path: Path):
     assert third.status == "COMPLETED"
     assert third.reused_nodes == ("A",)
     assert reuse_launcher.launches == []
+
+
+def test_unknown_runtime_estimate_does_not_become_allocation_walltime(
+    tmp_path: Path,
+) -> None:
+    compiled = workflow(tmp_path, (node("A"),))
+    launcher = RecordingLauncher()
+    result = CompiledWorkflowRuntime(
+        workflow=compiled,
+        registry=registry_for(SyntheticCapability()),
+        root=tmp_path / "run",
+        source_root=tmp_path,
+        scientific_identities={"A": identity()},
+        execution_specs=execution(),
+        launcher=launcher,
+        allocation=RuntimeAllocation(
+            1,
+            1,
+            shutdown_margin_seconds=10,
+            remaining_time=lambda: 59,
+        ),
+    ).run()
+    assert result.status == "COMPLETED"
+    assert [item.task_id for item in launcher.launches] == ["A"]
 
 
 def test_controlled_interruption_resumes_only_unfinished_attempt(tmp_path: Path):
