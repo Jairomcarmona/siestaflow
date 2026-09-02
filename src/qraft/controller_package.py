@@ -57,6 +57,8 @@ class ControllerPackageBuilder:
         "src/qraft/magnetism.py",
         "src/qraft/models.py",
         "src/qraft/project_packages.py",
+        "src/qraft/runtime_compatibility.py",
+        "src/qraft/runtime_evidence.py",
         "src/qraft/execution/allocation_controller.py",
         "src/qraft/execution/allocation_controller_compat.py",
         "src/qraft/execution/canonical_controller.py",

@@ -15,6 +15,10 @@ from typing import Any, Mapping
 from qraft.controller_package import ControllerPackageBuilder
 from qraft.execution.allocation_controller import load_controller_config
 from qraft.execution.legacy_translation import translate_controller_config
+try:
+    from tools.resolve_yoltla_m10_runtime import validate_runtime_compatibility
+except ModuleNotFoundError:  # Direct execution places tools/, not its parent, on sys.path.
+    from resolve_yoltla_m10_runtime import validate_runtime_compatibility
 
 
 CAMPAIGN_ID = "QRAFT_M10_MULTINODE_SIESTA_TECHNICAL_ACCEPTANCE"
@@ -344,6 +348,7 @@ def _load_runtime_selection(path: Path) -> dict[str, Any]:
             raise ValueError(f"M10_RUNTIME_PROFILE_UNRESOLVED: missing {name} evidence")
         if name == "hydra":
             _hydra_bootstrap(payload.get("bootstrap"))
+            validate_runtime_compatibility(result["siesta"], payload, "Hydra")
     srun_args = result["launchers"]["srun"]["arguments"]
     placement_options = ("--nodes", "--ntasks", "--ntasks-per-node", "--cpus-per-task")
     if any(
@@ -613,15 +618,17 @@ def _unresolved(repository: Path, output: Path) -> dict[str, Any]:
     scheduler_resolver = repository / "tools" / "resolve_yoltla_m10_scheduler.py"
     scheduler_resolution = repository / "src" / "qraft" / "validation" / "scheduler_resolution.py"
     runtime_resolver = repository / "tools" / "resolve_yoltla_m10_runtime.py"
+    runtime_compatibility = repository / "src" / "qraft" / "runtime_compatibility.py"
     _copy_linux_text(raw_probe, discovery / "run_login_probe.sh")
     _copy_linux_text(runtime_probe, discovery / "run_runtime_candidate_probe.sh")
     _copy_linux_text(summary_builder, discovery / "build_login_summary.py")
     _copy_linux_text(scheduler_resolver, discovery / "resolve_m10_scheduler.py")
     _copy_linux_text(scheduler_resolution, discovery / "scheduler_resolution.py")
     _copy_linux_text(runtime_resolver, discovery / "resolve_m10_runtime.py")
+    _copy_linux_text(runtime_compatibility, discovery / "runtime_compatibility.py")
     (discovery / "README.md").write_text(_discovery_readme(), encoding="utf-8", newline="\n")
     _write_json(discovery / "resource_requirements.json", {"allocation_policy": "MAXIMUM_LEGAL_PLACEMENT_FIXED_PARTITION", "cpus_per_task": 1, "walltime": "00:20:00"})
-    manifest = {"schema_version": "1.0", "scheduler_profile_status": "UNRESOLVED", "runtime_profile_status": "UNRESOLVED", "placement_status": "UNRESOLVED", "historical_hint": HISTORICAL_HINT, "scientific_fixture_hashes": hashes, "raw_login_probe": {"source": "tools/m10_yoltla_raw_login_probe.sh", "sha256": _sha(raw_probe), "python_required": False, "module_required": False}, "runtime_candidate_probe": {"source": "tools/m10_yoltla_runtime_candidate_probe.sh", "sha256": _sha(runtime_probe), "python_required": False, "requires_explicit_modules": True, "launches_work": False}, "m10_scheduler_resolver": {"source": "tools/resolve_yoltla_m10_scheduler.py", "sha256": _sha(scheduler_resolver), "generic_engine_source": "src/qraft/validation/scheduler_resolution.py", "generic_engine_sha256": _sha(scheduler_resolution)}, "m10_runtime_resolver": {"source": "tools/resolve_yoltla_m10_runtime.py", "sha256": _sha(runtime_resolver)}, "remote_execution_status": "PENDING_REMOTE", "scientific_submit_scripts_generated": False}
+    manifest = {"schema_version": "1.0", "scheduler_profile_status": "UNRESOLVED", "runtime_profile_status": "UNRESOLVED", "placement_status": "UNRESOLVED", "historical_hint": HISTORICAL_HINT, "scientific_fixture_hashes": hashes, "raw_login_probe": {"source": "tools/m10_yoltla_raw_login_probe.sh", "sha256": _sha(raw_probe), "python_required": False, "module_required": False}, "runtime_candidate_probe": {"source": "tools/m10_yoltla_runtime_candidate_probe.sh", "sha256": _sha(runtime_probe), "python_required": False, "requires_explicit_modules": True, "launches_work": False}, "m10_scheduler_resolver": {"source": "tools/resolve_yoltla_m10_scheduler.py", "sha256": _sha(scheduler_resolver), "generic_engine_source": "src/qraft/validation/scheduler_resolution.py", "generic_engine_sha256": _sha(scheduler_resolution)}, "m10_runtime_resolver": {"source": "tools/resolve_yoltla_m10_runtime.py", "sha256": _sha(runtime_resolver), "compatibility_authority_source": "src/qraft/runtime_compatibility.py", "compatibility_authority_sha256": _sha(runtime_compatibility)}, "remote_execution_status": "PENDING_REMOTE", "scientific_submit_scripts_generated": False}
     _write_json(output / "bundle_manifest.json", manifest)
     (output / "README.md").write_text("# QRAFT M10 unresolved discovery bundle\n\nNo scientific submit scripts are generated until a current, human-reviewed scheduler selection is supplied.\n", encoding="utf-8", newline="\n")
     return manifest

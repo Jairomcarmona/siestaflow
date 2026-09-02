@@ -9,6 +9,15 @@ import re
 from pathlib import Path
 from typing import Any, Mapping
 
+try:
+    from qraft.runtime_compatibility import (
+        INCOMPATIBLE, evaluate_runtime_compatibility,
+    )
+except ModuleNotFoundError:  # Standalone unresolved bundle execution.
+    from runtime_compatibility import (
+        INCOMPATIBLE, evaluate_runtime_compatibility,
+    )
+
 
 PYTHON_REQUIREMENT = (3, 11)
 _BOOTSTRAP = re.compile(r"[A-Za-z0-9._-]+")
@@ -55,6 +64,64 @@ def _select(candidates: list[dict[str, Any]], executable: str | None, label: str
     return selected
 
 
+def _runtime_decision(
+    engine: Mapping[str, Any], candidate: Mapping[str, Any], label: str,
+) -> dict[str, Any]:
+    components = {
+        "engine": engine.get("compatibility_facts", {}),
+        "environment": engine.get("environment_compatibility_facts", {}),
+        "launcher": candidate.get("compatibility_facts", {}),
+    }
+    conflicts = {
+        name: value
+        for name, value in (
+            ("engine", engine.get("compatibility_conflicts", [])),
+            ("launcher", candidate.get("compatibility_conflicts", [])),
+        )
+        if value
+    }
+    try:
+        return evaluate_runtime_compatibility(components, conflicts)
+    except ValueError as error:
+        raise ValueError(
+            f"M10_RUNTIME_PROFILE_UNRESOLVED: {label} compatibility evidence is invalid"
+        ) from error
+
+
+def validate_runtime_compatibility(
+    engine: Mapping[str, Any], candidate: Mapping[str, Any], label: str = "launcher",
+) -> dict[str, Any]:
+    """Validate one selected component without turning absent evidence into certainty."""
+    result = _runtime_decision(engine, candidate, label)
+    if result["status"] == INCOMPATIBLE:
+        raise ValueError(f"M10_RUNTIME_PROFILE_UNRESOLVED: selected {label} contradicts runtime evidence")
+    return result
+
+
+def _select_compatible(
+    candidates: list[dict[str, Any]], executable: str | None, label: str,
+    engine: Mapping[str, Any],
+) -> dict[str, Any]:
+    considered = [
+        (candidate, _runtime_decision(engine, candidate, label))
+        for candidate in candidates
+        if executable is None or candidate.get("selected_executable") == executable
+    ]
+    if executable is not None:
+        selected = _select(candidates, executable, label)
+        if _runtime_decision(engine, selected, label)["status"] == INCOMPATIBLE:
+            raise ValueError(f"M10_RUNTIME_PROFILE_UNRESOLVED: selected {label} contradicts runtime evidence")
+    else:
+        compatible = [item for item, result in considered if result["status"] == "COMPATIBLE"]
+        unknown = [item for item, result in considered if result["status"] == "UNKNOWN"]
+        pool = compatible if compatible else unknown
+        if not pool and considered:
+            raise ValueError(f"M10_RUNTIME_PROFILE_UNRESOLVED: all {label} candidates contradict runtime evidence")
+        selected = _select(pool, None, label)
+    selected["compatibility"] = _runtime_decision(engine, selected, label)
+    return selected
+
+
 def _administrative_hydra_policy(path: Path, bootstrap: str) -> dict[str, Any]:
     try:
         payload_bytes = path.read_bytes()
@@ -87,6 +154,7 @@ def resolve(summary_path: Path, *, python: str | None = None, siesta: str | None
     if version is None or version < PYTHON_REQUIREMENT:
         raise ValueError("M10_RUNTIME_PROFILE_UNRESOLVED: Python evidence does not satisfy >=3.11")
     selected_siesta = _select(_candidates(data, "siesta_candidates"), siesta, "SIESTA")
+    validate_runtime_compatibility(selected_siesta, {}, "runtime environment")
     launchers = data.get("launcher_candidates", {})
     if not isinstance(launchers, Mapping): raise ValueError("M10_RUNTIME_PROFILE_UNRESOLVED: launcher evidence missing")
     selected_srun = _select(_candidates(launchers, "srun"), srun, "srun")
@@ -97,7 +165,7 @@ def resolve(summary_path: Path, *, python: str | None = None, siesta: str | None
     if not require_hydra and (hydra is not None or hydra_bootstrap is not None or hydra_policy_evidence is not None):
         raise ValueError("M10_RUNTIME_PROFILE_UNRESOLVED: Hydra selection requires --require-hydra")
     if require_hydra:
-        selected_hydra = _select(hydra_candidates, hydra, "Hydra")
+        selected_hydra = _select_compatible(hydra_candidates, hydra, "Hydra", selected_siesta)
         arguments = selected_hydra.get("arguments", [])
         if not isinstance(arguments, list) or not all(isinstance(value, str) and value for value in arguments):
             raise ValueError("M10_RUNTIME_PROFILE_UNRESOLVED: Hydra requires reviewed launcher arguments")

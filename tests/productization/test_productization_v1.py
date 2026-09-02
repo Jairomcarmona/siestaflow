@@ -15,6 +15,7 @@ import qraft
 from qraft.application import ApplicationConfiguration, QraftApplication
 from qraft.cli import main
 from qraft.errors import PreflightError
+from qraft.environment_inspection import EnvironmentInspector
 from qraft.repl import QraftShell
 
 
@@ -126,6 +127,69 @@ def test_run_preflight_blocks_before_attempt_or_session(tmp_path: Path) -> None:
     with pytest.raises(PreflightError, match="Engine"):
         app.run()
     assert not runs.exists()
+
+
+def _application_with_runtime_facts(
+    tmp_path: Path, facts: dict[str, dict[str, str]],
+) -> QraftApplication:
+    fdf = inputs(tmp_path)
+    script = tmp_path / "fake.py"
+    script.write_text("print('not executed by preflight')\n", encoding="utf-8")
+    selected = profile(tmp_path, sys.executable, script)
+    inspector = EnvironmentInspector(
+        runtime_evidence_probe=lambda *_args: (facts, {}),
+    )
+    return QraftApplication(
+        ApplicationConfiguration(fdf=fdf, profile=selected),
+        environment_inspector=inspector,
+    )
+
+
+def test_application_preflight_preserves_compatible_runtime_behavior(
+    tmp_path: Path,
+) -> None:
+    app = _application_with_runtime_facts(tmp_path, {
+        "engine": {"runtime_instance": "instance-a"},
+        "launcher": {"runtime_instance": "instance-a"},
+        "environment": {"runtime_instance": "instance-a"},
+    })
+    report = app.validate()
+    assert report["status"] == "PASS"
+    assert report["environment"]["compatibility"]["status"] == "COMPATIBLE"
+
+
+def test_application_preflight_blocks_explicit_runtime_contradiction(
+    tmp_path: Path,
+) -> None:
+    runs = tmp_path / "runs"
+    app = _application_with_runtime_facts(tmp_path, {
+        "engine": {"runtime_instance": "instance-a"},
+        "launcher": {"runtime_instance": "instance-b"},
+        "environment": {},
+    })
+    app.configuration.runs_root = runs
+    report = app.validate()
+    assert report["status"] == "BLOCKED"
+    assert report["environment"]["compatibility"]["status"] == "INCOMPATIBLE"
+    with pytest.raises(PreflightError, match="Runtime compatibility"):
+        app.run()
+    assert not runs.exists()
+
+
+def test_application_preflight_labels_unknown_without_false_block(
+    tmp_path: Path,
+) -> None:
+    app = _application_with_runtime_facts(tmp_path, {
+        "engine": {"runtime_instance": "instance-a"},
+        "launcher": {},
+        "environment": {},
+    })
+    report = app.validate()
+    assert report["status"] == "PASS"
+    assert report["environment"]["compatibility"]["status"] == "UNKNOWN"
+    assert next(
+        item for item in report["checks"] if item["name"] == "Runtime compatibility"
+    )["status"] == "UNKNOWN"
 
 
 def test_repl_uses_shared_env_config_validate_backend(tmp_path: Path) -> None:

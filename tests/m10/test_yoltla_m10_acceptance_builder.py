@@ -229,6 +229,50 @@ def _hydra_policy_evidence(tmp_path: Path, bootstrap: str) -> Path:
     return path
 
 
+def _runtime_compatibility_summary(
+    tmp_path: Path, *, engine_facts: dict[str, str] | None,
+    environment_facts: dict[str, str] | None = None,
+    hydra_candidates: list[tuple[str, dict[str, str] | None]],
+) -> Path:
+    siesta = {
+        "selected_mechanism": "MODULE", "selected_executable": "/runtime/engine/bin/siesta",
+        "observed_version": "1.0", "environment_setup": ["module load engine"],
+        "evidence_source": ["engine-evidence"],
+    }
+    if engine_facts is not None:
+        siesta["compatibility_facts"] = engine_facts
+    if environment_facts is not None:
+        siesta["environment_compatibility_facts"] = environment_facts
+    hydra = []
+    for executable, facts in hydra_candidates:
+        candidate = {
+            "selected_mechanism": "OTHER_EVIDENCE_BOUND", "selected_executable": executable,
+            "arguments": [], "bootstrap": "ssh", "environment_setup": [],
+            "evidence_source": [f"launcher-evidence:{executable}"],
+        }
+        if facts is not None:
+            candidate["compatibility_facts"] = facts
+        hydra.append(candidate)
+    path = tmp_path / "runtime-compatibility-summary.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({
+        "python_candidates": [{
+            "selected_mechanism": "PATH", "selected_executable": "/runtime/python/bin/python3",
+            "observed_version": "3.11.0", "environment_setup": [],
+            "evidence_source": ["python-evidence"],
+        }],
+        "siesta_candidates": [siesta],
+        "launcher_candidates": {
+            "srun": [{
+                "selected_mechanism": "PATH", "selected_executable": "/usr/bin/srun",
+                "arguments": [], "environment_setup": [], "evidence_source": ["srun-evidence"],
+            }],
+            "mpiexec.hydra": hydra,
+        },
+    }, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
 def _bash_path(path: Path) -> str:
     drive = path.drive.rstrip(":").lower()
     return f"/mnt/{drive}/{path.as_posix().split(':', 1)[1].lstrip('/')}" if drive else path.as_posix()
@@ -406,6 +450,7 @@ def test_unresolved_bundle_has_discovery_and_no_authoritative_submit(tmp_path: P
     assert (discovery / "resolve_m10_scheduler.py").is_file()
     assert (discovery / "scheduler_resolution.py").is_file()
     assert (discovery / "resolve_m10_runtime.py").is_file()
+    assert (discovery / "runtime_compatibility.py").is_file()
     run_probe = discovery / "run_login_probe.sh"
     assert run_probe.read_bytes().startswith(b"#!/usr/bin/env bash\n")
     assert b"\r" not in run_probe.read_bytes()
@@ -539,6 +584,147 @@ def test_real_shaped_runtime_requires_explicit_module_executable_selection(tmp_p
     )
     assert resolved["python"]["selected_mechanism"] == "MODULE"
     assert resolved["python"]["observed_version"] == "3.11.9"
+
+
+def test_runtime_compatibility_preserves_a_coherent_candidate(tmp_path: Path) -> None:
+    summary = _runtime_compatibility_summary(
+        tmp_path,
+        engine_facts={"runtime_origin": "/runtime/a"},
+        environment_facts={"runtime_origin": "/runtime/a"},
+        hydra_candidates=[("/runtime/a/bin/mpiexec.hydra", {"runtime_origin": "/runtime/a"})],
+    )
+    selected = resolve_runtime(summary, require_hydra=True)
+    hydra = selected["launchers"]["hydra"]
+    assert hydra["observed_path"] == "/runtime/a/bin/mpiexec.hydra"
+    assert hydra["compatibility"] == {
+        "status": "COMPATIBLE",
+        "matched_facts": {"runtime_origin": "/runtime/a"},
+        "missing_facts": {},
+        "contradictions": {},
+    }
+
+
+def test_runtime_compatibility_rejects_explicit_component_or_environment_contradiction(
+    tmp_path: Path,
+) -> None:
+    component = _runtime_compatibility_summary(
+        tmp_path / "component",
+        engine_facts={"runtime_origin": "/runtime/a"},
+        hydra_candidates=[("/runtime/b/bin/mpiexec.hydra", {"runtime_origin": "/runtime/b"})],
+    )
+    try:
+        resolve_runtime(component, require_hydra=True)
+    except ValueError as error:
+        assert "all Hydra candidates contradict runtime evidence" in str(error)
+    else:
+        raise AssertionError("runtime resolver authorized an explicitly contradictory launcher")
+
+    environment = _runtime_compatibility_summary(
+        tmp_path / "environment",
+        engine_facts={"runtime_origin": "/runtime/a"},
+        environment_facts={"runtime_origin": "/runtime/b"},
+        hydra_candidates=[("/runtime/a/bin/mpiexec.hydra", {"runtime_origin": "/runtime/a"})],
+    )
+    try:
+        resolve_runtime(environment, require_hydra=True)
+    except ValueError as error:
+        assert "selected runtime environment contradicts runtime evidence" in str(error)
+    else:
+        raise AssertionError("runtime resolver authorized contradictory environment evidence")
+
+
+def test_runtime_compatibility_keeps_incomplete_evidence_unknown(tmp_path: Path) -> None:
+    summary = _runtime_compatibility_summary(
+        tmp_path,
+        engine_facts={"runtime_origin": "/runtime/a"},
+        hydra_candidates=[("/runtime/unknown/bin/mpiexec.hydra", None)],
+    )
+    selected = resolve_runtime(summary, require_hydra=True)
+    compatibility = selected["launchers"]["hydra"]["compatibility"]
+    assert compatibility["status"] == "UNKNOWN"
+    assert compatibility["missing_facts"] == {
+        "runtime_origin": ["environment", "launcher"]
+    }
+    assert compatibility["contradictions"] == {}
+    assert "compatibility_facts" not in selected["launchers"]["hydra"]
+
+
+def test_runtime_compatibility_filters_before_selection_for_an_abstract_property(
+    tmp_path: Path,
+) -> None:
+    summary = _runtime_compatibility_summary(
+        tmp_path,
+        engine_facts={"producer_contract": "contract-a"},
+        environment_facts={"producer_contract": "contract-a"},
+        hydra_candidates=[
+            ("/runtime/first/bin/mpiexec.hydra", {"producer_contract": "contract-b"}),
+            ("/runtime/second/bin/mpiexec.hydra", {"producer_contract": "contract-a"}),
+        ],
+    )
+    selected = resolve_runtime(summary, require_hydra=True)
+    hydra = selected["launchers"]["hydra"]
+    assert hydra["observed_path"] == "/runtime/second/bin/mpiexec.hydra"
+    assert hydra["compatibility"]["status"] == "COMPATIBLE"
+
+
+def test_login_summary_preserves_observed_runtime_origins_for_compatibility(
+    tmp_path: Path,
+) -> None:
+    raw = _raw_login_evidence(tmp_path)
+    probe = _runtime_probe_evidence(tmp_path, hydra=True)
+    (probe / "siesta_dynamic_dependencies.txt").write_text(
+        "libmpifort.so.12 => /runtime/a/lib/libmpifort.so.12 (0x1)\n"
+        "libmpi.so.12 => /runtime/a/lib/libmpi.so.12 (0x2)\n",
+        encoding="utf-8",
+    )
+    (probe / "siesta_dynamic_dependencies.txt.exit_code").write_text("0\n", encoding="utf-8")
+    (probe / "siesta_dynamic_dependencies_realpaths.txt").write_text(
+        "/runtime/a/lib/libmpifort.so.12\n/runtime/a/lib/libmpi.so.12\n",
+        encoding="utf-8",
+    )
+    (probe / "i_mpi_root_realpath.txt").write_text("/runtime/a\n", encoding="utf-8")
+    (probe / "command_mpiexec_hydra.txt").write_text(
+        "/runtime/a/bin/mpiexec.hydra\n", encoding="utf-8"
+    )
+    (probe / "mpiexec_hydra_dynamic_dependencies.txt").write_text(
+        "libmpi.so.12 => /runtime/a/lib/libmpi.so.12 (0x3)\n", encoding="utf-8"
+    )
+    (probe / "mpiexec_hydra_dynamic_dependencies.txt.exit_code").write_text(
+        "0\n", encoding="utf-8"
+    )
+    (probe / "mpiexec_hydra_dynamic_dependencies_realpaths.txt").write_text(
+        "/runtime/a/lib/libmpi.so.12\n", encoding="utf-8"
+    )
+    summary = build_login_summary(raw, probe)
+    siesta = next(
+        candidate for candidate in summary["siesta_candidates"]
+        if candidate["selected_mechanism"] == "MODULE"
+    )
+    hydra = next(
+        candidate for candidate in summary["launcher_candidates"]["mpiexec.hydra"]
+        if candidate["selected_mechanism"] == "MODULE"
+    )
+    assert siesta["compatibility_facts"] == {"mpi_runtime_instance": "/runtime/a"}
+    assert siesta["environment_compatibility_facts"] == {"mpi_runtime_instance": "/runtime/a"}
+    assert hydra["compatibility_facts"] == {"mpi_runtime_instance": "/runtime/a"}
+    assert "${artifact}_realpaths.txt" in (
+        REPO / "tools" / "m10_yoltla_runtime_candidate_probe.sh"
+    ).read_text(encoding="utf-8")
+
+
+def test_m10_builder_rejects_a_runtime_selection_with_explicit_contradiction(
+    tmp_path: Path,
+) -> None:
+    runtime = _runtime_selection(tmp_path, hydra_bootstrap="ssh")
+    payload = json.loads(runtime.read_text(encoding="utf-8"))
+    payload["siesta"]["compatibility_facts"] = {"runtime_origin": "/runtime/a"}
+    payload["launchers"]["hydra"]["compatibility_facts"] = {
+        "runtime_origin": "/runtime/b"
+    }
+    runtime.write_text(json.dumps(payload), encoding="utf-8")
+    result = _build_result(tmp_path, _selection(tmp_path), runtime)
+    assert result.returncode != 0
+    assert "selected Hydra contradicts runtime evidence" in result.stderr
 
 
 def test_summary_rejects_unbound_or_forged_runtime_probe_modules(tmp_path: Path) -> None:

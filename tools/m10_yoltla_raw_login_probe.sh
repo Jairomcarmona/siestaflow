@@ -26,12 +26,27 @@ printf '%s\n' "${SHELL:-unknown}" >"$OUT/raw/shell.txt"
 printf '%s\n' "${PATH:-}" >"$OUT/raw/path.txt"
 pwd -P >"$OUT/raw/working_path.txt"
 df -Pk "$ROOT" >"$OUT/raw/df_project.txt" 2>&1 || true
-env | LC_ALL=C sort | grep -E '^(SLURM|MODULE|LMOD|I_MPI_HYDRA_BOOTSTRAP|PATH|SHELL|TMPDIR|SCRATCH|HOME|USER)=' | grep -Evi '(TOKEN|PASSWORD|SECRET|KEY|CREDENTIAL|COOKIE)' >"$OUT/raw/environment_redacted.txt" || true
+env | LC_ALL=C sort | grep -E '^(SLURM|MODULE|LMOD|I_MPI|PATH|SHELL|TMPDIR|SCRATCH|HOME|USER)=' | grep -Evi '(TOKEN|PASSWORD|SECRET|KEY|CREDENTIAL|COOKIE)' >"$OUT/raw/environment_redacted.txt" || true
 for cmd in sbatch squeue sinfo sacct scontrol sacctmgr srun python python3 conda spack siesta mpirun mpiexec mpiexec.hydra; do capture_command "$cmd"; done
 for cmd in python python3 srun mpirun mpiexec mpiexec.hydra siesta; do
   command -v "$cmd" >/dev/null 2>&1 && run_optional "$OUT/raw/${cmd//./_}_version.txt" "$cmd" --version
 done
 command -v mpiexec.hydra >/dev/null 2>&1 && run_optional "$OUT/raw/mpiexec_hydra_help.txt" mpiexec.hydra -help
+command -v siesta >/dev/null 2>&1 && command -v ldd >/dev/null 2>&1 && run_optional "$OUT/raw/siesta_dynamic_dependencies.txt" ldd "$(command -v siesta)"
+command -v mpiexec.hydra >/dev/null 2>&1 && command -v ldd >/dev/null 2>&1 && run_optional "$OUT/raw/mpiexec_hydra_dynamic_dependencies.txt" ldd "$(command -v mpiexec.hydra)"
+canonicalize_dynamic_libraries() {
+  local artifact="$1"
+  [[ -f "$OUT/raw/${artifact}.txt" && "$(cat "$OUT/raw/${artifact}.txt.exit_code" 2>/dev/null || true)" == '0' ]] || return 0
+  command -v readlink >/dev/null 2>&1 || return 0
+  awk '$2 == "=>" && $3 ~ /^\// { print $3 }' "$OUT/raw/${artifact}.txt" |
+    while IFS= read -r library; do readlink -f -- "$library" 2>/dev/null || true; done \
+    > "$OUT/raw/${artifact}_realpaths.txt"
+}
+canonicalize_dynamic_libraries siesta_dynamic_dependencies
+canonicalize_dynamic_libraries mpiexec_hydra_dynamic_dependencies
+if [[ -n "${I_MPI_ROOT:-}" && -e "${I_MPI_ROOT}" ]] && command -v readlink >/dev/null 2>&1; then
+  readlink -f -- "${I_MPI_ROOT}" > "$OUT/raw/i_mpi_root_realpath.txt" 2>/dev/null || true
+fi
 run_optional "$OUT/raw/sinfo.txt" sinfo -h -o '%P|%a|%l|%D|%c|%m'
 run_optional "$OUT/raw/squeue.txt" squeue -h -u "$(id -un 2>/dev/null || true)" -o '%i|%T|%P|%a|%q|%M|%N'
 run_optional "$OUT/raw/sacct.txt" sacct -n -X -S now-1days -o JobID,State,ExitCode,Elapsed,Partition,Account,QOS

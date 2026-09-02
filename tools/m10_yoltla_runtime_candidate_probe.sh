@@ -80,6 +80,33 @@ fi
   record_query srun srun_version.txt
   record_query mpirun mpirun_version.txt
   record_query mpiexec mpiexec_version.txt
+  if [[ -s "$output/command_siesta.txt" ]] && command -v ldd >/dev/null 2>&1; then
+    set +e
+    ldd "$(head -n 1 "$output/command_siesta.txt")" > "$output/siesta_dynamic_dependencies.txt" 2>&1
+    ldd_status=$?
+    set -e
+    printf '%s\n' "$ldd_status" > "$output/siesta_dynamic_dependencies.txt.exit_code"
+  fi
+  if [[ -s "$output/command_mpiexec_hydra.txt" ]] && command -v ldd >/dev/null 2>&1; then
+    set +e
+    ldd "$(head -n 1 "$output/command_mpiexec_hydra.txt")" > "$output/mpiexec_hydra_dynamic_dependencies.txt" 2>&1
+    ldd_status=$?
+    set -e
+    printf '%s\n' "$ldd_status" > "$output/mpiexec_hydra_dynamic_dependencies.txt.exit_code"
+  fi
+  canonicalize_dynamic_libraries() {
+    local artifact="$1"
+    [[ -f "$output/${artifact}.txt" && "$(cat "$output/${artifact}.txt.exit_code" 2>/dev/null || true)" == '0' ]] || return 0
+    command -v readlink >/dev/null 2>&1 || return 0
+    awk '$2 == "=>" && $3 ~ /^\// { print $3 }' "$output/${artifact}.txt" |
+      while IFS= read -r library; do readlink -f -- "$library" 2>/dev/null || true; done \
+      > "$output/${artifact}_realpaths.txt"
+  }
+  canonicalize_dynamic_libraries siesta_dynamic_dependencies
+  canonicalize_dynamic_libraries mpiexec_hydra_dynamic_dependencies
+  if [[ -n "${I_MPI_ROOT:-}" && -e "${I_MPI_ROOT}" ]] && command -v readlink >/dev/null 2>&1; then
+    readlink -f -- "${I_MPI_ROOT}" > "$output/i_mpi_root_realpath.txt" 2>/dev/null || true
+  fi
   if [[ -s "$output/command_mpiexec_hydra.txt" ]]; then
     mpiexec.hydra -help > "$output/mpiexec_hydra_help.txt" 2>&1 || true
   fi

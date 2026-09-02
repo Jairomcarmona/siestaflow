@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Mapping
 
 from ..core import ExecutionSpec
+from ..runtime_compatibility import INCOMPATIBLE, evaluate_runtime_compatibility
+from ..runtime_evidence import observe_runtime_evidence
 from .adapters import launcher_registry
 from .placement_validation import probe_launcher_placement
 from .resource_coordinator import RuntimeAllocation
@@ -34,11 +36,22 @@ def compose_runtime(
     """Compose registered launch infrastructure without scientific policy."""
 
     adapter = launcher_registry.require(execution.launcher)
+    values = dict(os.environ if environment is None else environment)
+    launcher_command = execution.launcher_command or adapter.default_command
+    components, conflicts = observe_runtime_evidence(
+        execution.executable,
+        launcher_command[0] if launcher_command else None,
+        {**values, **execution.environment},
+    )
+    if evaluate_runtime_compatibility(components, conflicts)["status"] == INCOMPATIBLE:
+        raise ValueError(
+            "RUNTIME_COMPATIBILITY_INCOMPATIBLE: resolved execution runtime "
+            "contradicts observed evidence"
+        )
     launcher = adapter.create(
         command=execution.launcher_command,
         arguments=execution.launcher_arguments,
     )
-    values = dict(os.environ if environment is None else environment)
     active_slurm = str(values.get("SLURM_JOB_ID", "")).strip()
     slurm: SlurmEnvironment | None = None
     if active_slurm:

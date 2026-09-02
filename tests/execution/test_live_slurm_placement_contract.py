@@ -536,6 +536,51 @@ def test_canonical_controller_blocks_engine_construction_after_probe_mismatch(
     assert controller.runtime is None
 
 
+def test_canonical_controller_blocks_serialized_runtime_contradiction(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    config = ControllerConfig(
+        campaign_id="contract",
+        system_id="system",
+        partition="partition_beta",
+        nodes=4,
+        total_cpus=80,
+        max_parallel_steps=1,
+        shutdown_margin_seconds=1,
+        termination_grace_seconds=1,
+        siesta_executable="siesta",
+        executable_arguments=(),
+        srun_command=("srun",),
+        srun_arguments=(),
+        exclusive=True,
+        environment={},
+        tasks=(),
+        launcher_kind="srun",
+        processes_per_node=20,
+        ntasks=80,
+        cpus_per_task=1,
+    )
+    controller = CanonicalController(
+        root=tmp_path,
+        config=config,
+        slurm=SlurmEnvironment.from_mapping(_environment(tmp_path)),
+        launcher=ProbeLauncher(tuple(["nodeA"] * 80)),
+        runtime_evidence_probe=lambda *_args: ({
+            "engine": {"runtime_instance": "instance-a"},
+            "launcher": {"runtime_instance": "instance-b"},
+            "environment": {},
+        }, {}),
+    )
+    monkeypatch.setattr(
+        "qraft.execution.canonical_controller.translate_controller_config",
+        lambda *_args, **_kwargs: pytest.fail("translation crossed compatibility gate"),
+    )
+    with pytest.raises(ValueError, match="RUNTIME_COMPATIBILITY_INCOMPATIBLE"):
+        controller.run(install_signal_handlers=False)
+    assert controller.plan is None
+    assert controller.runtime is None
+
+
 def test_identity_execution_and_post_selection_provenance(tmp_path: Path):
     service, _ = _service()
     alpha = service.select(

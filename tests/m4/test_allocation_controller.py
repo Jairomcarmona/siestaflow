@@ -607,6 +607,26 @@ def test_runtime_composition_hydra_uses_execution_spec_arguments(
     assert composition.launcher.arguments == execution.launcher_arguments
 
 
+def test_runtime_composition_blocks_observed_runtime_contradiction(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    execution = ExecutionSpec(
+        partition="local", nodes=1, mpi_ranks=1, cpus_per_rank=1,
+        memory_mb=None, launcher="direct", executable="siesta",
+        walltime_seconds=60,
+    )
+    monkeypatch.setattr(
+        "qraft.execution.runtime_composition.observe_runtime_evidence",
+        lambda *_args: ({
+            "engine": {"runtime_instance": "instance-a"},
+            "launcher": {"runtime_instance": "instance-b"},
+            "environment": {},
+        }, {}),
+    )
+    with pytest.raises(ValueError, match="RUNTIME_COMPATIBILITY_INCOMPATIBLE"):
+        compose_runtime(execution, environment={})
+
+
 def test_hash_bound_gate_task_runs_after_parent_and_emits_decision(tmp_path: Path):
     campaign, config = make_package(
         tmp_path, ["ARTIFACT", "SUCCESS"], max_parallel=2, required_artifact=True

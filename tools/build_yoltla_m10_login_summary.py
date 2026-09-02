@@ -6,6 +6,7 @@ import argparse
 import json
 import re
 from pathlib import Path
+from pathlib import PurePosixPath
 from typing import Any
 
 
@@ -24,6 +25,90 @@ def _commands(root: Path) -> dict[str, str | None]:
         path.stem.removeprefix("command_").replace("_", "."): _read(root, path.name) or None
         for path in root.glob("command_*.txt")
     }
+
+
+def _absolute_library_runtime_root(value: str | None) -> str | None:
+    """Normalize an observed dynamic-library path to its installation root."""
+    if not value or not value.startswith("/"):
+        return None
+    path = PurePosixPath(re.sub(r"/+", "/", value.strip()))
+    for parent in path.parents:
+        if parent.name in {"lib", "lib64"}:
+            return str(parent.parent)
+    return None
+
+
+def _dynamic_runtime_facts(root: Path, artifact: str) -> tuple[dict[str, str], list[str]]:
+    """Extract one unambiguous runtime instance from canonicalized library evidence."""
+    evidence = _read(root, f"{artifact}_realpaths.txt")
+    if evidence is None or _read(root, f"{artifact}.txt.exit_code") != "0":
+        return {}, []
+    roots = {
+        runtime_root
+        for line in evidence.splitlines()
+        if re.fullmatch(r"/\S*/libmpi(?:fort|cxx)?\.so(?:\.\d+)*", line)
+        for runtime_root in [_absolute_library_runtime_root(line)]
+        if runtime_root is not None
+    }
+    if len(roots) == 1:
+        return {"mpi_runtime_instance": roots.pop()}, []
+    if len(roots) > 1:
+        return {}, ["mpi_runtime_instance has multiple canonical dynamic-link origins"]
+    return {}, []
+
+
+def _environment_runtime_facts(root: Path) -> dict[str, str]:
+    value = _read(root, "i_mpi_root_realpath.txt")
+    if not value or not re.fullmatch(r"/\S+", value):
+        return {}
+    return {"mpi_runtime_instance": str(PurePosixPath(value))}
+
+
+def _add_engine_runtime_evidence(
+    candidate: dict[str, object], root: Path, source_prefix: str,
+) -> None:
+    facts, conflicts = _dynamic_runtime_facts(root, "siesta_dynamic_dependencies")
+    if facts:
+        candidate["compatibility_facts"] = facts
+        candidate["compatibility_fact_sources"] = {
+            "mpi_runtime_instance": [f"{source_prefix}siesta_dynamic_dependencies_realpaths.txt"]
+        }
+        candidate["evidence_source"] = [
+            *candidate["evidence_source"],
+            f"{source_prefix}siesta_dynamic_dependencies.txt",
+            f"{source_prefix}siesta_dynamic_dependencies.txt.exit_code",
+            f"{source_prefix}siesta_dynamic_dependencies_realpaths.txt",
+        ]
+    if conflicts:
+        candidate["compatibility_conflicts"] = conflicts
+    environment_facts = _environment_runtime_facts(root)
+    if environment_facts:
+        candidate["environment_compatibility_facts"] = environment_facts
+        candidate["environment_compatibility_fact_sources"] = {
+            "mpi_runtime_instance": [f"{source_prefix}i_mpi_root_realpath.txt"]
+        }
+        candidate["evidence_source"] = [
+            *candidate["evidence_source"], f"{source_prefix}i_mpi_root_realpath.txt"
+        ]
+
+
+def _add_launcher_runtime_evidence(
+    candidate: dict[str, object], root: Path, source_prefix: str,
+) -> None:
+    facts, conflicts = _dynamic_runtime_facts(root, "mpiexec_hydra_dynamic_dependencies")
+    if facts:
+        candidate["compatibility_facts"] = facts
+        candidate["compatibility_fact_sources"] = {
+            "mpi_runtime_instance": [f"{source_prefix}mpiexec_hydra_dynamic_dependencies_realpaths.txt"]
+        }
+        candidate["evidence_source"] = [
+            *candidate["evidence_source"],
+            f"{source_prefix}mpiexec_hydra_dynamic_dependencies.txt",
+            f"{source_prefix}mpiexec_hydra_dynamic_dependencies.txt.exit_code",
+            f"{source_prefix}mpiexec_hydra_dynamic_dependencies_realpaths.txt",
+        ]
+    if conflicts:
+        candidate["compatibility_conflicts"] = conflicts
 
 
 def _partitions(value: str | None) -> list[dict[str, object]]:
@@ -196,6 +281,8 @@ def _module_candidates(raw: Path, probe: Path | None) -> tuple[list[dict[str, ob
         "environment_setup": setup,
         "evidence_source": [f"{source_prefix}module_setup_commands.txt", f"{source_prefix}command_siesta.txt", f"{source_prefix}siesta_version.txt"],
     }]
+    if siesta_candidates:
+        _add_engine_runtime_evidence(siesta_candidates[0], probe, source_prefix)
     launchers: dict[str, list[dict[str, object]]] = {}
     srun = commands.get("srun")
     if srun:
@@ -218,6 +305,7 @@ def _module_candidates(raw: Path, probe: Path | None) -> tuple[list[dict[str, ob
         if bootstrap:
             candidate["bootstrap"] = bootstrap
             candidate["evidence_source"] = [*candidate["evidence_source"], f"{source_prefix}environment_redacted.txt"]
+        _add_launcher_runtime_evidence(candidate, probe, source_prefix)
         launchers["mpiexec.hydra"] = [candidate]
     return python_candidates, siesta_candidates, launchers
 
@@ -246,6 +334,8 @@ def build(raw: Path, runtime_probe: Path | None = None) -> dict[str, object]:
         "observed_version": _version(_read(raw, "siesta_version.txt")) or "UNVERIFIED", "environment_setup": [],
         "evidence_source": ["command_siesta.txt", "siesta_version.txt"],
     }]
+    if siesta_candidates:
+        _add_engine_runtime_evidence(siesta_candidates[0], raw, "")
     launchers: dict[str, list[dict[str, object]]] = {}
     for name in ("srun", "mpiexec.hydra"):
         executable = commands.get(name)
@@ -261,6 +351,7 @@ def build(raw: Path, runtime_probe: Path | None = None) -> dict[str, object]:
                 if bootstrap:
                     candidate["bootstrap"] = bootstrap
                     candidate["evidence_source"] = [*candidate["evidence_source"], "mpiexec_hydra_help.txt", "environment_redacted.txt"]
+                _add_launcher_runtime_evidence(candidate, raw, "")
             launchers[name] = [candidate]
     module_python, module_siesta, module_launchers = _module_candidates(raw, runtime_probe)
     python_candidates.extend(module_python)

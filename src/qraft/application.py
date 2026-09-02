@@ -469,8 +469,18 @@ class QraftApplication:
             {"name": name, "status": "PASS" if passed else "BLOCKED", "detail": detail}
             for name, passed, detail in checks
         ]
+        compatibility_blocked = report.compatibility.status is ProbeStatus.INCOMPATIBLE
+        rendered.insert(3, {
+            "name": "Runtime compatibility",
+            "status": "BLOCKED" if compatibility_blocked else report.compatibility.status.value,
+            "detail": report.compatibility.detail,
+        })
         return {
-            "status": "PASS" if all(item[1] for item in checks) else "BLOCKED",
+            "status": (
+                "PASS"
+                if all(item[1] for item in checks) and not compatibility_blocked
+                else "BLOCKED"
+            ),
             "checks": rendered,
             "environment": report.to_dict(),
             "execution_fingerprint": plan["execution_spec"]["fingerprint"],

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from contextlib import nullcontext
 from pathlib import Path
 from typing import Mapping
@@ -9,6 +10,8 @@ from typing import Mapping
 from ..contracts import CapabilityRegistry
 from ..core import ExecutionSpec
 from ..filesystem import RealFileSystem
+from ..runtime_compatibility import INCOMPATIBLE, evaluate_runtime_compatibility
+from ..runtime_evidence import RuntimeEvidenceProbe, observe_runtime_evidence
 from .adapters import launcher_registry
 from .allocation_controller_compat import (
     AllocationController as HistoricalAllocationController,
@@ -38,12 +41,14 @@ class CanonicalController:
         launcher: StepLauncher | None = None,
         shutdown: ShutdownRequest | None = None,
         poll_interval_seconds: float = 0.05,
+        runtime_evidence_probe: RuntimeEvidenceProbe = observe_runtime_evidence,
     ) -> None:
         self.root = root.resolve()
         self.config = config
         self.slurm = slurm
         self.shutdown = shutdown or ShutdownRequest()
         self.poll_interval_seconds = max(0.001, float(poll_interval_seconds))
+        self.runtime_evidence_probe = runtime_evidence_probe
         self.launcher_adapter = launcher_registry.require(config.launcher_kind)
         self.launcher = launcher or self.launcher_adapter.create(
             command=config.srun_command,
@@ -65,6 +70,7 @@ class CanonicalController:
         launcher: StepLauncher | None = None,
         shutdown: ShutdownRequest | None = None,
         poll_interval_seconds: float = 0.05,
+        runtime_evidence_probe: RuntimeEvidenceProbe = observe_runtime_evidence,
     ) -> "CanonicalController":
         campaign_path = campaign_path.resolve()
         selected_root = (root or campaign_path.parent).resolve()
@@ -81,7 +87,21 @@ class CanonicalController:
             launcher=launcher,
             shutdown=shutdown,
             poll_interval_seconds=poll_interval_seconds,
+            runtime_evidence_probe=runtime_evidence_probe,
         )
+
+    def _validate_runtime_compatibility(self) -> None:
+        components, conflicts = self.runtime_evidence_probe(
+            self.config.siesta_executable,
+            self.config.srun_command[0] if self.config.srun_command else None,
+            {**os.environ, **self.config.environment},
+        )
+        decision = evaluate_runtime_compatibility(components, conflicts)
+        if decision["status"] == INCOMPATIBLE:
+            raise ValueError(
+                "RUNTIME_COMPATIBILITY_INCOMPATIBLE: selected campaign runtime "
+                "contradicts observed evidence"
+            )
 
     def _allocation(self) -> RuntimeAllocation:
         if not self._validated_hosts:
@@ -139,6 +159,7 @@ class CanonicalController:
         self._validated_hosts = hosts
 
     def run(self, *, install_signal_handlers: bool = True) -> ExecutionStatus:
+        self._validate_runtime_compatibility()
         self.plan = translate_controller_config(self.config, root=self.root)
         self._validate_runtime_placement()
         registry = CapabilityRegistry()

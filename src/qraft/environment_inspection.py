@@ -7,7 +7,7 @@ import platform
 import shutil
 import subprocess
 import sys
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
@@ -17,10 +17,15 @@ from .engines.registry import EngineRegistry, engine_registry
 from .execution.adapters import (
     LauncherRegistry, SchedulerRegistry, launcher_registry, scheduler_registry,
 )
+from .runtime_compatibility import (
+    COMPATIBLE, INCOMPATIBLE, UNKNOWN, evaluate_runtime_compatibility,
+)
+from .runtime_evidence import RuntimeEvidenceProbe, observe_runtime_evidence
 
 
 class ProbeStatus(str, Enum):
     AVAILABLE = "AVAILABLE"
+    COMPATIBLE = COMPATIBLE
     NOT_FOUND = "NOT_FOUND"
     NOT_REQUIRED = "NOT_REQUIRED"
     INVALID = "INVALID"
@@ -35,10 +40,13 @@ class ProbeResult:
     executable: str | None = None
     version: str | None = None
     detail: str | None = None
+    data: Mapping[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         value = asdict(self)
         value["status"] = self.status.value
+        if not value["data"]:
+            value.pop("data")
         return value
 
 
@@ -53,6 +61,7 @@ class EnvironmentReport:
     launchers: tuple[ProbeResult, ...]
     profile: ProbeResult
     filesystem: ProbeResult
+    compatibility: ProbeResult
     workspace: str
     config_paths: tuple[str, ...]
 
@@ -69,6 +78,7 @@ class EnvironmentReport:
             selected_launcher is not None and selected_launcher.status in acceptable,
             self.profile.status in acceptable,
             self.filesystem.status in acceptable,
+            self.compatibility.status in {ProbeStatus.COMPATIBLE, ProbeStatus.UNKNOWN},
         ))
 
     def to_dict(self) -> dict[str, Any]:
@@ -84,6 +94,7 @@ class EnvironmentReport:
             "launchers": [item.to_dict() for item in self.launchers],
             "profile": self.profile.to_dict(),
             "filesystem": self.filesystem.to_dict(),
+            "compatibility": self.compatibility.to_dict(),
             "workspace": self.workspace,
             "config_paths": list(self.config_paths),
             "result": "READY" if self.ready else "INCOMPLETE",
@@ -92,8 +103,6 @@ class EnvironmentReport:
 
 Runner = Callable[..., subprocess.CompletedProcess[str]]
 Which = Callable[[str], str | None]
-
-
 class EnvironmentInspector:
     """Inspect registered external capabilities without running scientific work."""
 
@@ -103,6 +112,7 @@ class EnvironmentInspector:
         schedulers: SchedulerRegistry | None = None,
         which: Which = shutil.which, runner: Runner = subprocess.run,
         environ: Mapping[str, str] | None = None,
+        runtime_evidence_probe: RuntimeEvidenceProbe | None = None,
     ) -> None:
         self.engines = engines or engine_registry
         self.launchers = launchers or launcher_registry
@@ -110,6 +120,7 @@ class EnvironmentInspector:
         self._which = which
         self._runner = runner
         self._environ = dict(os.environ if environ is None else environ)
+        self._runtime_evidence_probe = runtime_evidence_probe
 
     def inspect(
         self, *, engine_name: str, engine_executable: str,
@@ -140,6 +151,35 @@ class EnvironmentInspector:
             ))
         scheduler = self.schedulers.require(scheduler_name)
         scheduler_probe = self._scheduler_probe(scheduler)
+        selected_launcher_probe = next(
+            item for item in launcher_probes
+            if item.name.startswith("launcher:selected:")
+        )
+        if self._runtime_evidence_probe is None:
+            components, conflicts = observe_runtime_evidence(
+                engine_probe.executable,
+                selected_launcher_probe.executable,
+                self._environ,
+                which=self._which,
+                runner=self._runner,
+            )
+        else:
+            components, conflicts = self._runtime_evidence_probe(
+                engine_probe.executable,
+                selected_launcher_probe.executable,
+                self._environ,
+            )
+        compatibility = evaluate_runtime_compatibility(components, conflicts)
+        compatibility_probe = ProbeResult(
+            "runtime:compatibility",
+            ProbeStatus(compatibility["status"]),
+            detail={
+                COMPATIBLE: "selected runtime facts are compatible",
+                INCOMPATIBLE: "explicit runtime evidence is contradictory",
+                UNKNOWN: "runtime compatibility evidence is incomplete",
+            }[compatibility["status"]],
+            data=compatibility,
+        )
         resolved_workspace = workspace.expanduser().resolve()
         writable = (
             resolved_workspace.is_dir()
@@ -171,6 +211,7 @@ class EnvironmentInspector:
             launchers=tuple(launcher_probes),
             profile=profile_probe,
             filesystem=filesystem_probe,
+            compatibility=compatibility_probe,
             workspace=str(resolved_workspace),
             config_paths=tuple(str(path.expanduser().resolve()) for path in config_paths),
         )
@@ -261,7 +302,9 @@ def render_environment(report: EnvironmentReport) -> str:
         f"  Status           : {report.scheduler.status.value}", "", "LAUNCHER",
         f"  Selected         : {selected_launcher.name.rsplit(':', 1)[-1]}",
         f"  Executable       : {selected_launcher.executable or '-'}",
-        f"  Status           : {selected_launcher.status.value}", "", "PROFILE",
+        f"  Status           : {selected_launcher.status.value}", "", "COMPATIBILITY",
+        f"  Runtime          : {report.compatibility.status.value}",
+        f"  Detail           : {report.compatibility.detail or '-'}", "", "PROFILE",
         f"  Active           : {report.profile.detail or '-'}",
         f"  Status           : {report.profile.status.value}", "", "FILESYSTEM",
         f"  Workspace        : {report.workspace}",
