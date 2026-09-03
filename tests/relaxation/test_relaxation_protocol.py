@@ -87,6 +87,14 @@ siesta: Atomic forces (eV/Ang):
 """
     assert _force_from_text(iterations) == pytest.approx(0.01)
     assert _force_from_text("Maximum force: 0.01 eV/Ang") == pytest.approx(0.01)
+    vectors = """siesta: Atomic forces (eV/Ang):
+siesta:      1   -1.342877   -0.000009   -0.000009
+siesta:      2    1.650755    0.000024    0.000024
+siesta: ----------------------------------------
+siesta:    Tot    0.307877    0.000015    0.000015
+"""
+    assert _force_from_text(vectors) == pytest.approx(1.650755)
+    assert _force_from_text("siesta: Atomic forces (eV/Ang):\nsiesta: Tot 0 0 0\n") is None
     with pytest.raises(ValueError, match="unsupported force unit"):
         _force_from_text("siesta: Atomic forces (Hartree/Bohr):\n Max 0.1\n")
 

@@ -25,6 +25,7 @@ _GEOMETRY_TYPE = "qraft.geometry"
 _LEGACY_FORCE = re.compile(r"max(?:imum)?\s+force\s*[:=]\s*([-+0-9.Ee]+)\s*([A-Za-zÅ/]+)", re.I)
 _FORCE_HEADER = re.compile(r"^\s*(?:siesta:\s*)?atomic\s+forces\s*\(([^)]+)\)\s*:\s*$", re.I)
 _FORCE_MAX = re.compile(r"^\s*max\s+([-+0-9.Ee]+)(?:\s+(constrained))?\s*$", re.I)
+_FORCE_VECTOR = re.compile(r"^\s*(?:siesta:\s*)?\d+\s+([-+0-9.Ee]+)\s+([-+0-9.Ee]+)\s+([-+0-9.Ee]+)\s*$", re.I)
 
 
 def _scalar(document: FDFDocument, name: str) -> FDFScalar | None:
@@ -158,10 +159,17 @@ def _force_from_text(text: str) -> float | None:
             for line in lines[start + 1:end]
             if (match := _FORCE_MAX.match(line))
         ]
-        if not maxima:
-            return None
-        constrained = [value for match, value in maxima if match.group(2)]
-        return (constrained[-1] if constrained else maxima[-1][1]) * factor
+        if maxima:
+            constrained = [value for match, value in maxima if match.group(2)]
+            return (constrained[-1] if constrained else maxima[-1][1]) * factor
+        vectors = [
+            math.sqrt(sum(_float(match.group(column), "atomic force") ** 2 for column in (1, 2, 3)))
+            for line in lines[start + 1:end]
+            if (match := _FORCE_VECTOR.match(line))
+        ]
+        if vectors:
+            return max(vectors) * factor
+        return None
     matches = list(_LEGACY_FORCE.finditer(text))
     if not matches:
         return None
