@@ -222,6 +222,50 @@ class ScientificSection:
 
 
 @dataclass(frozen=True)
+class RelaxationSpec:
+    """Explicit public request for the post-convergence fixed-cell relaxation."""
+
+    run_type: str
+    steps: int
+    max_force: float
+    unit: str
+
+    def __post_init__(self) -> None:
+        if self.run_type.upper() not in {"CG", "BROYDEN", "FIRE"}:
+            raise ValueError("relaxation type must be CG, Broyden, or FIRE")
+        if isinstance(self.steps, bool) or self.steps <= 0:
+            raise ValueError("relaxation steps must be positive")
+        if isinstance(self.max_force, bool) or self.max_force <= 0:
+            raise ValueError("relaxation max_force must be positive")
+        if not self.unit.strip():
+            raise ValueError("relaxation unit must be non-empty")
+
+    @classmethod
+    def from_mapping(cls, raw: Mapping[str, Any]) -> "RelaxationSpec | None":
+        data = dict(raw)
+        enabled = data.pop("enabled", None)
+        if enabled is False:
+            if data:
+                raise ValueError("disabled relaxation cannot declare controls")
+            return None
+        if enabled is not True:
+            return None
+        allowed = {"type", "steps", "max_force", "unit"}
+        unknown = sorted(set(data) - allowed)
+        if unknown:
+            raise ValueError("unknown relaxation controls: " + ", ".join(unknown))
+        missing = sorted(allowed - set(data))
+        if missing:
+            raise ValueError("relaxation requires: " + ", ".join(missing))
+        return cls(
+            run_type=str(data["type"]),
+            steps=int(data["steps"]),
+            max_force=float(data["max_force"]),
+            unit=str(data["unit"]),
+        )
+
+
+@dataclass(frozen=True)
 class CampaignSpec:
     campaign_id: str
     system: SystemSpec
@@ -232,6 +276,7 @@ class CampaignSpec:
     required_outputs: tuple[str, ...] = ()
     engine_options: tuple[EngineOption, ...] = ()
     sections: tuple[ScientificSection, ...] = ()
+    relaxation: RelaxationSpec | None = None
     source: Path | None = None
     schema_version: str = "1.0"
 
@@ -276,6 +321,7 @@ class CampaignSpec:
         value["criterion"] = _primitive(self.criterion)
         value["engine_options"] = [_primitive(item) for item in self.engine_options]
         value["sections"] = [_primitive(item) for item in self.sections]
+        value["relaxation"] = _primitive(self.relaxation) if self.relaxation else None
         value["source"] = str(self.source) if include_source and self.source else None
         return value
 
@@ -366,6 +412,11 @@ class CampaignSpec:
             ScientificSection(name, tuple(sorted(data[name])))
             for name in section_names if isinstance(data.get(name), Mapping)
         )
+        relaxation = (
+            RelaxationSpec.from_mapping(data["relaxation"])
+            if isinstance(data.get("relaxation"), Mapping)
+            else None
+        )
         return cls(
             campaign_id=str(data.get("campaign_id", "")),
             system=system,
@@ -376,6 +427,7 @@ class CampaignSpec:
             required_outputs=tuple(map(str, data.get("required_outputs", ()) or ())),
             engine_options=options,
             sections=sections,
+            relaxation=relaxation,
             source=source,
             schema_version=str(data.get("schema_version", "1.0")),
         )

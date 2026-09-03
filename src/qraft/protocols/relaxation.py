@@ -12,7 +12,9 @@ from ..contracts import CapabilityRegistry, ContractEnvelope, SCIENTIFIC_ARTIFAC
 from ..contracts.scientific import ScientificArtifactReference, ScientificAuthority
 from ..execution.capability_plugins import SIESTA_RELAX_CAPABILITY, register_siesta_relax
 from ..execution.capability_runtime import CompiledWorkflowRuntime
+from ..execution.resource_coordinator import CooperativeShutdown
 from ..execution.runtime_composition import compose_runtime
+from ..execution.slurm_environment import SignalHandlers
 from ..workflows import WorkflowCompiler
 from .single_fdf import build_scientific_identity, resolve_execution_spec
 from ..engines.siesta.input_closure import resolve_scientific_input_closure
@@ -26,7 +28,7 @@ def _atomic_json(path: Path, payload: Mapping[str, Any]) -> None:
 
 
 class RelaxationProtocol:
-    def run(self, fdf: Path, *, pseudo_manifest: Path | None = None, profile: Mapping[str, Any] | None = None, project_config: Path | None = None, recipe: Path | None = None, overrides: Mapping[str, Any] | None = None, runs_root: Path = Path(".qraft-relax"), force_new_attempt: bool = False) -> dict[str, Any]:
+    def run(self, fdf: Path, *, pseudo_manifest: Path | None = None, profile: Mapping[str, Any] | None = None, project_config: Path | None = None, recipe: Path | None = None, overrides: Mapping[str, Any] | None = None, runs_root: Path = Path(".qraft-relax"), force_new_attempt: bool = False, shutdown: CooperativeShutdown | None = None) -> dict[str, Any]:
         fdf = fdf.resolve()
         geometry = geometry_from_fdf(fdf)
         tolerance = validate_relaxation(fdf)
@@ -55,7 +57,21 @@ class RelaxationProtocol:
             max_parallel_steps=1,
             placement_probe_root=root,
         )
-        runtime = CompiledWorkflowRuntime(workflow=compilation.compiled, registry=registry, root=root, source_root=root, scientific_identities={"relax": build_scientific_identity(fdf, pseudo_manifest=pseudo_manifest)}, execution_specs=execution, launcher=composition.launcher, allocation=composition.allocation, force_new_attempts=force_new_attempt).run()
+        owns_shutdown = shutdown is None
+        shutdown = shutdown or CooperativeShutdown()
+        compiled_runtime = CompiledWorkflowRuntime(
+            workflow=compilation.compiled, registry=registry, root=root,
+            source_root=root,
+            scientific_identities={"relax": build_scientific_identity(fdf, pseudo_manifest=pseudo_manifest)},
+            execution_specs=execution, launcher=composition.launcher,
+            allocation=composition.allocation, shutdown=shutdown,
+            force_new_attempts=force_new_attempt,
+        )
+        if owns_shutdown:
+            with SignalHandlers(shutdown):
+                runtime = compiled_runtime.run()
+        else:
+            runtime = compiled_runtime.run()
         attempt = runtime.attempts.get("relax")
         if attempt is None:
             return {"status": runtime.status, "technical_validation": "FAIL", "scientific_decision": "NOT_EVALUATED"}

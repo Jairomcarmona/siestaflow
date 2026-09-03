@@ -73,6 +73,20 @@ def campaign_file(root: Path, *, parameter: dict | None = None) -> Path:
     return path
 
 
+def relaxation_campaign_file(root: Path) -> Path:
+    path = campaign_file(root)
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    raw["relaxation"] = {
+        "enabled": True,
+        "type": "CG",
+        "steps": 4,
+        "max_force": 0.05,
+        "unit": "eV/Ang",
+    }
+    path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+    return path
+
+
 def test_parameter_modes_and_invalid_combinations(tmp_path: Path) -> None:
     assert ParameterSpec.from_mapping({"mode": "fixed", "value": 450, "unit": "Ry"}).resolved_values() == (450,)
     assert ParameterSpec.from_mapping({"mode": "scan", "values": [1, 2]}).resolved_values() == (1, 2)
@@ -343,6 +357,157 @@ def test_interrupted_campaign_preserves_runtime_state_without_final_result(
 def test_convergence_execution_authority_is_canonical_runtime() -> None:
     source = Path(inspect.getsourcefile(ConvergenceProtocol) or "")
     assert "execute_fdf_plan(" not in source.read_text(encoding="utf-8")
+
+
+def test_public_relaxation_selection_renders_exact_value_and_provenance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import qraft.protocols.convergence as convergence_module
+
+    campaign = CampaignSpec.load(relaxation_campaign_file(tmp_path))
+    observed: list[Path] = []
+
+    class FakeRelaxation:
+        def run(self, fdf: Path, **_kwargs):
+            observed.append(fdf)
+            return {
+                "status": "COMPLETED", "technical_validation": "PASS",
+                "scientific_decision": "CONVERGED",
+                "attempt": {"attempt_id": "attempt-0001", "stdout": "stdout.txt", "stderr": "stderr.txt"},
+                "reused": False,
+            }
+
+    monkeypatch.setattr(convergence_module, "RelaxationProtocol", FakeRelaxation)
+    downstream = ConvergenceProtocol()._run_downstream_relaxation(
+        campaign,
+        selected=100,
+        decision="CONVERGED",
+        convergence_result={"selected_point": 100, "scientific_decision": "CONVERGED"},
+        root=tmp_path / "runs",
+        profile=None,
+        project_config=None,
+        recipe=None,
+        overrides={"partition": "local", "launcher": "direct", "executable": sys.executable},
+        force_new_attempt=False,
+    )
+
+    assert downstream is not None and downstream["status"] == "COMPLETED"
+    assert observed == [Path(downstream["rendered_fdf"])]
+    text = Path(downstream["rendered_fdf"]).read_text(encoding="utf-8")
+    assert "Mesh.Cutoff 100 Ry" in text
+    assert "MD.TypeOfRun CG" in text
+    assert "MD.Steps 4" in text
+    assert "MD.MaxForceTol 0.05 eV/Ang" in text
+    provenance = json.loads(Path(downstream["provenance"]).read_text(encoding="utf-8"))
+    assert provenance["upstream"]["value"] == 100
+    selection = json.loads(Path(downstream["selection"]).read_text(encoding="utf-8"))
+    assert selection["scientific_decision"] == "CONVERGED"
+    assert selection["selected_parameter"] == {"name": "mesh_cutoff", "value": 100, "unit": "Ry"}
+    assert provenance["upstream"]["selection"] == downstream["selection"]
+    assert provenance["upstream"]["selection_sha256"] == __import__("hashlib").sha256(
+        Path(downstream["selection"]).read_bytes()
+    ).hexdigest()
+    assert provenance["downstream"]["rendered_fdf_sha256"]
+
+
+def test_relaxation_is_fail_closed_without_converged_selection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import qraft.protocols.convergence as convergence_module
+
+    campaign = CampaignSpec.load(relaxation_campaign_file(tmp_path))
+    calls: list[object] = []
+
+    class UnexpectedRelaxation:
+        def run(self, *_args, **_kwargs):
+            calls.append(object())
+            raise AssertionError("downstream relaxation must not run")
+
+    monkeypatch.setattr(convergence_module, "RelaxationProtocol", UnexpectedRelaxation)
+    protocol = ConvergenceProtocol()
+    for decision, selected in (("SCIENTIFIC_NOT_CONVERGED", None), ("CONVERGED", None)):
+        result = protocol._run_downstream_relaxation(
+            campaign,
+            selected=selected,
+            decision=decision,
+            convergence_result={},
+            root=tmp_path / decision,
+            profile=None,
+            project_config=None,
+            recipe=None,
+            overrides=None,
+            force_new_attempt=False,
+        )
+        assert result is not None and result["status"] == "BLOCKED"
+    assert calls == []
+
+
+def test_relaxation_declaration_persists_and_public_plan_exposes_dependency(
+    tmp_path: Path,
+) -> None:
+    path = relaxation_campaign_file(tmp_path)
+    first = CampaignSpec.load(path)
+    second = CampaignSpec.load(path)
+    assert first.relaxation == second.relaxation
+    dag = ConvergenceProtocol().plan(
+        first,
+        overrides={"partition": "local", "launcher": "direct", "executable": sys.executable},
+    )["dag"]
+    nodes = {item["node_id"]: item for item in dag}
+    assert nodes["render_relaxation"]["depends_on"] == ["scientific_decision"]
+    assert nodes["relaxation"]["depends_on"] == ["render_relaxation"]
+    assert nodes["downstream_result"]["depends_on"] == ["relaxation"]
+
+
+def test_chained_campaign_resume_reuses_convergence_and_status_exposes_downstream(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import qraft.protocols.convergence as convergence_module
+
+    campaign = relaxation_campaign_file(tmp_path)
+    fake = tmp_path / "fake.py"
+    fake.write_text(
+        "import re,sys\ntext=open(sys.argv[1], encoding='utf-8').read()\n"
+        "v=float(re.search(r'Mesh\\.Cutoff\\s+([0-9.]+)',text,re.I).group(1))\n"
+        "energy={200.0:-10.0,250.0:-10.0005,300.0:-10.0009}[v]\n"
+        "print('Siesta started')\nprint('SCF converged')\n"
+        "print(f'siesta: E_KS(eV) = {energy}')\nprint('Job completed')\n",
+        encoding="utf-8",
+    )
+    wrapper = tmp_path / ("fake-siesta.cmd" if os.name == "nt" else "fake-siesta")
+    if os.name == "nt":
+        wrapper.write_text(f'@echo off\r\n"{sys.executable}" "{fake}" %1\r\n', encoding="utf-8")
+    else:
+        wrapper.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{fake}" "$1"\n', encoding="utf-8")
+        wrapper.chmod(0o755)
+
+    calls: list[Path] = []
+
+    class FakeRelaxation:
+        def run(self, fdf: Path, **_kwargs):
+            calls.append(fdf)
+            return {
+                "status": "COMPLETED", "technical_validation": "PASS",
+                "scientific_decision": "CONVERGED",
+                "attempt": {"attempt_id": "attempt-0001", "stdout": "stdout.txt", "stderr": "stderr.txt"},
+                "reused": len(calls) > 1,
+            }
+
+    monkeypatch.setattr(convergence_module, "RelaxationProtocol", FakeRelaxation)
+    root = tmp_path / "runs"
+    app = QraftApplication(ApplicationConfiguration(
+        fdf=campaign, runs_root=root,
+        overrides={"partition": "local", "launcher": "direct", "executable": str(wrapper)},
+    ))
+    first = app.run()
+    second = app.run()
+    assert first["downstream"]["status"] == "COMPLETED"
+    assert all(point["reused"] for point in second["points"])
+    assert second["downstream"]["result"]["reused"] is True
+    status = app.status()
+    assert status["campaign"]["downstream"]["selected_parameter"]["value"] == 300
+    assert Path(status["campaign"]["downstream"]["provenance"]).is_file()
+    assert len(calls) == 2
 
 
 def test_execution_changes_do_not_change_rendered_science(tmp_path: Path) -> None:

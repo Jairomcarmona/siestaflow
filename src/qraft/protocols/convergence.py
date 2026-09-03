@@ -30,6 +30,7 @@ from ..execution.runtime_composition import compose_runtime
 from ..execution.slurm_environment import SignalHandlers
 from ..workflows import WorkflowCompiler
 from .single_fdf import build_scientific_identity, resolve_execution_spec
+from .relaxation import RelaxationProtocol
 
 
 ALGORITHM = "qraft.convergence.v1"
@@ -160,7 +161,7 @@ class ConvergenceProtocol:
         preflight = self.preflight(campaign)
         execution, provenance = resolve_execution_spec(profile=profile, project_config=project_config, recipe=recipe, overrides=overrides)
         variants = self._variants(campaign)
-        dag = _dag(len(variants))
+        dag = _dag(len(variants), downstream_relaxation=campaign.relaxation is not None)
         root = (output_root or Path(".qraft-render") / campaign.campaign_id).resolve()
         return {
             "schema_version": "1.0", "status": "BLOCKED" if preflight["status"] != "PASS" else "EXECUTABLE_PLAN",
@@ -199,7 +200,7 @@ class ConvergenceProtocol:
             fdf = rendered.root_fdf
             generated_manifest = self._copy_dependencies(campaign, point)
             paths.append({"node_id": f"point_{index:03d}", "value": item.value, "fdf": str(fdf), "sha256": _sha(fdf), "closure_sha256": rendered.closure_sha256, "closure_files": rendered.file_sha256, "pseudo_manifest": str(generated_manifest) if generated_manifest else None})
-        manifest = {"schema_version": "1.0", "campaign_id": campaign.campaign_id, "campaign_fingerprint": campaign.fingerprint, "parameter": campaign.scanned_parameter[0], "points": paths, "dag": _dag(len(paths))}
+        manifest = {"schema_version": "1.0", "campaign_id": campaign.campaign_id, "campaign_fingerprint": campaign.fingerprint, "parameter": campaign.scanned_parameter[0], "points": paths, "dag": _dag(len(paths), downstream_relaxation=campaign.relaxation is not None)}
         _atomic_json(root / "render-manifest.json", manifest)
         return {"status": "RENDERED", "root": str(root), "manifest": str(root / "render-manifest.json"), "points": paths, "executed": False, "submitted": False}
 
@@ -222,7 +223,7 @@ class ConvergenceProtocol:
         writer.start_session(ExecutionSession(session_id, _next_epoch(root), "RESUME" if (root / "state" / "workflow_runtime.json").is_file() else "NEW", _utc_now(), invocation or f"qraft run {campaign.source}", None, str(root)), OutputModel(
             configuration={"campaign": str(campaign.source), "parameter scanned": campaign.scanned_parameter[0], "values": json.dumps(list(campaign.scanned_parameter[1].resolved_values())), "metric": campaign.criterion.metric, "criterion": campaign.criterion.delta, "consecutive": campaign.criterion.consecutive},
             execution={"partition": execution.partition, "nodes": execution.nodes, "MPI ranks": execution.mpi_ranks, "launcher": execution.launcher},
-            dag=tuple(DagEntry(item["node_id"], item["kind"], "READY" if not item["depends_on"] else "WAITING", tuple(item["depends_on"])) for item in _dag(len(rendered["points"]))),
+            dag=tuple(DagEntry(item["node_id"], item["kind"], "READY" if not item["depends_on"] else "WAITING", tuple(item["depends_on"])) for item in _dag(len(rendered["points"]), downstream_relaxation=campaign.relaxation is not None)),
         ))
         definition = rendered_root / "convergence-workflow.json"
         _atomic_json(
@@ -304,6 +305,26 @@ class ConvergenceProtocol:
             "scientific_decision": decision, "selected_point": selected, "criterion": asdict(campaign.criterion),
             "points": [asdict(point) for point in evaluated], "render_manifest": rendered["manifest"],
         }
+        downstream_shutdown = CooperativeShutdown()
+        with SignalHandlers(downstream_shutdown):
+            downstream = self._run_downstream_relaxation(
+                campaign,
+                selected=selected,
+                decision=decision,
+                convergence_result=result_payload,
+                root=root,
+                profile=profile,
+                project_config=project_config,
+                recipe=recipe,
+                overrides=overrides,
+                force_new_attempt=force_new_attempt,
+                shutdown=downstream_shutdown,
+            )
+        if downstream is not None:
+            result_payload["downstream"] = downstream
+            if downstream["status"] not in {"COMPLETED", "BLOCKED"}:
+                status = "FAILED"
+                result_payload["execution_state"] = status
         _atomic_json(root / "campaign-result.json", result_payload)
         rows = tuple((str(point.value), point.energy_ev, point.energy_per_atom_ev, point.delta, point.technical_status, point.attempt_id, point.reused) for point in evaluated)
         writer.append("CONVERGENCE", OutputModel(
@@ -312,9 +333,97 @@ class ConvergenceProtocol:
             decisions={"criterion": campaign.criterion.delta, "metric": campaign.criterion.metric, "consecutive": campaign.criterion.consecutive, "scientific decision": decision, "selected point": str(selected) if selected is not None else None},
             paths={"render manifest": rendered["manifest"], "campaign result": str(root / "campaign-result.json")},
         ))
+        if downstream is not None:
+            downstream_attempt = downstream.get("result", {}).get("attempt", {})
+            writer.append("DOWNSTREAM RELAXATION", OutputModel(
+                nodes=(NodeEntry("relaxation", "fixed_cell_relaxation", str(downstream.get("technical_validation", "BLOCKED")), str(downstream_attempt.get("attempt_id", "-")), input_path=downstream.get("rendered_fdf"), stdout_path=downstream.get("stdout"), stderr_path=downstream.get("stderr")),),
+                decisions={"selected parameter": f"{campaign.scanned_parameter[0]}={selected}", "downstream status": str(downstream["status"]), "scientific decision": str(downstream.get("scientific_decision", "NOT_EVALUATED"))},
+                paths={"selection provenance": str(downstream.get("provenance", "-")), "rendered relaxation input": str(downstream.get("rendered_fdf", "-"))},
+            ))
         writer.finish_session(result=status, finished=_utc_now(), elapsed_seconds=time.monotonic() - started)
         writer.finish({"Campaign status": status, "Technical validation": result_payload["technical_validation"], "Scientific decision": decision, "Selected": str(selected) if selected is not None else None, "QRAFT output": str(root / "qraft.out"), "Evidence": str(root / "campaign-result.json")})
-        return {"status": status, "technical_validation": result_payload["technical_validation"], "scientific_decision": decision, "selected_point": selected, "points": result_payload["points"], "result_manifest": str(root / "campaign-result.json"), "qraft_output": str(root / "qraft.out")}
+        return {"status": status, "technical_validation": result_payload["technical_validation"], "scientific_decision": decision, "selected_point": selected, "points": result_payload["points"], "downstream": downstream, "result_manifest": str(root / "campaign-result.json"), "qraft_output": str(root / "qraft.out")}
+
+    def _run_downstream_relaxation(
+        self,
+        campaign: CampaignSpec,
+        *,
+        selected: ScientificValue | None,
+        decision: str,
+        convergence_result: Mapping[str, Any],
+        root: Path,
+        profile: Mapping[str, Any] | None,
+        project_config: Path | None,
+        recipe: Path | None,
+        overrides: Mapping[str, Any] | None,
+        force_new_attempt: bool,
+        shutdown: CooperativeShutdown | None = None,
+    ) -> dict[str, Any] | None:
+        relaxation = campaign.relaxation
+        if relaxation is None:
+            return None
+        if decision != "CONVERGED" or selected is None:
+            return {"status": "BLOCKED", "technical_validation": "NOT_EVALUATED", "scientific_decision": "NOT_EVALUATED", "reason": "convergence did not produce a valid selected value"}
+        parameter, scan = campaign.scanned_parameter
+        fixed = {name: (item.resolved_values()[0], item.unit) for name, item in campaign.parameters.items() if item.mode in {ParameterMode.FIXED, ParameterMode.INHERIT}}
+        render_root = root / "downstream" / "rendered"
+        rendered = self.adapter.materialize_effective(
+            campaign.system.fdf,
+            render_root,
+            resolved={**fixed, parameter: (selected, scan.unit)},
+            engine_options=campaign.engine_options,
+            scalar_updates={
+                "MD.TypeOfRun": (relaxation.run_type.upper(), None),
+                "MD.Steps": (relaxation.steps, None),
+                "MD.MaxForceTol": (relaxation.max_force, relaxation.unit),
+                "MD.VariableCell": ("false", None),
+            },
+            primary_destination="input.fdf",
+        )
+        generated_manifest = self._copy_dependencies(campaign, render_root)
+        selection_path = root / "downstream" / "convergence-selection.json"
+        selection = {
+            "schema_version": "1.0",
+            "campaign_id": campaign.campaign_id,
+            "scientific_decision": decision,
+            "selected_parameter": {"name": parameter, "value": selected, "unit": scan.unit},
+            "convergence_result_sha256": hashlib.sha256(
+                json.dumps(
+                    convergence_result,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    default=str,
+                ).encode()
+            ).hexdigest(),
+        }
+        _atomic_json(selection_path, selection)
+        provenance_path = root / "downstream" / "selection-provenance.json"
+        provenance = {
+            "schema_version": "1.0",
+            "upstream": {
+                "selection": str(selection_path),
+                "selection_sha256": _sha(selection_path),
+                "parameter": parameter,
+                "value": selected,
+                "unit": scan.unit,
+            },
+            "downstream": {"rendered_fdf": str(rendered.root_fdf), "rendered_fdf_sha256": _sha(rendered.root_fdf)},
+        }
+        _atomic_json(provenance_path, provenance)
+        result = RelaxationProtocol().run(
+            rendered.root_fdf,
+            pseudo_manifest=generated_manifest,
+            profile=profile,
+            project_config=project_config,
+            recipe=recipe,
+            overrides=overrides,
+            runs_root=root / "downstream" / "relaxation",
+            force_new_attempt=force_new_attempt,
+            shutdown=shutdown,
+        )
+        attempt = result.get("attempt", {})
+        attempt_root = root / "downstream" / "relaxation" / "work" / "relax" / str(attempt.get("attempt_id", ""))
+        return {"status": result["status"], "technical_validation": result["technical_validation"], "scientific_decision": result["scientific_decision"], "selected_parameter": {"name": parameter, "value": selected, "unit": scan.unit}, "selection": str(selection_path), "rendered_fdf": str(rendered.root_fdf), "provenance": str(provenance_path), "result": result, "stdout": str(attempt_root / attempt.get("stdout", "stdout.txt")) if attempt else None, "stderr": str(attempt_root / attempt.get("stderr", "stderr.txt")) if attempt else None}
 
     def _variants(self, campaign: CampaignSpec) -> tuple[MaterializedFDF, ...]:
         scan_name, scan = campaign.scanned_parameter
@@ -446,12 +555,14 @@ def evaluate_convergence(points: Sequence[ConvergencePoint], metric: str, tolera
     return tuple(output), "CONVERGED" if selected is not None else "SCIENTIFIC_NOT_CONVERGED", selected
 
 
-def _dag(points: int) -> list[dict[str, Any]]:
+def _dag(points: int, *, downstream_relaxation: bool = False) -> list[dict[str, Any]]:
     dag = [{"node_id": "validate_campaign", "kind": "validate_campaign", "depends_on": []}, {"node_id": "render_variants", "kind": "render_variants", "depends_on": ["validate_campaign"]}]
     ids = []
     for index in range(1, points + 1):
         node = f"point_{index:03d}"; ids.append(node); dag.append({"node_id": node, "kind": "single_fdf", "depends_on": ["render_variants"]})
     dag.extend([{"node_id": "extract_metrics", "kind": "extract_metrics", "depends_on": ids}, {"node_id": "evaluate_convergence", "kind": "evaluate_convergence", "depends_on": ["extract_metrics"]}, {"node_id": "scientific_decision", "kind": "scientific_decision", "depends_on": ["evaluate_convergence"]}])
+    if downstream_relaxation:
+        dag.extend([{"node_id": "render_relaxation", "kind": "render_relaxation", "depends_on": ["scientific_decision"]}, {"node_id": "relaxation", "kind": "fixed_cell_relaxation", "depends_on": ["render_relaxation"]}, {"node_id": "downstream_result", "kind": "downstream_result", "depends_on": ["relaxation"]}])
     return dag
 
 
