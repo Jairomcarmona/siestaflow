@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import hashlib
+import os
+import signal
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -37,6 +39,8 @@ from qraft.execution.capability_runtime import (
     CompiledWorkflowRuntime,
     load_runtime_state_payload,
 )
+from qraft.execution.resource_coordinator import RuntimeAllocation
+from qraft.execution.slurm_environment import SignalHandlers
 from qraft.execution.srun_launcher import StepLaunchSpec, StepOutcome
 
 
@@ -535,6 +539,57 @@ def test_reserved_attempt_survives_crash_before_workspace_creation(tmp_path: Pat
     )["payload"]["tasks"]["A"]
     assert recovered["attempts"] == 2 and recovered["last_attempt"] == "attempt-0002"
     assert (tmp_path / "run" / "work" / "A" / "attempt-0002" / "attempt.json").is_file()
+
+
+@pytest.mark.skipif(not hasattr(signal, "SIGUSR1"), reason="SIGUSR1 unavailable")
+def test_sigusr1_after_engine_exit_preserves_completed_attempt_and_stops_new_work(
+    tmp_path: Path,
+) -> None:
+    compiled = workflow(tmp_path, (node("A"), node("B")))
+    launcher = RecordingLauncher()
+    original_launch = launcher.launch
+    sent = False
+
+    def launch(spec):
+        nonlocal sent
+        outcome = original_launch(spec)
+        if not sent:
+            sent = True
+            os.kill(os.getpid(), signal.SIGUSR1)
+        return outcome
+
+    launcher.launch = launch
+    current = CompiledWorkflowRuntime(
+        workflow=compiled,
+        registry=registry_for(SyntheticCapability()),
+        root=tmp_path / "run",
+        source_root=tmp_path,
+        scientific_identities={task.task_id: identity() for task in compiled.tasks},
+        execution_specs=execution(),
+        launcher=launcher,
+        allocation=RuntimeAllocation(1, 1, max_parallel_steps=1),
+    )
+    with SignalHandlers(current.shutdown):
+        result = current.run()
+
+    assert result.status == "INTERRUPTED"
+    assert tuple(result.attempts) == ("A",)
+    assert (tmp_path / "run" / "work" / "A" / "attempt-0001" / "attempt.json").is_file()
+    assert [item.task_id for item in launcher.launches] == ["A"]
+
+    resumed = CompiledWorkflowRuntime(
+        workflow=compiled,
+        registry=registry_for(SyntheticCapability()),
+        root=tmp_path / "run",
+        source_root=tmp_path,
+        scientific_identities={task.task_id: identity() for task in compiled.tasks},
+        execution_specs=execution(),
+        launcher=launcher,
+        allocation=RuntimeAllocation(1, 1, max_parallel_steps=1),
+    ).run()
+    assert resumed.status == "COMPLETED"
+    assert resumed.reused_nodes == ("A",)
+    assert [item.task_id for item in launcher.launches] == ["A", "B"]
 
 
 def test_valid_attempt_is_reused_without_relaunch(tmp_path: Path):

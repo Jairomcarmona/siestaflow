@@ -13,6 +13,7 @@ from .environment_inspection import EnvironmentInspector, EnvironmentReport, Pro
 from .engines.registry import engine_registry
 from .errors import PreflightError
 from .execution.adapters import launcher_registry
+from .execution.capability_runtime import load_runtime_state_payload
 from .execution_profiles import ExecutionProfile, ProfileStore
 from .output import OutputContributor
 from .campaign_spec import CampaignSpec, is_campaign_file
@@ -586,9 +587,20 @@ class QraftApplication:
                 except (OSError, json.JSONDecodeError, TypeError):
                     states.append({"path": str(path), "technical_status": "UNREADABLE"})
         campaign_result = root / "campaign-result.json"
+        runtime_state = root / "state" / "workflow_runtime.json"
+        runtime: dict[str, Any] | None = None
+        if runtime_state.is_file():
+            try:
+                runtime = {
+                    "path": str(runtime_state),
+                    **load_runtime_state_payload(runtime_state),
+                }
+            except (OSError, TypeError, ValueError, json.JSONDecodeError):
+                runtime = {"path": str(runtime_state), "status": "UNREADABLE"}
         return {
             "root": str(root), "states": states,
             "campaign": json.loads(campaign_result.read_text(encoding="utf-8")) if campaign_result.is_file() else None,
+            "runtime": runtime,
         }
 
     def attempts(self) -> tuple[dict[str, Any], ...]:

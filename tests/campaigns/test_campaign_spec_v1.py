@@ -3,8 +3,10 @@ from __future__ import annotations
 import json
 import inspect
 import os
+import signal
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import yaml
@@ -18,6 +20,7 @@ from qraft.protocols.convergence import (
 )
 from qraft.protocols.single_fdf import build_scientific_identity
 from qraft.protocols.single_fdf import validate_technical_result
+from qraft.execution.capability_runtime import WorkflowRuntimeResult
 
 
 FDF = """SystemName QRAFT convergence test
@@ -282,6 +285,59 @@ def test_campaign_run_qraft_out_csv_and_recovery(tmp_path: Path) -> None:
     assert [path.read_bytes() for path in manifests] == originals
     result = json.loads((root / "campaign-result.json").read_text(encoding="utf-8"))
     assert result["algorithm"] == "qraft.convergence.v1"
+
+
+@pytest.mark.skipif(not hasattr(signal, "SIGUSR1"), reason="SIGUSR1 unavailable")
+def test_interrupted_campaign_preserves_runtime_state_without_final_result(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import hashlib
+    import qraft.protocols.convergence as convergence_module
+
+    campaign = campaign_file(tmp_path)
+    root = tmp_path / "runs"
+
+    class InterruptedRuntime:
+        def __init__(self, *, root: Path, shutdown, **_kwargs) -> None:
+            self.root = root
+            self.shutdown = shutdown
+
+        def run(self) -> WorkflowRuntimeResult:
+            payload = {
+                "schema_version": "1.0", "runtime_fingerprint": "test",
+                "workflow_id": "test", "status": "INTERRUPTED", "revision": 0,
+                "allocation_history": [], "tasks": {},
+            }
+            canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+            state = {
+                "schema_version": "1.0", "payload": payload,
+                "sha256": hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
+            }
+            path = self.root / "state" / "workflow_runtime.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(state), encoding="utf-8")
+            os.kill(os.getpid(), signal.SIGUSR1)
+            assert self.shutdown.requested
+            return WorkflowRuntimeResult("INTERRUPTED", {}, {}, ())
+
+    monkeypatch.setattr(convergence_module, "CompiledWorkflowRuntime", InterruptedRuntime)
+    monkeypatch.setattr(
+        convergence_module, "compose_runtime",
+        lambda *_args, **_kwargs: SimpleNamespace(launcher=object(), allocation=object()),
+    )
+    app = QraftApplication(ApplicationConfiguration(
+        fdf=campaign, runs_root=root,
+        overrides={"partition": "local", "launcher": "direct", "executable": sys.executable},
+    ))
+    result = app.run()
+    assert result["status"] == "INTERRUPTED"
+    assert result["points"] == []
+    assert result["result_manifest"] is None
+    assert not (root / "campaign-result.json").exists()
+    assert "SESSION RESULT : INTERRUPTED" in (root / "qraft.out").read_text(encoding="utf-8")
+    status = app.status()
+    assert status["campaign"] is None
+    assert status["runtime"]["status"] == "INTERRUPTED"
 
 
 def test_convergence_execution_authority_is_canonical_runtime() -> None:

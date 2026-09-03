@@ -25,7 +25,9 @@ from ..models import DecisionStatus
 from ..output import DagEntry, ExecutionSession, NodeEntry, OutputModel, OutputTable, QraftOutputWriter
 from ..execution.capability_plugins import SIESTA_ENGINE_CAPABILITY, register_siesta_engine
 from ..execution.capability_runtime import CompiledWorkflowRuntime
+from ..execution.resource_coordinator import CooperativeShutdown
 from ..execution.runtime_composition import compose_runtime
+from ..execution.slurm_environment import SignalHandlers
 from ..workflows import WorkflowCompiler
 from .single_fdf import build_scientific_identity, resolve_execution_spec
 
@@ -217,7 +219,7 @@ class ConvergenceProtocol:
         if not writer.exists:
             writer.initialize(OutputModel(header={"Version": __version__, "Campaign": campaign.campaign_id, "Protocol": "convergence", "Started": _utc_now()}))
         session_id = uuid.uuid4().hex
-        writer.start_session(ExecutionSession(session_id, _next_epoch(root), "RESUME" if (root / "campaign-result.json").is_file() else "NEW", _utc_now(), invocation or f"qraft run {campaign.source}", None, str(root)), OutputModel(
+        writer.start_session(ExecutionSession(session_id, _next_epoch(root), "RESUME" if (root / "state" / "workflow_runtime.json").is_file() else "NEW", _utc_now(), invocation or f"qraft run {campaign.source}", None, str(root)), OutputModel(
             configuration={"campaign": str(campaign.source), "parameter scanned": campaign.scanned_parameter[0], "values": json.dumps(list(campaign.scanned_parameter[1].resolved_values())), "metric": campaign.criterion.metric, "criterion": campaign.criterion.delta, "consecutive": campaign.criterion.consecutive},
             execution={"partition": execution.partition, "nodes": execution.nodes, "MPI ranks": execution.mpi_ranks, "launcher": execution.launcher},
             dag=tuple(DagEntry(item["node_id"], item["kind"], "READY" if not item["depends_on"] else "WAITING", tuple(item["depends_on"])) for item in _dag(len(rendered["points"]))),
@@ -252,7 +254,8 @@ class ConvergenceProtocol:
             max_parallel_steps=1,
             placement_probe_root=root,
         )
-        runtime_result = CompiledWorkflowRuntime(
+        shutdown = CooperativeShutdown()
+        runtime = CompiledWorkflowRuntime(
             workflow=compilation.compiled,
             registry=registry,
             root=root,
@@ -261,11 +264,16 @@ class ConvergenceProtocol:
             execution_specs=execution,
             launcher=composition.launcher,
             allocation=composition.allocation,
+            shutdown=shutdown,
             force_new_attempts=force_new_attempt,
-        ).run()
+        )
+        with SignalHandlers(shutdown):
+            runtime_result = runtime.run()
         points: list[ConvergencePoint] = []
         for index, item in enumerate(rendered["points"], 1):
-            attempt = runtime_result.attempts[item["node_id"]]
+            attempt = runtime_result.attempts.get(item["node_id"])
+            if attempt is None:
+                continue
             technical = (
                 "PASS"
                 if attempt.result.technical_validation.status == "PASS"
@@ -277,6 +285,16 @@ class ConvergenceProtocol:
             energy = extract_total_energy(stdout) if technical == "PASS" else None
             atoms = _atom_count(Path(item["fdf"]))
             points.append(ConvergencePoint(index, item["value"], technical, energy, energy / atoms if energy is not None and atoms else None, None, attempt.attempt_id, item["fdf"], str(stdout), str(stderr), item["node_id"] in runtime_result.reused_nodes))
+        if runtime_result.status != "COMPLETED":
+            technical = "INCOMPLETE" if runtime_result.status == "INTERRUPTED" else "FAIL"
+            writer.append("CONVERGENCE", OutputModel(
+                nodes=tuple(NodeEntry(f"point_{point.index:03d}", "convergence_point", point.technical_status, point.attempt_id, input_path=point.fdf, stdout_path=point.stdout, stderr_path=point.stderr) for point in points),
+                decisions={"execution state": runtime_result.status, "scientific decision": "NOT_EVALUATED"},
+                paths={"workflow runtime state": str(root / "state" / "workflow_runtime.json")},
+            ))
+            writer.finish_session(result=runtime_result.status, finished=_utc_now(), elapsed_seconds=time.monotonic() - started)
+            writer.finish({"Campaign status": runtime_result.status, "Technical validation": technical, "Scientific decision": "NOT_EVALUATED", "QRAFT output": str(root / "qraft.out"), "Workflow state": str(root / "state" / "workflow_runtime.json")})
+            return {"status": runtime_result.status, "technical_validation": technical, "scientific_decision": "NOT_EVALUATED", "selected_point": None, "points": [asdict(point) for point in points], "result_manifest": None, "qraft_output": str(root / "qraft.out")}
         evaluated, decision, selected = evaluate_convergence(points, campaign.criterion.metric, campaign.criterion.delta, campaign.criterion.consecutive)
         all_technical = all(point.technical_status == "PASS" for point in evaluated)
         status = "COMPLETED" if all_technical else "FAILED"
