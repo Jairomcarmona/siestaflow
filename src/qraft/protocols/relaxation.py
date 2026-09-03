@@ -77,6 +77,14 @@ class RelaxationProtocol:
             return {"status": runtime.status, "technical_validation": "FAIL", "scientific_decision": "NOT_EVALUATED"}
         technical = attempt.result.technical_validation.status
         attempt_root = root / "work" / "relax" / attempt.attempt_id
+        if attempt.result.execution_state == "INTERRUPTED":
+            return {
+                "status": "INTERRUPTED",
+                "technical_validation": "INCOMPLETE",
+                "attempt": attempt.to_dict(),
+                "reused": "relax" in runtime.reused_nodes,
+                "scientific_decision": "NOT_EVALUATED",
+            }
         result: dict[str, Any] = {"status": "COMPLETED" if technical == "PASS" else "FAILED", "technical_validation": technical, "attempt": attempt.to_dict(), "reused": "relax" in runtime.reused_nodes, "scientific_decision": "NOT_EVALUATED"}
         geometry_path = attempt_root / "relaxed-geometry.json"
         if technical != "PASS" or not geometry_path.is_file():

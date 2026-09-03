@@ -322,7 +322,11 @@ class ConvergenceProtocol:
             )
         if downstream is not None:
             result_payload["downstream"] = downstream
-            if downstream["status"] not in {"COMPLETED", "BLOCKED"}:
+            if downstream["status"] == "INTERRUPTED":
+                status = "INTERRUPTED"
+                result_payload["execution_state"] = status
+                result_payload["technical_validation"] = "INCOMPLETE"
+            elif downstream["status"] not in {"COMPLETED", "BLOCKED"}:
                 status = "FAILED"
                 result_payload["execution_state"] = status
         _atomic_json(root / "campaign-result.json", result_payload)

@@ -510,6 +510,110 @@ def test_chained_campaign_resume_reuses_convergence_and_status_exposes_downstrea
     assert len(calls) == 2
 
 
+def test_downstream_interruption_is_resumable_and_not_a_campaign_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import qraft.protocols.convergence as convergence_module
+
+    campaign = relaxation_campaign_file(tmp_path)
+    fake = tmp_path / "fake.py"
+    fake.write_text(
+        "import re,sys\ntext=open(sys.argv[1], encoding='utf-8').read()\n"
+        "v=float(re.search(r'Mesh\\.Cutoff\\s+([0-9.]+)',text,re.I).group(1))\n"
+        "energy={200.0:-10.0,250.0:-10.0005,300.0:-10.0009}[v]\n"
+        "print('Siesta started')\nprint('SCF converged')\n"
+        "print(f'siesta: E_KS(eV) = {energy}')\nprint('Job completed')\n",
+        encoding="utf-8",
+    )
+    wrapper = tmp_path / "fake-siesta"
+    wrapper.write_text(
+        f'#!/bin/sh\nexec "{sys.executable}" "{fake}" "$1"\n',
+        encoding="utf-8",
+    )
+    wrapper.chmod(0o755)
+
+    calls = 0
+
+    class FakeRelaxation:
+        def run(self, _fdf: Path, **_kwargs):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                return {
+                    "status": "INTERRUPTED", "technical_validation": "INCOMPLETE",
+                    "scientific_decision": "NOT_EVALUATED", "reused": False,
+                    "attempt": {
+                        "attempt_id": "attempt-0001", "stdout": "stdout.txt", "stderr": "stderr.txt",
+                        "result": {"execution_state": "INTERRUPTED"},
+                    },
+                }
+            return {
+                "status": "COMPLETED", "technical_validation": "PASS",
+                "scientific_decision": "CONVERGED", "reused": False,
+                "attempt": {
+                    "attempt_id": "attempt-0002", "stdout": "stdout.txt", "stderr": "stderr.txt",
+                    "result": {"execution_state": "COMPLETED"},
+                },
+            }
+
+    monkeypatch.setattr(convergence_module, "RelaxationProtocol", FakeRelaxation)
+    root = tmp_path / "runs"
+    app = QraftApplication(ApplicationConfiguration(
+        fdf=campaign, runs_root=root,
+        overrides={"partition": "local", "launcher": "direct", "executable": str(wrapper)},
+    ))
+
+    interrupted = app.run()
+    assert interrupted["status"] == "INTERRUPTED"
+    assert interrupted["technical_validation"] == "INCOMPLETE"
+    status = app.status()
+    assert status["campaign"]["execution_state"] == "INTERRUPTED"
+    assert status["campaign"]["downstream"]["status"] == "INTERRUPTED"
+    assert status["campaign"]["downstream"]["result"]["attempt"]["result"]["execution_state"] == "INTERRUPTED"
+    assert status["runtime"]["status"] == "COMPLETED"
+    assert status["campaign"]["selected_point"] == 300
+
+    resumed = app.run()
+    assert resumed["status"] == "COMPLETED"
+    assert resumed["downstream"]["result"]["attempt"]["attempt_id"] == "attempt-0002"
+    assert all(point["reused"] for point in resumed["points"])
+
+
+def test_downstream_technical_failure_remains_a_campaign_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import qraft.protocols.convergence as convergence_module
+
+    campaign = relaxation_campaign_file(tmp_path)
+    fake = tmp_path / "fake.py"
+    fake.write_text(
+        "import re,sys\ntext=open(sys.argv[1], encoding='utf-8').read()\n"
+        "v=float(re.search(r'Mesh\\.Cutoff\\s+([0-9.]+)',text,re.I).group(1))\n"
+        "print('Siesta started')\nprint('SCF converged')\n"
+        "print(f'siesta: E_KS(eV) = {-10.0 - v / 1000000}')\nprint('Job completed')\n",
+        encoding="utf-8",
+    )
+    wrapper = tmp_path / "fake-siesta"
+    wrapper.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{fake}" "$1"\n', encoding="utf-8")
+    wrapper.chmod(0o755)
+
+    class FailedRelaxation:
+        def run(self, _fdf: Path, **_kwargs):
+            return {
+                "status": "FAILED", "technical_validation": "FAIL",
+                "scientific_decision": "NOT_EVALUATED", "reused": False,
+                "attempt": {"attempt_id": "attempt-0001", "stdout": "stdout.txt", "stderr": "stderr.txt", "result": {"execution_state": "FAILED"}},
+            }
+
+    monkeypatch.setattr(convergence_module, "RelaxationProtocol", FailedRelaxation)
+    app = QraftApplication(ApplicationConfiguration(
+        fdf=campaign, runs_root=tmp_path / "runs",
+        overrides={"partition": "local", "launcher": "direct", "executable": str(wrapper)},
+    ))
+    result = app.run()
+    assert result["status"] == "FAILED"
+
+
 def test_execution_changes_do_not_change_rendered_science(tmp_path: Path) -> None:
     campaign = CampaignSpec.load(campaign_file(tmp_path))
     protocol = ConvergenceProtocol()
