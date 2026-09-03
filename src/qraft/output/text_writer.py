@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import threading
 from pathlib import Path
 from typing import Iterable, Mapping
@@ -33,6 +34,10 @@ def _mapping(lines: list[str], values: Mapping[str, Scalar]) -> None:
     width = min(24, max(len(str(key)) for key in values))
     for key, value in values.items():
         lines.append(f"{str(key):<{width}} : {_display(value)}")
+
+
+def _human_command(command: str) -> str:
+    return re.sub(r"(?<!\S)_fdf-run(?=\s|$)", "run", command)
 
 
 class QraftOutputWriter:
@@ -75,7 +80,7 @@ class QraftOutputWriter:
             f"Controller epoch : {session.controller_epoch}",
             f"Mode             : {session.mode}",
             f"Started          : {session.started}",
-            f"Command          : {session.command}",
+            f"Command          : {_human_command(session.command)}",
             f"Previous state   : {_display(session.previous_state)}",
             f"Working root     : {self._path(session.working_root)}",
             _RULE,

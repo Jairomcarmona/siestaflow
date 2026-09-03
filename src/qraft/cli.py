@@ -9,7 +9,7 @@ import shlex
 import sys
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from . import __version__
 from .engines.siesta.fdf_parser import FDFParser
@@ -111,7 +111,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(
         dest="domain",
         required=True,
-        metavar="{env,config,profile,validate,plan,render,run,status,resume}",
+        metavar="{init,env,config,profile,validate,plan,render,run,status,resume}",
     )
 
     def add_resolution_options(command: argparse.ArgumentParser) -> None:
@@ -131,6 +131,10 @@ def build_parser() -> argparse.ArgumentParser:
     add_resolution_options(env)
     config = sub.add_parser("config", help="show effective execution configuration")
     add_resolution_options(config)
+    init = sub.add_parser("init", help="create a minimal editable CampaignSpec template")
+    init.add_argument("path", nargs="?", type=Path, default=Path("campaign.yaml"))
+    init.add_argument("--force", action="store_true", help="replace an existing template")
+    init.add_argument("--json", action="store_true")
     validate = sub.add_parser("validate", help="validate one FDF and its execution preflight")
     _add_single_fdf_arguments(validate, execute=False)
     render = sub.add_parser("render", help="materialize CampaignSpec FDF variants without execution")
@@ -586,6 +590,26 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _dispatch(args: argparse.Namespace) -> int:
+    if args.domain == "init":
+        path = args.path.resolve()
+        if path.exists() and not args.force:
+            raise ValueError(
+                f"campaign template already exists: {path} (use --force to overwrite)"
+            )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(_CAMPAIGN_TEMPLATE, encoding="utf-8", newline="\n")
+        result = {
+            "status": "CREATED",
+            "path": str(path),
+            "next_step": f"edit {path.name}, then run: qraft validate {path}",
+        }
+        if args.json:
+            _emit(result, True)
+        else:
+            print(f"Created campaign template: {path}")
+            print("Edit the FDF and pseudopotential paths, then validate it:")
+            print(f"  qraft validate {path}")
+        return 0
     if args.domain in {"env", "config"}:
         overrides = {
             "partition": args.partition,
@@ -620,7 +644,7 @@ def _dispatch(args: argparse.Namespace) -> int:
         result = QraftApplication(ApplicationConfiguration(
             runs_root=args.runs_root,
         )).status()
-        _emit(result, args.json)
+        _emit(result, True) if args.json else print(_render_compact_status(result))
         return 0
     if args.domain == "resume":
         overrides = {
@@ -1361,6 +1385,75 @@ def _emit(data: Any, as_json: bool) -> None:
     elif isinstance(payload, dict):
         for key, value in payload.items(): print(f"{key}: {value}")
     else: print(payload)
+
+
+_CAMPAIGN_TEMPLATE = """# QRAFT CampaignSpec template
+#
+# Edit the FDF and pseudopotential manifest paths below. Runtime and placement
+# stay outside this scientific campaign: use a profile or CLI options, e.g.
+#   qraft validate campaign.yaml --profile local
+#   qraft validate campaign.yaml --siesta /path/to/siesta
+schema_version: "1.0"
+campaign_id: my-siesta-campaign
+engine: siesta
+protocol: convergence
+system:
+  fdf: system.fdf
+  pseudo_manifest: pseudos/manifest.yaml
+parameters:
+  mesh_cutoff:
+    mode: scan
+    values: [80, 100, 120]
+    unit: Ry
+  basis_size:
+    mode: fixed
+    value: DZP
+criterion:
+  metric: energy_per_atom
+  delta: 0.01
+  unit: eV
+  consecutive: 1
+# Set enabled to true and add type, steps, max_force, and unit to relax.
+relaxation:
+  enabled: false
+"""
+
+
+def _render_compact_status(data: Mapping[str, Any]) -> str:
+    campaign = data.get("campaign")
+    if not isinstance(campaign, dict):
+        return "Campaign: NOT STARTED\nRun qraft run <campaign.yaml> to create a campaign state."
+    points = campaign.get("points") if isinstance(campaign.get("points"), list) else []
+    completed = sum(
+        1 for point in points
+        if isinstance(point, dict) and point.get("technical_status") == "PASS"
+    )
+    downstream = campaign.get("downstream")
+    downstream = downstream if isinstance(downstream, dict) else None
+    selected = downstream.get("selected_parameter") if downstream else None
+    lines = [
+        f"Campaign: {campaign.get('execution_state', 'UNKNOWN')}",
+        f"Progress: {completed}/{len(points)} convergence points",
+        f"Convergence: {campaign.get('scientific_decision', 'NOT_EVALUATED')}",
+    ]
+    if isinstance(selected, dict):
+        name = str(selected.get("name", "selected value"))
+        label = "MeshCutoff" if name == "mesh_cutoff" else name.replace("_", " ")
+        value = selected.get("value")
+        unit = selected.get("unit")
+        lines.append(f"Selected {label}: {value}{f' {unit}' if unit else ''}")
+    elif campaign.get("selected_point") is not None:
+        lines.append(f"Selected point: {campaign['selected_point']}")
+    if downstream:
+        lines.append(f"Relaxation: {downstream.get('status', 'UNKNOWN')}")
+    lines.append(f"Technical: {campaign.get('technical_validation', 'NOT_EVALUATED')}")
+    lines.append(f"Scientific: {campaign.get('scientific_decision', 'NOT_EVALUATED')}")
+    if campaign.get("execution_state") == "INTERRUPTED":
+        lines.append("Resume available: yes")
+    elif campaign.get("execution_state") == "FAILED":
+        detail = downstream.get("technical_validation") if downstream else campaign.get("technical_validation")
+        lines.append(f"Failure: {detail or 'see qraft status --json for details'}")
+    return "\n".join(lines)
 
 
 def _emit_workflow_validation(compilation, as_json: bool) -> None:
