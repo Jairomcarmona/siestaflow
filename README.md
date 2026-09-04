@@ -75,3 +75,7 @@ and the [release checklist](https://github.com/Jairomcarmona/siestaflow/blob/mai
 Historical material remains available by stable repository URL, including
 [`docs/user/USER_MANUAL.md`](https://github.com/Jairomcarmona/siestaflow/blob/main/docs/user/USER_MANUAL.md)
 and the [`docs/operations/YOLTLA_RUNBOOK.md`](https://github.com/Jairomcarmona/siestaflow/blob/main/docs/operations/YOLTLA_RUNBOOK.md).
+
+## License
+
+QRAFT is distributed under the BSD 3-Clause License. See [LICENSE](LICENSE).

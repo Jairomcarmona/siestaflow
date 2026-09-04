@@ -8,6 +8,14 @@ version = "0.2.0"
 description = "Declarative, evidence-oriented orchestrator for scientific HPC campaigns"
 readme = "README.md"
 requires-python = ">=3.11"
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Jairo Carmona", email = "268262068+Jairomcarmona@users.noreply.github.com" },
+]
+maintainers = [
+    { name = "Jairo Carmona", email = "268262068+Jairomcarmona@users.noreply.github.com" },
+]
 dependencies = [
     "PyYAML>=6.0",
 ]
@@ -30,6 +38,7 @@ symmetry = ["seekpath>=2.1"]
 [project.urls]
 Repository = "https://github.com/Jairomcarmona/siestaflow"
 Documentation = "https://github.com/Jairomcarmona/siestaflow/tree/main/docs"
+Issues = "https://github.com/Jairomcarmona/siestaflow/issues"
 
 [project.scripts]
 qraft = "qraft.cli:main"

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from importlib.metadata import version
 from pathlib import Path
+import tomllib
 
 import pytest
 
@@ -51,3 +52,19 @@ def test_public_runtime_has_no_repo_root_lookup() -> None:
     assert "def _repo_root" not in (root / "src/qraft/cli.py").read_text(encoding="utf-8")
     readme = (root / "README.md").read_text(encoding="utf-8")
     assert "https://github.com/Jairomcarmona/siestaflow/blob/main/docs/" in readme
+
+
+def test_distribution_metadata_declares_bsd_license_and_maintainers() -> None:
+    root = Path(__file__).resolve().parents[2]
+    project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+
+    assert project["license"] == "BSD-3-Clause"
+    assert project["license-files"] == ["LICENSE"]
+    assert project["authors"] == project["maintainers"]
+    assert project["authors"][0]["name"] == "Jairo Carmona"
+    assert not any(item.startswith("License ::") for item in project["classifiers"])
+    assert project["urls"]["Issues"] == "https://github.com/Jairomcarmona/siestaflow/issues"
+    assert (root / "LICENSE").read_text(encoding="utf-8").startswith(
+        "Copyright (c) 2026 Jairo Carmona\n\n"
+        "Redistribution and use in source and binary forms"
+    )
