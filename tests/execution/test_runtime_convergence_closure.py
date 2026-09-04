@@ -518,13 +518,19 @@ def test_host_leases_are_exclusive_and_released(tmp_path: Path):
     try:
         assert launcher.wave_ready.wait(5)
         first_hosts = [item.hosts for item in launcher.launches[:2]]
-        assert first_hosts == [("node-a",), ("node-b",)]
+        assert len(first_hosts) == 2
+        assert all(hosts in {("node-a",), ("node-b",)} for hosts in first_hosts)
+        assert len(set(first_hosts)) == 2
+        assert set(current.coordinator.used_hosts) == {"node-a", "node-b"}
+        assert len(current.coordinator.active_task_ids) == 2
         launcher.release_wave.set()
         assert future.result(timeout=5).status == "COMPLETED"
     finally:
         pool.shutdown(wait=True)
     assert launcher.launches[2].hosts in {("node-a",), ("node-b",)}
     assert current.coordinator.used_hosts == ()
+    assert current.coordinator.active_task_ids == ()
+    current.coordinator.assert_released()
 
 
 def test_walltime_stop_is_resumable_and_completed_work_reuses(tmp_path: Path):
