@@ -97,12 +97,15 @@ def test_cli_full_local_flow_and_dry_run(reference_package: Path, tmp_path: Path
     assert _run_cli(repo, *common, "remote", "package", "m1_sanity", "--json").returncode == 0
 
 
-def test_context_remains_exactly_642_zip_members():
+def test_context_remains_exactly_642_zip_members(historical_context_root: Path):
     import zipfile
 
-    root = Path(__file__).resolve().parents[3]
-    context = root / "context"
-    archive = root / "SIESTAFLOW_CONTEXT_v01.zip"
+    context = historical_context_root
+    archive = context / "SIESTAFLOW_CONTEXT_v01.zip"
+    if not archive.is_file():
+        pytest.skip(
+            "QRAFT_HISTORICAL_CONTEXT_ROOT lacks SIESTAFLOW_CONTEXT_v01.zip",
+        )
     with zipfile.ZipFile(archive) as handle:
         members = [item for item in handle.infolist() if not item.is_dir()]
         assert len(members) == 642

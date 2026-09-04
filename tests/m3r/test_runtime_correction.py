@@ -45,6 +45,7 @@ def _rebuild_checksums(package: Path) -> None:
 def _stub(path: Path, body: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("#!/usr/bin/env bash\nset -euo pipefail\n" + body + "\n", encoding="utf-8", newline="\n")
+    path.chmod(0o755)
 
 
 def _bash(package: Path, command: str, *, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:

@@ -33,15 +33,25 @@ def test_convergence_execution_uses_the_canonical_runtime() -> None:
         and isinstance(node.func.value.func, ast.Name)
         and node.func.value.func.id == "WorkflowCompiler"
     ]
+    runtime_bindings = [
+        node for node in ast.walk(run_method)
+        if isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == "runtime"
+        and isinstance(node.value, ast.Call)
+        and isinstance(node.value.func, ast.Name)
+        and node.value.func.id == "CompiledWorkflowRuntime"
+    ]
     runtime_calls = [
         node for node in ast.walk(run_method)
         if isinstance(node, ast.Call)
         and isinstance(node.func, ast.Attribute)
         and node.func.attr == "run"
-        and isinstance(node.func.value, ast.Call)
-        and isinstance(node.func.value.func, ast.Name)
-        and node.func.value.func.id == "CompiledWorkflowRuntime"
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "runtime"
     ]
     assert not direct_calls
     assert len(compiler_calls) == 1
+    assert len(runtime_bindings) == 1
     assert len(runtime_calls) == 1

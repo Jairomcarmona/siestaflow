@@ -7,6 +7,30 @@ repository root:
 python -m pytest -q
 ```
 
+It runs only self-contained repository tests. Historical characterization and
+real-provenance checks are retained, but excluded from collection until their
+immutable external evidence is explicitly supplied:
+
+```bash
+# Read-only characterization of the separate QEF donor.
+QRAFT_QEF_DONOR_ROOT=/absolute/path/to/qe-postprocess-framework \
+  python -m pytest -q tests/characterization
+
+# M2 historical snapshot and its original archive.
+QRAFT_HISTORICAL_CONTEXT_ROOT=/absolute/path/to/context \
+  python -m pytest -q tests/m2
+
+# M3B1 historical provenance also needs the original C PSML file.
+QRAFT_HISTORICAL_CONTEXT_ROOT=/absolute/path/to/context \
+QRAFT_M3B1_C_PSEUDOPOTENTIAL=/absolute/path/to/C.psml \
+  python -m pytest -q tests/m3b1/test_real_smoke_package.py
+```
+
+`QRAFT_HISTORICAL_CONTEXT_ROOT` contains both
+`scientific_project_snapshot/` and (for the archive check)
+`SIESTAFLOW_CONTEXT_v01.zip`. These inputs are not current-product fixtures,
+are not copied into Git, and never authorize an HPC execution.
+
 Use focused suites while iterating, then run the full regression before
 integration:
 

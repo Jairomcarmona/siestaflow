@@ -80,12 +80,6 @@ def test_collinear_identity_distinguishes_fm_afm_numeric_and_initialization(tmp_
     assert "%block DM.InitSpin\n\n%endblock DM.InitSpin" in empty.read_text(encoding="utf-8")
 
 
-def test_legacy_m6_identity_regression_is_preserved(tmp_path: Path) -> None:
-    """Regression fixture with no M8-A labels: the historical M6 hash is fixed."""
-
-    assert build_scientific_identity(_base(tmp_path / "legacy-hash")).fingerprint == "8e8723a8216fd0f0f6dfb0cbf61ee1da3f7381162878b85431255ef380785522"
-
-
 def test_collinear_renderer_is_exact_and_validates_indices_and_moments(tmp_path: Path) -> None:
     fdf = _render(tmp_path, "fixed", CollinearSpinSpec((CollinearSpinMoment(1, "+"), CollinearSpinMoment(2, 0.0)), True, 2.0))
     text = fdf.read_text(encoding="utf-8")

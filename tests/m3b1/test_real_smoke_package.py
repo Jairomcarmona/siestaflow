@@ -2,21 +2,45 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import zipfile
 from pathlib import Path
+
+import pytest
 
 from qraft.real_smoke import RealSiestaSmokePackager, RealSmokeSpec
 from qraft.slurm_renderer import SlurmProfile
 
 
 REPO = Path(__file__).resolve().parents[2]
-CONTEXT = REPO.parent / "context" / "scientific_project_snapshot"
+_context_root = os.environ.get("QRAFT_HISTORICAL_CONTEXT_ROOT")
+_pseudo_path = os.environ.get("QRAFT_M3B1_C_PSEUDOPOTENTIAL")
+if not _context_root or not _pseudo_path:
+    pytest.skip(
+        "historical M3B1 smoke provenance requires QRAFT_HISTORICAL_CONTEXT_ROOT "
+        "and QRAFT_M3B1_C_PSEUDOPOTENTIAL",
+        allow_module_level=True,
+    )
+
+CONTEXT = Path(_context_root) / "scientific_project_snapshot"
+if not CONTEXT.is_dir():
+    pytest.skip(
+        "QRAFT_HISTORICAL_CONTEXT_ROOT lacks scientific_project_snapshot",
+        allow_module_level=True,
+    )
+
+UPSTREAM_PSEUDO = Path(_pseudo_path)
+if not UPSTREAM_PSEUDO.is_file():
+    pytest.skip(
+        "QRAFT_M3B1_C_PSEUDOPOTENTIAL does not name an available PSML file",
+        allow_module_level=True,
+    )
+
 PROJECT = REPO / "examples/reference_projects/graphene_surf_gr5x5"
 UPSTREAM_GEOMETRY = CONTEXT / "structures/parents/SURF_Gr5x5_clean_v01.xyz"
 UPSTREAM_SEED = CONTEXT / "fdf/references/SURF_Gr5x5_clean_v01.fdf"
-UPSTREAM_PSEUDO = Path(r"C:\Users\Jairo\Downloads\nc-sr-05_pbe_stringent_psml\nc-sr-05_pbe_stringent_psml\C.psml")
 GEOMETRY = PROJECT / "systems/SURF_Gr5x5_clean_v01.xyz"
 SEED = PROJECT / "systems/SURF_Gr5x5_clean_v01.seed.fdf"
 PSEUDO = PROJECT / "pseudopotentials/C.psml"

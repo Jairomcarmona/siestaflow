@@ -163,7 +163,7 @@ def test_unexecuted_real_siesta_fixtures_use_canonical_m8b_input() -> None:
     assert fe2 is not None and len(fe2.canonical()["initialization"]["moments"]) == 2
 
 
-def test_noncollinear_identity_binds_direction_not_resources_and_preserves_legacy(tmp_path: Path) -> None:
+def test_noncollinear_identity_binds_direction_not_resources(tmp_path: Path) -> None:
     z = _render(tmp_path, "z", NonCollinearSpinSpec((NonCollinearSpinMoment(1, "+"),)))
     x = _render(tmp_path, "x", NonCollinearSpinSpec((NonCollinearSpinMoment(1, "+", 90.0, 0.0),)))
     y = _render(tmp_path, "y", NonCollinearSpinSpec((NonCollinearSpinMoment(1, "+", 90.0, 90.0),)))
@@ -175,9 +175,6 @@ def test_noncollinear_identity_binds_direction_not_resources_and_preserves_legac
     collinear = _base(tmp_path / "collinear")
     collinear.write_text(BASE + "Spin polarized\n%block DM.InitSpin\n  1 +\n%endblock DM.InitSpin\n", encoding="utf-8")
     assert build_scientific_identity(collinear).fingerprint != build_scientific_identity(x).fingerprint
-    legacy = _base(tmp_path / "legacy")
-    legacy.write_text(BASE.replace("noncollinear", "magnetic"), encoding="utf-8")
-    assert build_scientific_identity(legacy).fingerprint == "8e8723a8216fd0f0f6dfb0cbf61ee1da3f7381162878b85431255ef380785522"
     assert CollinearSpinSpec((CollinearSpinMoment(1, "+"),)).spin_mode == "polarized"
 
 

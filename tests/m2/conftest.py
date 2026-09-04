@@ -1,11 +1,32 @@
+import os
 from pathlib import Path
 
 import pytest
 
 
 @pytest.fixture(scope="session")
-def snapshot() -> Path:
-    return Path(__file__).resolve().parents[3] / "context" / "scientific_project_snapshot"
+def historical_context_root() -> Path:
+    configured = os.environ.get("QRAFT_HISTORICAL_CONTEXT_ROOT")
+    if not configured:
+        pytest.skip(
+            "historical M2 evidence requires QRAFT_HISTORICAL_CONTEXT_ROOT",
+        )
+    root = Path(configured)
+    if not root.is_dir():
+        pytest.skip(
+            "QRAFT_HISTORICAL_CONTEXT_ROOT does not name an available evidence root",
+        )
+    return root
+
+
+@pytest.fixture(scope="session")
+def snapshot(historical_context_root: Path) -> Path:
+    snapshot_root = historical_context_root / "scientific_project_snapshot"
+    if not snapshot_root.is_dir():
+        pytest.skip(
+            "QRAFT_HISTORICAL_CONTEXT_ROOT lacks scientific_project_snapshot",
+        )
+    return snapshot_root
 
 
 @pytest.fixture(scope="session")
