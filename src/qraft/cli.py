@@ -9,6 +9,7 @@ import shlex
 import sys
 import time
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -77,42 +78,250 @@ from .environment_inspection import render_environment
 from .execution.adapters import launcher_registry
 
 
-@dataclass(frozen=True)
-class CommandSurface:
-    """One intentional top-level command in the installed CLI."""
+class CommandClassification(str, Enum):
+    """Current-surface classification, retained until the V2 hierarchy lands."""
 
-    name: str
-    classification: str
+    PUBLIC = "PUBLIC"
+    ADVANCED_PUBLIC = "ADVANCED_PUBLIC"
+    LEGACY = "LEGACY"
+    INTERNAL = "INTERNAL"
+
+
+class CommandVisibility(str, Enum):
+    """Whether a command is included in ordinary parser discovery."""
+
+    PRIMARY = "PRIMARY"
+    ADVANCED = "ADVANCED"
+    HIDDEN = "HIDDEN"
+
+
+class CommandSideEffect(str, Enum):
+    """Coarse behavior metadata for future help and automation policy."""
+
+    READ_ONLY = "READ_ONLY"
+    WRITE_LOCAL = "WRITE_LOCAL"
+    EXECUTE = "EXECUTE"
+    PACKAGE_ONLY = "PACKAGE_ONLY"
+    MIXED = "MIXED"
+
+
+class CommandInputPolicy(str, Enum):
+    """Current commands never require an interactive prompt."""
+
+    NEVER_PROMPT = "NEVER_PROMPT"
+
+
+@dataclass(frozen=True)
+class CommandAlias:
+    """A future-compatible alternate spelling owned by one command spec."""
+
+    path: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class CommandOption:
+    """Named reusable option metadata; parser binding remains phase-two work."""
+
+    id: str
+    flags: tuple[str, ...]
     description: str
 
 
-# This registry is the public presentation authority.  Parser definitions use
-# it for help text, and the REPL uses it to direct users to the full CLI.
-_COMMAND_SURFACE = (
-    CommandSurface("init", "PUBLIC", "create a minimal editable CampaignSpec template"),
-    CommandSurface("env", "PUBLIC", "inspect installed execution capabilities"),
-    CommandSurface("config", "PUBLIC", "show effective execution configuration"),
-    CommandSurface("profile", "PUBLIC", "list, show or validate execution profiles"),
-    CommandSurface("validate", "PUBLIC", "validate one FDF and its execution preflight"),
-    CommandSurface("plan", "PUBLIC", "resolve an executable three-node plan from one FDF"),
-    CommandSurface("render", "PUBLIC", "materialize CampaignSpec FDF variants without execution"),
-    CommandSurface("run", "PUBLIC", "execute one FDF or manage hash-bound run packages"),
-    CommandSurface("status", "PUBLIC", "inspect single-FDF campaign state"),
-    CommandSurface("resume", "PUBLIC", "resume the saved single-FDF session"),
-    CommandSurface("project", "ADVANCED_PUBLIC", "advanced: prepare and inspect reproducible project packages"),
-    CommandSurface("fdf", "ADVANCED_PUBLIC", "advanced: inspect parsed SIESTA FDF inputs"),
-    CommandSurface("input", "ADVANCED_PUBLIC", "advanced: validate SIESTA inputs and view validation rules"),
-    CommandSurface("environment", "LEGACY", "legacy spelling for the public env inspection"),
-    CommandSurface("pseudo", "ADVANCED_PUBLIC", "advanced: verify pseudopotential manifests"),
-    CommandSurface("campaign", "ADVANCED_PUBLIC", "advanced: manage allocation-controller campaigns"),
-    CommandSurface("workflow", "ADVANCED_PUBLIC", "advanced: author, validate and compile workflow definitions"),
-    CommandSurface("scientific", "ADVANCED_PUBLIC", "advanced: record reviewed scientific decisions and profiles"),
-    CommandSurface("results", "ADVANCED_PUBLIC", "advanced: export verified SIESTA result tables"),
-    CommandSurface("examples", "ADVANCED_PUBLIC", "advanced: inspect and package curated examples"),
-    CommandSurface("remote", "ADVANCED_PUBLIC", "advanced: create or inspect non-submitting remote artifacts"),
-    CommandSurface("_fdf-run", "INTERNAL", "internal compatibility adapter for single-FDF runs"),
+@dataclass(frozen=True)
+class CommandSurface:
+    """Immutable command-tree record and sole current presentation authority."""
+
+    id: str
+    path: tuple[str, ...]
+    parent_id: str | None
+    classification: CommandClassification
+    visibility: CommandVisibility
+    order: int
+    summary: str
+    description: str
+    usage: str | None
+    examples: tuple[str, ...]
+    aliases: tuple[CommandAlias, ...]
+    handler_id: str
+    json_supported: bool
+    side_effect: CommandSideEffect
+    input_policy: CommandInputPolicy
+    option_ids: tuple[str, ...] = ()
+
+    @property
+    def name(self) -> str:
+        """Compatibility accessor for the existing top-level surface API."""
+
+        return self.path[-1]
+
+
+_SHARED_COMMAND_OPTIONS = (
+    CommandOption("output.json", ("--json",), "emit the command result as JSON"),
+    CommandOption("execution.profile", ("--profile",), "select an execution profile"),
+    CommandOption("execution.resolution", ("--project-config", "--recipe"), "supply execution resolution inputs"),
+    CommandOption("execution.runs-root", ("--runs-root",), "select persistent run state"),
 )
-_COMMANDS_BY_NAME = {command.name: command for command in _COMMAND_SURFACE}
+
+
+def _command(
+    id: str, name: str, classification: CommandClassification,
+    visibility: CommandVisibility, order: int, summary: str, *,
+    usage: str | None, handler_id: str, json_supported: bool,
+    side_effect: CommandSideEffect, option_ids: tuple[str, ...] = (),
+) -> CommandSurface:
+    """Keep the current flat surface concise while preparing a command tree."""
+
+    return CommandSurface(
+        id=id,
+        path=(name,),
+        parent_id=None,
+        classification=classification,
+        visibility=visibility,
+        order=order,
+        summary=summary,
+        description=summary,
+        usage=usage,
+        examples=(),
+        aliases=(),
+        handler_id=handler_id,
+        json_supported=json_supported,
+        side_effect=side_effect,
+        input_policy=CommandInputPolicy.NEVER_PROMPT,
+        option_ids=option_ids,
+    )
+
+
+# This registry is the current command-specification authority. Parser
+# definitions consume its help, visibility, classification, and handler
+# metadata; the REPL consumes the same public discovery API. The V2 grouped
+# hierarchy is deliberately not introduced in this phase.
+_COMMAND_SURFACE = (
+    _command("qraft.init", "init", CommandClassification.PUBLIC, CommandVisibility.PRIMARY, 10, "create a minimal editable CampaignSpec template", usage="qraft init [PATH] [--force] [--json]", handler_id="init", json_supported=True, side_effect=CommandSideEffect.WRITE_LOCAL, option_ids=("output.json",)),
+    _command("qraft.env", "env", CommandClassification.PUBLIC, CommandVisibility.PRIMARY, 20, "inspect installed execution capabilities", usage="qraft env [execution options] [--json]", handler_id="env", json_supported=True, side_effect=CommandSideEffect.READ_ONLY, option_ids=("execution.profile", "execution.resolution", "output.json")),
+    _command("qraft.config", "config", CommandClassification.PUBLIC, CommandVisibility.PRIMARY, 30, "show effective execution configuration", usage="qraft config [execution options] [--json]", handler_id="config", json_supported=True, side_effect=CommandSideEffect.READ_ONLY, option_ids=("execution.profile", "execution.resolution", "output.json")),
+    _command("qraft.profile", "profile", CommandClassification.PUBLIC, CommandVisibility.PRIMARY, 40, "list, show or validate execution profiles", usage="qraft profile {list,show,validate} ...", handler_id="profile", json_supported=False, side_effect=CommandSideEffect.READ_ONLY),
+    _command("qraft.validate", "validate", CommandClassification.PUBLIC, CommandVisibility.PRIMARY, 50, "validate one FDF and its execution preflight", usage="qraft validate FDF [execution options] [--json]", handler_id="validate", json_supported=True, side_effect=CommandSideEffect.READ_ONLY, option_ids=("execution.profile", "execution.resolution", "output.json")),
+    _command("qraft.plan", "plan", CommandClassification.PUBLIC, CommandVisibility.PRIMARY, 60, "resolve an executable three-node plan from one FDF", usage="qraft plan FDF [execution options] [--json]", handler_id="plan", json_supported=True, side_effect=CommandSideEffect.READ_ONLY, option_ids=("execution.profile", "execution.resolution", "output.json")),
+    _command("qraft.render", "render", CommandClassification.PUBLIC, CommandVisibility.PRIMARY, 70, "materialize CampaignSpec FDF variants without execution", usage="qraft render FDF [--output PATH] [--json]", handler_id="render", json_supported=True, side_effect=CommandSideEffect.WRITE_LOCAL, option_ids=("output.json",)),
+    _command("qraft.run", "run", CommandClassification.PUBLIC, CommandVisibility.PRIMARY, 80, "execute one FDF or manage hash-bound run packages", usage="qraft run FDF [execution options] [--json]", handler_id="run", json_supported=True, side_effect=CommandSideEffect.EXECUTE, option_ids=("execution.profile", "execution.resolution", "execution.runs-root", "output.json")),
+    _command("qraft.status", "status", CommandClassification.PUBLIC, CommandVisibility.PRIMARY, 90, "inspect single-FDF campaign state", usage="qraft status [--runs-root PATH] [--json]", handler_id="status", json_supported=True, side_effect=CommandSideEffect.READ_ONLY, option_ids=("execution.runs-root", "output.json")),
+    _command("qraft.resume", "resume", CommandClassification.PUBLIC, CommandVisibility.PRIMARY, 100, "resume the saved single-FDF session", usage="qraft resume [FDF] [execution options] [--json]", handler_id="resume", json_supported=True, side_effect=CommandSideEffect.EXECUTE, option_ids=("execution.profile", "execution.runs-root", "output.json")),
+    _command("qraft.project", "project", CommandClassification.ADVANCED_PUBLIC, CommandVisibility.ADVANCED, 110, "advanced: prepare and inspect reproducible project packages", usage="qraft project {init,inspect,validate,load} ...", handler_id="project", json_supported=False, side_effect=CommandSideEffect.MIXED),
+    _command("qraft.fdf", "fdf", CommandClassification.ADVANCED_PUBLIC, CommandVisibility.ADVANCED, 120, "advanced: inspect parsed SIESTA FDF inputs", usage="qraft fdf inspect PATH [--json]", handler_id="fdf", json_supported=False, side_effect=CommandSideEffect.READ_ONLY),
+    _command("qraft.input", "input", CommandClassification.ADVANCED_PUBLIC, CommandVisibility.ADVANCED, 130, "advanced: validate SIESTA inputs and view validation rules", usage="qraft input {validate,rules} ...", handler_id="input", json_supported=False, side_effect=CommandSideEffect.READ_ONLY),
+    _command("qraft.environment", "environment", CommandClassification.LEGACY, CommandVisibility.HIDDEN, 140, "legacy spelling for the public env inspection", usage="qraft environment check ...", handler_id="environment", json_supported=False, side_effect=CommandSideEffect.READ_ONLY),
+    _command("qraft.pseudo", "pseudo", CommandClassification.ADVANCED_PUBLIC, CommandVisibility.ADVANCED, 150, "advanced: verify pseudopotential manifests", usage="qraft pseudo verify MANIFEST [--json]", handler_id="pseudo", json_supported=False, side_effect=CommandSideEffect.READ_ONLY),
+    _command("qraft.campaign", "campaign", CommandClassification.ADVANCED_PUBLIC, CommandVisibility.ADVANCED, 160, "advanced: manage allocation-controller campaigns", usage="qraft campaign ACTION ...", handler_id="campaign", json_supported=False, side_effect=CommandSideEffect.MIXED),
+    _command("qraft.workflow", "workflow", CommandClassification.ADVANCED_PUBLIC, CommandVisibility.ADVANCED, 170, "advanced: author, validate and compile workflow definitions", usage="qraft workflow ACTION ...", handler_id="workflow", json_supported=False, side_effect=CommandSideEffect.MIXED),
+    _command("qraft.scientific", "scientific", CommandClassification.ADVANCED_PUBLIC, CommandVisibility.ADVANCED, 180, "advanced: record reviewed scientific decisions and profiles", usage="qraft scientific {decide,profile} ...", handler_id="scientific", json_supported=False, side_effect=CommandSideEffect.WRITE_LOCAL),
+    _command("qraft.results", "results", CommandClassification.ADVANCED_PUBLIC, CommandVisibility.ADVANCED, 190, "advanced: export verified SIESTA result tables", usage="qraft results {dos-pdos,bands,optics} ...", handler_id="results", json_supported=False, side_effect=CommandSideEffect.WRITE_LOCAL),
+    _command("qraft.examples", "examples", CommandClassification.ADVANCED_PUBLIC, CommandVisibility.ADVANCED, 200, "advanced: inspect and package curated examples", usage="qraft examples ACTION ...", handler_id="examples", json_supported=False, side_effect=CommandSideEffect.MIXED),
+    _command("qraft.remote", "remote", CommandClassification.ADVANCED_PUBLIC, CommandVisibility.ADVANCED, 210, "advanced: create or inspect non-submitting remote artifacts", usage="qraft remote ACTION ...", handler_id="remote", json_supported=False, side_effect=CommandSideEffect.PACKAGE_ONLY),
+    _command("qraft.internal.fdf-run", "_fdf-run", CommandClassification.INTERNAL, CommandVisibility.HIDDEN, 220, "internal compatibility adapter for single-FDF runs", usage=None, handler_id="_fdf-run", json_supported=True, side_effect=CommandSideEffect.EXECUTE, option_ids=("execution.profile", "execution.resolution", "execution.runs-root", "output.json")),
+)
+
+
+def validate_command_surface(commands: tuple[CommandSurface, ...]) -> None:
+    """Fail deterministically for command-specification programming defects."""
+
+    ids: set[str] = set()
+    canonical_paths: dict[tuple[str, ...], str] = {}
+    commands_by_id: dict[str, CommandSurface] = {}
+    for command in commands:
+        if not command.id:
+            raise ValueError("command specification has an empty id")
+        if command.id in ids:
+            raise ValueError(f"duplicate command id: {command.id}")
+        ids.add(command.id)
+        commands_by_id[command.id] = command
+        if not command.path or any(not token for token in command.path):
+            raise ValueError(f"command {command.id} has an invalid canonical path")
+        owner = canonical_paths.setdefault(command.path, command.id)
+        if owner != command.id:
+            rendered = " ".join(command.path)
+            raise ValueError(f"duplicate canonical command path: {rendered}")
+        if (
+            command.classification is CommandClassification.INTERNAL
+            and command.visibility is not CommandVisibility.HIDDEN
+        ):
+            raise ValueError(f"internal command must be hidden: {command.id}")
+    for command in commands:
+        if command.parent_id is None:
+            continue
+        parent = commands_by_id.get(command.parent_id)
+        if parent is None:
+            raise ValueError(
+                f"command {command.id} references unknown parent: {command.parent_id}"
+            )
+        if command.path[:-1] != parent.path:
+            raise ValueError(
+                f"command {command.id} path does not extend parent {command.parent_id}"
+            )
+    alias_owners: dict[tuple[str, ...], str] = {}
+    for command in commands:
+        for alias in command.aliases:
+            if not alias.path or any(not token for token in alias.path):
+                raise ValueError(f"command {command.id} has an invalid alias path")
+            if alias.path in canonical_paths:
+                rendered = " ".join(alias.path)
+                raise ValueError(f"alias collides with canonical command path: {rendered}")
+            owner = alias_owners.setdefault(alias.path, command.id)
+            if owner != command.id:
+                rendered = " ".join(alias.path)
+                raise ValueError(f"ambiguous alias ownership for {rendered}: {owner}, {command.id}")
+
+
+validate_command_surface(_COMMAND_SURFACE)
+_COMMAND_SPECS_BY_PATH = {command.path: command for command in _COMMAND_SURFACE}
+_COMMAND_OPTION_SPECS_BY_ID = {option.id: option for option in _SHARED_COMMAND_OPTIONS}
+
+
+def shared_command_options() -> tuple[CommandOption, ...]:
+    """Return immutable reusable option metadata for future parser bindings."""
+
+    return _SHARED_COMMAND_OPTIONS
+
+
+def validate_command_option_references(
+    commands: tuple[CommandSurface, ...],
+    options: tuple[CommandOption, ...],
+) -> None:
+    """Reject duplicate option records and dangling command option references."""
+
+    option_ids = {option.id for option in options}
+    if len(option_ids) != len(options):
+        raise ValueError("duplicate shared command option id")
+    for command in commands:
+        unknown = set(command.option_ids) - option_ids
+        if unknown:
+            rendered = ", ".join(sorted(unknown))
+            raise ValueError(
+                f"command {command.id} references unknown shared option: {rendered}"
+            )
+
+
+validate_command_option_references(_COMMAND_SURFACE, _SHARED_COMMAND_OPTIONS)
+
+
+def command_surface() -> tuple[CommandSurface, ...]:
+    """Return the complete immutable current command specification."""
+
+    return _COMMAND_SURFACE
+
+
+def command_spec(path: tuple[str, ...]) -> CommandSurface:
+    """Look up one canonical command record without a parallel name list."""
+
+    return _COMMAND_SPECS_BY_PATH[path]
+
+
+def parser_visible_command_surface() -> tuple[CommandSurface, ...]:
+    """Return the current top-level commands argparse exposes in ordinary help."""
+
+    return tuple(
+        command for command in _COMMAND_SURFACE
+        if len(command.path) == 1 and command.visibility is not CommandVisibility.HIDDEN
+    )
 
 
 def public_command_surface() -> tuple[CommandSurface, ...]:
@@ -120,7 +329,10 @@ def public_command_surface() -> tuple[CommandSurface, ...]:
 
     return tuple(
         command for command in _COMMAND_SURFACE
-        if command.classification in {"PUBLIC", "ADVANCED_PUBLIC"}
+        if command.classification in {
+            CommandClassification.PUBLIC,
+            CommandClassification.ADVANCED_PUBLIC,
+        }
     )
 
 
@@ -133,7 +345,7 @@ def public_command_metavar() -> str:
 def public_command_help() -> tuple[tuple[str, str], ...]:
     """Return stable, concise command discovery rows for the REPL and tests."""
 
-    return tuple((command.name, command.description) for command in public_command_surface())
+    return tuple((command.name, command.summary) for command in public_command_surface())
 
 
 def _add_single_fdf_arguments(command: argparse.ArgumentParser, *, execute: bool) -> None:
@@ -187,31 +399,31 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("--walltime-seconds", type=int)
         command.add_argument("--json", action="store_true")
 
-    env = sub.add_parser("env", help=_COMMANDS_BY_NAME["env"].description)
+    env = sub.add_parser("env", help=command_spec(("env",)).summary)
     add_resolution_options(env)
-    config = sub.add_parser("config", help=_COMMANDS_BY_NAME["config"].description)
+    config = sub.add_parser("config", help=command_spec(("config",)).summary)
     add_resolution_options(config)
-    init = sub.add_parser("init", help=_COMMANDS_BY_NAME["init"].description)
+    init = sub.add_parser("init", help=command_spec(("init",)).summary)
     init.add_argument("path", nargs="?", type=Path, default=Path("campaign.yaml"))
     init.add_argument("--force", action="store_true", help="replace an existing template")
     init.add_argument("--json", action="store_true")
-    validate = sub.add_parser("validate", help=_COMMANDS_BY_NAME["validate"].description)
+    validate = sub.add_parser("validate", help=command_spec(("validate",)).summary)
     _add_single_fdf_arguments(validate, execute=False)
-    render = sub.add_parser("render", help=_COMMANDS_BY_NAME["render"].description)
+    render = sub.add_parser("render", help=command_spec(("render",)).summary)
     render.add_argument("fdf", type=Path)
     render.add_argument("--output", type=Path, default=Path(".qraft-render"))
     render.add_argument("--json", action="store_true")
-    profiles = sub.add_parser("profile", help=_COMMANDS_BY_NAME["profile"].description)
+    profiles = sub.add_parser("profile", help=command_spec(("profile",)).summary)
     profile_sub = profiles.add_subparsers(dest="action", required=True)
     profile_sub.add_parser("list").add_argument("--json", action="store_true")
     for action in ("show", "validate"):
         profile_command = profile_sub.add_parser(action)
         profile_command.add_argument("reference", nargs="?")
         profile_command.add_argument("--json", action="store_true")
-    status = sub.add_parser("status", help=_COMMANDS_BY_NAME["status"].description)
+    status = sub.add_parser("status", help=command_spec(("status",)).summary)
     status.add_argument("--runs-root", type=Path, default=Path(".qraft-runs"))
     status.add_argument("--json", action="store_true")
-    resume = sub.add_parser("resume", help=_COMMANDS_BY_NAME["resume"].description)
+    resume = sub.add_parser("resume", help=command_spec(("resume",)).summary)
     resume.add_argument("fdf", nargs="?", type=Path)
     resume.add_argument("--profile")
     resume.add_argument("--runs-root", type=Path, default=Path(".qraft-runs"))
@@ -225,13 +437,13 @@ def build_parser() -> argparse.ArgumentParser:
     resume.add_argument("--json", action="store_true")
 
     single_plan = sub.add_parser(
-        "plan", help=_COMMANDS_BY_NAME["plan"].description
+        "plan", help=command_spec(("plan",)).summary
     )
     _add_single_fdf_arguments(single_plan, execute=False)
-    single_run = sub.add_parser("_fdf-run", prog="qraft run", help=None)
+    single_run = sub.add_parser("_fdf-run", prog="qraft run", help=command_spec(("_fdf-run",)).summary)
     _add_single_fdf_arguments(single_run, execute=True)
 
-    project = sub.add_parser("project", help=_COMMANDS_BY_NAME["project"].description)
+    project = sub.add_parser("project", help=command_spec(("project",)).summary)
     project_sub = project.add_subparsers(dest="action", required=True)
     project_init = project_sub.add_parser(
         "init",
@@ -255,13 +467,13 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("path", type=Path)
         command.add_argument("--json", action="store_true")
 
-    fdf = sub.add_parser("fdf", help=_COMMANDS_BY_NAME["fdf"].description)
+    fdf = sub.add_parser("fdf", help=command_spec(("fdf",)).summary)
     fdf_sub = fdf.add_subparsers(dest="action", required=True)
     fdf_inspect = fdf_sub.add_parser("inspect")
     fdf_inspect.add_argument("path", type=Path)
     fdf_inspect.add_argument("--json", action="store_true")
 
-    inp = sub.add_parser("input", help=_COMMANDS_BY_NAME["input"].description)
+    inp = sub.add_parser("input", help=command_spec(("input",)).summary)
     inp_sub = inp.add_subparsers(dest="action", required=True)
     inp_validate = inp_sub.add_parser("validate")
     inp_validate.add_argument("path", type=Path)
@@ -290,7 +502,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     inp_rules.add_argument("--json", action="store_true")
 
-    environment = sub.add_parser("environment", help=None)
+    environment = sub.add_parser("environment", help=command_spec(("environment",)).summary)
     environment_sub = environment.add_subparsers(dest="action", required=True)
     environment_check = environment_sub.add_parser("check")
     environment_check.add_argument("--siesta", default="siesta")
@@ -307,14 +519,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     environment_check.add_argument("--json", action="store_true")
 
-    pseudo = sub.add_parser("pseudo", help=_COMMANDS_BY_NAME["pseudo"].description)
+    pseudo = sub.add_parser("pseudo", help=command_spec(("pseudo",)).summary)
     pseudo_sub = pseudo.add_subparsers(dest="action", required=True)
     pseudo_verify = pseudo_sub.add_parser("verify")
     pseudo_verify.add_argument("manifest", type=Path)
     pseudo_verify.add_argument("--species", nargs="*")
     pseudo_verify.add_argument("--json", action="store_true")
 
-    campaign = sub.add_parser("campaign", help=_COMMANDS_BY_NAME["campaign"].description)
+    campaign = sub.add_parser("campaign", help=command_spec(("campaign",)).summary)
     campaign_sub = campaign.add_subparsers(dest="action", required=True)
     create = campaign_sub.add_parser("create")
     create.add_argument("--project", type=Path, required=True)
@@ -342,7 +554,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     watch.add_argument("--json", action="store_true")
 
-    workflow = sub.add_parser("workflow", help=_COMMANDS_BY_NAME["workflow"].description)
+    workflow = sub.add_parser("workflow", help=command_spec(("workflow",)).summary)
     workflow_sub = workflow.add_subparsers(dest="action", required=True)
     workflow_recipes = workflow_sub.add_parser(
         "recipes", help="list registered workflow recipes"
@@ -405,7 +617,7 @@ def build_parser() -> argparse.ArgumentParser:
     workflow_compile.add_argument("--dry-run", action="store_true")
     workflow_compile.add_argument("--json", action="store_true")
 
-    scientific = sub.add_parser("scientific", help=_COMMANDS_BY_NAME["scientific"].description)
+    scientific = sub.add_parser("scientific", help=command_spec(("scientific",)).summary)
     scientific_sub = scientific.add_subparsers(dest="action", required=True)
     scientific_decide = scientific_sub.add_parser(
         "decide", help="record APPROVE or REJECT for reviewed convergence evidence"
@@ -428,7 +640,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     prepared_run = sub.add_parser(
         "run",
-        help=_COMMANDS_BY_NAME["run"].description,
+        help=command_spec(("run",)).summary,
     )
     prepared_run_sub = prepared_run.add_subparsers(
         dest="action",
@@ -512,7 +724,7 @@ def build_parser() -> argparse.ArgumentParser:
             )
         command.add_argument("--json", action="store_true")
 
-    results = sub.add_parser("results", help=_COMMANDS_BY_NAME["results"].description)
+    results = sub.add_parser("results", help=command_spec(("results",)).summary)
     results_sub = results.add_subparsers(dest="action", required=True)
     dos_pdos = results_sub.add_parser(
         "dos-pdos", help="export total DOS table and PDOS provenance without interpretation"
@@ -532,7 +744,7 @@ def build_parser() -> argparse.ArgumentParser:
     optics.add_argument("package", type=Path); optics.add_argument("--output", type=Path, required=True)
     optics.add_argument("--dry-run", action="store_true"); optics.add_argument("--json", action="store_true")
 
-    examples = sub.add_parser("examples", help=_COMMANDS_BY_NAME["examples"].description)
+    examples = sub.add_parser("examples", help=command_spec(("examples",)).summary)
     example_sub = examples.add_subparsers(dest="action", required=True)
     example_sub.add_parser("list").add_argument("--json", action="store_true")
     for action in ("inspect", "validate"):
@@ -555,7 +767,7 @@ def build_parser() -> argparse.ArgumentParser:
     example_import.add_argument("--output", type=Path, required=True); example_import.add_argument("--dry-run", action="store_true")
     example_import.add_argument("--json", action="store_true")
 
-    remote = sub.add_parser("remote", help=_COMMANDS_BY_NAME["remote"].description)
+    remote = sub.add_parser("remote", help=command_spec(("remote",)).summary)
     remote_sub = remote.add_subparsers(dest="action", required=True)
     package = remote_sub.add_parser("package")
     package.add_argument("campaign"); package.add_argument("--output", type=Path)
@@ -587,12 +799,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="optional explicit destination for an accepted external cluster profile",
     )
     env_import.add_argument("--dry-run", action="store_true"); env_import.add_argument("--json", action="store_true")
-    # Keep compatibility parsers dispatchable, but exclude them from normal
-    # command discovery.  Their public spellings are ``qraft run FDF`` and
-    # ``qraft env`` respectively.
+    expected_paths = {
+        command.path for command in command_surface() if len(command.path) == 1
+    }
+    actual_paths = {(name,) for name in sub.choices}
+    if actual_paths != expected_paths:
+        missing = ", ".join(" ".join(path) for path in sorted(expected_paths - actual_paths))
+        unexpected = ", ".join(" ".join(path) for path in sorted(actual_paths - expected_paths))
+        raise RuntimeError(
+            "parser command surface does not match command specification"
+            f"; missing: {missing or '-'}; unexpected: {unexpected or '-'}"
+        )
+    # Keep compatibility parsers dispatchable, but derive ordinary discovery
+    # solely from the immutable command specification. Their public spellings
+    # remain ``qraft run FDF`` and ``qraft env`` respectively.
+    visible_names = {command.name for command in parser_visible_command_surface()}
     sub._choices_actions[:] = [
         action for action in sub._choices_actions
-        if action.dest not in {"_fdf-run", "environment"}
+        if action.dest in visible_names
     ]
     return parser
 
