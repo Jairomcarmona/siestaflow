@@ -260,12 +260,26 @@ def test_shutdown_signals_stop_new_launches_and_close_active_step(tmp_path: Path
     shutdown = ShutdownRequest()
     launcher = BlockingLauncher(shutdown)
     current = controller(campaign, f"signal-{reason}", launcher=launcher, shutdown=shutdown)
-    timer = threading.Timer(0.03, lambda: shutdown.request(reason))
-    timer.start()
+    observed: dict[str, object] = {}
+
+    def request_shutdown_after_step_starts() -> None:
+        assert launcher.started.wait(timeout=2)
+        observed["task_status_before_shutdown"] = state(tmp_path)["tasks"]["task-1"]["status"]
+        observed["active_step_started"] = launcher.active
+        observed["shutdown_request_time"] = time.monotonic()
+        shutdown.request(reason)
+
+    requester = threading.Thread(target=request_shutdown_after_step_starts)
+    requester.start()
     try:
         assert current.run(install_signal_handlers=False) is ExecutionStatus.INTERRUPTED
     finally:
-        timer.cancel()
+        launcher.release.set()
+        requester.join(timeout=2)
+    assert not requester.is_alive()
+    assert observed["task_status_before_shutdown"] == "RUNNING"
+    assert observed["active_step_started"] is True
+    assert isinstance(observed["shutdown_request_time"], float)
     tasks = state(tmp_path)["tasks"]
     assert tasks["task-1"]["status"] == "INTERRUPTED"
     assert tasks["task-2"]["status"] == "INCOMPLETE"
@@ -675,11 +689,15 @@ class BlockingLauncher:
     def __init__(self, shutdown: ShutdownRequest) -> None:
         self.shutdown = shutdown
         self.release = threading.Event()
+        self.started = threading.Event()
+        self.active = False
         self.terminated = False
 
     def launch(self, spec) -> StepOutcome:
         spec.stdout_path.write_text("SIESTA started\nSCF iteration 1\n", encoding="utf-8")
         spec.stderr_path.write_text("", encoding="utf-8")
+        self.active = True
+        self.started.set()
         self.release.wait(2)
         return StepOutcome(spec.task_id, spec.attempt_id, ("srun",), 143, 0.03, self.terminated)
 

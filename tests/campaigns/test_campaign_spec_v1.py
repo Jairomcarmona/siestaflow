@@ -525,13 +525,6 @@ def test_downstream_interruption_is_resumable_and_not_a_campaign_failure(
         "print(f'siesta: E_KS(eV) = {energy}')\nprint('Job completed')\n",
         encoding="utf-8",
     )
-    wrapper = tmp_path / "fake-siesta"
-    wrapper.write_text(
-        f'#!/bin/sh\nexec "{sys.executable}" "{fake}" "$1"\n',
-        encoding="utf-8",
-    )
-    wrapper.chmod(0o755)
-
     calls = 0
 
     class FakeRelaxation:
@@ -560,7 +553,10 @@ def test_downstream_interruption_is_resumable_and_not_a_campaign_failure(
     root = tmp_path / "runs"
     app = QraftApplication(ApplicationConfiguration(
         fdf=campaign, runs_root=root,
-        overrides={"partition": "local", "launcher": "direct", "executable": str(wrapper)},
+        overrides={
+            "partition": "local", "launcher": "direct",
+            "executable": sys.executable, "executable_arguments": [str(fake)],
+        },
     ))
 
     interrupted = app.run()
@@ -593,10 +589,6 @@ def test_downstream_technical_failure_remains_a_campaign_failure(
         "print(f'siesta: E_KS(eV) = {-10.0 - v / 1000000}')\nprint('Job completed')\n",
         encoding="utf-8",
     )
-    wrapper = tmp_path / "fake-siesta"
-    wrapper.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{fake}" "$1"\n', encoding="utf-8")
-    wrapper.chmod(0o755)
-
     class FailedRelaxation:
         def run(self, _fdf: Path, **_kwargs):
             return {
@@ -608,7 +600,10 @@ def test_downstream_technical_failure_remains_a_campaign_failure(
     monkeypatch.setattr(convergence_module, "RelaxationProtocol", FailedRelaxation)
     app = QraftApplication(ApplicationConfiguration(
         fdf=campaign, runs_root=tmp_path / "runs",
-        overrides={"partition": "local", "launcher": "direct", "executable": str(wrapper)},
+        overrides={
+            "partition": "local", "launcher": "direct",
+            "executable": sys.executable, "executable_arguments": [str(fake)],
+        },
     ))
     result = app.run()
     assert result["status"] == "FAILED"
