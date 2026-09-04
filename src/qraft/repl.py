@@ -55,7 +55,7 @@ class QraftShell(cmd.Cmd):
             f"Root    : {Path(state['runs_root']).resolve()}",
             "",
             profile_hint,
-            "Type 'help' for commands.",
+            "Type 'help' for interactive single-FDF commands; type 'cli' for the full public CLI.",
         ))
 
     def onecmd(self, line: str) -> bool:
@@ -74,6 +74,17 @@ class QraftShell(cmd.Cmd):
     def do_version(self, arg: str) -> None:
         """version: show the installed QRAFT version."""
         self.stdout.write(f"QRAFT {__version__}\n")
+
+    def do_cli(self, arg: str) -> None:
+        """cli: list public command-line commands and their descriptions."""
+        # Import lazily: cli imports the shell only when the no-argument
+        # entrypoint is used, while the shell otherwise remains standalone.
+        from .cli import public_command_help
+
+        self.stdout.write("Public QRAFT CLI commands:\n")
+        for name, description in public_command_help():
+            self.stdout.write(f"  {name:<12} {description}\n")
+        self.stdout.write("Use 'qraft COMMAND --help' for command-specific usage.\n")
 
     def do_show(self, arg: str) -> None:
         """show [resolved]: display active or fully resolved configuration."""

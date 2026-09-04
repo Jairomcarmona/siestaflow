@@ -8,6 +8,7 @@ import os
 import shlex
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -76,6 +77,65 @@ from .environment_inspection import render_environment
 from .execution.adapters import launcher_registry
 
 
+@dataclass(frozen=True)
+class CommandSurface:
+    """One intentional top-level command in the installed CLI."""
+
+    name: str
+    classification: str
+    description: str
+
+
+# This registry is the public presentation authority.  Parser definitions use
+# it for help text, and the REPL uses it to direct users to the full CLI.
+_COMMAND_SURFACE = (
+    CommandSurface("init", "PUBLIC", "create a minimal editable CampaignSpec template"),
+    CommandSurface("env", "PUBLIC", "inspect installed execution capabilities"),
+    CommandSurface("config", "PUBLIC", "show effective execution configuration"),
+    CommandSurface("profile", "PUBLIC", "list, show or validate execution profiles"),
+    CommandSurface("validate", "PUBLIC", "validate one FDF and its execution preflight"),
+    CommandSurface("plan", "PUBLIC", "resolve an executable three-node plan from one FDF"),
+    CommandSurface("render", "PUBLIC", "materialize CampaignSpec FDF variants without execution"),
+    CommandSurface("run", "PUBLIC", "execute one FDF or manage hash-bound run packages"),
+    CommandSurface("status", "PUBLIC", "inspect single-FDF campaign state"),
+    CommandSurface("resume", "PUBLIC", "resume the saved single-FDF session"),
+    CommandSurface("project", "ADVANCED_PUBLIC", "advanced: prepare and inspect reproducible project packages"),
+    CommandSurface("fdf", "ADVANCED_PUBLIC", "advanced: inspect parsed SIESTA FDF inputs"),
+    CommandSurface("input", "ADVANCED_PUBLIC", "advanced: validate SIESTA inputs and view validation rules"),
+    CommandSurface("environment", "LEGACY", "legacy spelling for the public env inspection"),
+    CommandSurface("pseudo", "ADVANCED_PUBLIC", "advanced: verify pseudopotential manifests"),
+    CommandSurface("campaign", "ADVANCED_PUBLIC", "advanced: manage allocation-controller campaigns"),
+    CommandSurface("workflow", "ADVANCED_PUBLIC", "advanced: author, validate and compile workflow definitions"),
+    CommandSurface("scientific", "ADVANCED_PUBLIC", "advanced: record reviewed scientific decisions and profiles"),
+    CommandSurface("results", "ADVANCED_PUBLIC", "advanced: export verified SIESTA result tables"),
+    CommandSurface("examples", "ADVANCED_PUBLIC", "advanced: inspect and package curated examples"),
+    CommandSurface("remote", "ADVANCED_PUBLIC", "advanced: create or inspect non-submitting remote artifacts"),
+    CommandSurface("_fdf-run", "INTERNAL", "internal compatibility adapter for single-FDF runs"),
+)
+_COMMANDS_BY_NAME = {command.name: command for command in _COMMAND_SURFACE}
+
+
+def public_command_surface() -> tuple[CommandSurface, ...]:
+    """Return every command presented to installed-product users."""
+
+    return tuple(
+        command for command in _COMMAND_SURFACE
+        if command.classification in {"PUBLIC", "ADVANCED_PUBLIC"}
+    )
+
+
+def public_command_metavar() -> str:
+    """Build argparse's usage metavar from the presentation authority."""
+
+    return "{" + ",".join(command.name for command in public_command_surface()) + "}"
+
+
+def public_command_help() -> tuple[tuple[str, str], ...]:
+    """Return stable, concise command discovery rows for the REPL and tests."""
+
+    return tuple((command.name, command.description) for command in public_command_surface())
+
+
 def _add_single_fdf_arguments(command: argparse.ArgumentParser, *, execute: bool) -> None:
     command.add_argument("fdf", type=Path)
     command.add_argument("--pseudo-manifest", type=Path)
@@ -111,7 +171,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(
         dest="domain",
         required=True,
-        metavar="{init,env,config,profile,validate,plan,render,run,status,resume}",
+        metavar=public_command_metavar(),
     )
 
     def add_resolution_options(command: argparse.ArgumentParser) -> None:
@@ -127,31 +187,31 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("--walltime-seconds", type=int)
         command.add_argument("--json", action="store_true")
 
-    env = sub.add_parser("env", help="inspect installed execution capabilities")
+    env = sub.add_parser("env", help=_COMMANDS_BY_NAME["env"].description)
     add_resolution_options(env)
-    config = sub.add_parser("config", help="show effective execution configuration")
+    config = sub.add_parser("config", help=_COMMANDS_BY_NAME["config"].description)
     add_resolution_options(config)
-    init = sub.add_parser("init", help="create a minimal editable CampaignSpec template")
+    init = sub.add_parser("init", help=_COMMANDS_BY_NAME["init"].description)
     init.add_argument("path", nargs="?", type=Path, default=Path("campaign.yaml"))
     init.add_argument("--force", action="store_true", help="replace an existing template")
     init.add_argument("--json", action="store_true")
-    validate = sub.add_parser("validate", help="validate one FDF and its execution preflight")
+    validate = sub.add_parser("validate", help=_COMMANDS_BY_NAME["validate"].description)
     _add_single_fdf_arguments(validate, execute=False)
-    render = sub.add_parser("render", help="materialize CampaignSpec FDF variants without execution")
+    render = sub.add_parser("render", help=_COMMANDS_BY_NAME["render"].description)
     render.add_argument("fdf", type=Path)
     render.add_argument("--output", type=Path, default=Path(".qraft-render"))
     render.add_argument("--json", action="store_true")
-    profiles = sub.add_parser("profile", help="list, show or validate execution profiles")
+    profiles = sub.add_parser("profile", help=_COMMANDS_BY_NAME["profile"].description)
     profile_sub = profiles.add_subparsers(dest="action", required=True)
     profile_sub.add_parser("list").add_argument("--json", action="store_true")
     for action in ("show", "validate"):
         profile_command = profile_sub.add_parser(action)
         profile_command.add_argument("reference", nargs="?")
         profile_command.add_argument("--json", action="store_true")
-    status = sub.add_parser("status", help="inspect single-FDF campaign state")
+    status = sub.add_parser("status", help=_COMMANDS_BY_NAME["status"].description)
     status.add_argument("--runs-root", type=Path, default=Path(".qraft-runs"))
     status.add_argument("--json", action="store_true")
-    resume = sub.add_parser("resume", help="resume the saved single-FDF session")
+    resume = sub.add_parser("resume", help=_COMMANDS_BY_NAME["resume"].description)
     resume.add_argument("fdf", nargs="?", type=Path)
     resume.add_argument("--profile")
     resume.add_argument("--runs-root", type=Path, default=Path(".qraft-runs"))
@@ -165,13 +225,13 @@ def build_parser() -> argparse.ArgumentParser:
     resume.add_argument("--json", action="store_true")
 
     single_plan = sub.add_parser(
-        "plan", help="resolve an executable three-node plan from one FDF"
+        "plan", help=_COMMANDS_BY_NAME["plan"].description
     )
     _add_single_fdf_arguments(single_plan, execute=False)
-    single_run = sub.add_parser("_fdf-run", prog="qraft run")
+    single_run = sub.add_parser("_fdf-run", prog="qraft run", help=None)
     _add_single_fdf_arguments(single_run, execute=True)
 
-    project = sub.add_parser("project", help=None)
+    project = sub.add_parser("project", help=_COMMANDS_BY_NAME["project"].description)
     project_sub = project.add_subparsers(dest="action", required=True)
     project_init = project_sub.add_parser(
         "init",
@@ -195,13 +255,13 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("path", type=Path)
         command.add_argument("--json", action="store_true")
 
-    fdf = sub.add_parser("fdf", help=None)
+    fdf = sub.add_parser("fdf", help=_COMMANDS_BY_NAME["fdf"].description)
     fdf_sub = fdf.add_subparsers(dest="action", required=True)
     fdf_inspect = fdf_sub.add_parser("inspect")
     fdf_inspect.add_argument("path", type=Path)
     fdf_inspect.add_argument("--json", action="store_true")
 
-    inp = sub.add_parser("input", help=None)
+    inp = sub.add_parser("input", help=_COMMANDS_BY_NAME["input"].description)
     inp_sub = inp.add_subparsers(dest="action", required=True)
     inp_validate = inp_sub.add_parser("validate")
     inp_validate.add_argument("path", type=Path)
@@ -230,10 +290,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     inp_rules.add_argument("--json", action="store_true")
 
-    environment = sub.add_parser(
-        "environment",
-        help=None,
-    )
+    environment = sub.add_parser("environment", help=None)
     environment_sub = environment.add_subparsers(dest="action", required=True)
     environment_check = environment_sub.add_parser("check")
     environment_check.add_argument("--siesta", default="siesta")
@@ -250,14 +307,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     environment_check.add_argument("--json", action="store_true")
 
-    pseudo = sub.add_parser("pseudo", help=None)
+    pseudo = sub.add_parser("pseudo", help=_COMMANDS_BY_NAME["pseudo"].description)
     pseudo_sub = pseudo.add_subparsers(dest="action", required=True)
     pseudo_verify = pseudo_sub.add_parser("verify")
     pseudo_verify.add_argument("manifest", type=Path)
     pseudo_verify.add_argument("--species", nargs="*")
     pseudo_verify.add_argument("--json", action="store_true")
 
-    campaign = sub.add_parser("campaign", help=None)
+    campaign = sub.add_parser("campaign", help=_COMMANDS_BY_NAME["campaign"].description)
     campaign_sub = campaign.add_subparsers(dest="action", required=True)
     create = campaign_sub.add_parser("create")
     create.add_argument("--project", type=Path, required=True)
@@ -285,7 +342,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     watch.add_argument("--json", action="store_true")
 
-    workflow = sub.add_parser("workflow", help=None)
+    workflow = sub.add_parser("workflow", help=_COMMANDS_BY_NAME["workflow"].description)
     workflow_sub = workflow.add_subparsers(dest="action", required=True)
     workflow_recipes = workflow_sub.add_parser(
         "recipes", help="list registered workflow recipes"
@@ -348,7 +405,7 @@ def build_parser() -> argparse.ArgumentParser:
     workflow_compile.add_argument("--dry-run", action="store_true")
     workflow_compile.add_argument("--json", action="store_true")
 
-    scientific = sub.add_parser("scientific", help=None)
+    scientific = sub.add_parser("scientific", help=_COMMANDS_BY_NAME["scientific"].description)
     scientific_sub = scientific.add_subparsers(dest="action", required=True)
     scientific_decide = scientific_sub.add_parser(
         "decide", help="record APPROVE or REJECT for reviewed convergence evidence"
@@ -371,7 +428,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     prepared_run = sub.add_parser(
         "run",
-        help="execute one FDF or manage hash-bound run packages",
+        help=_COMMANDS_BY_NAME["run"].description,
     )
     prepared_run_sub = prepared_run.add_subparsers(
         dest="action",
@@ -455,7 +512,7 @@ def build_parser() -> argparse.ArgumentParser:
             )
         command.add_argument("--json", action="store_true")
 
-    results = sub.add_parser("results", help=None)
+    results = sub.add_parser("results", help=_COMMANDS_BY_NAME["results"].description)
     results_sub = results.add_subparsers(dest="action", required=True)
     dos_pdos = results_sub.add_parser(
         "dos-pdos", help="export total DOS table and PDOS provenance without interpretation"
@@ -475,7 +532,7 @@ def build_parser() -> argparse.ArgumentParser:
     optics.add_argument("package", type=Path); optics.add_argument("--output", type=Path, required=True)
     optics.add_argument("--dry-run", action="store_true"); optics.add_argument("--json", action="store_true")
 
-    examples = sub.add_parser("examples", help=None)
+    examples = sub.add_parser("examples", help=_COMMANDS_BY_NAME["examples"].description)
     example_sub = examples.add_subparsers(dest="action", required=True)
     example_sub.add_parser("list").add_argument("--json", action="store_true")
     for action in ("inspect", "validate"):
@@ -498,7 +555,7 @@ def build_parser() -> argparse.ArgumentParser:
     example_import.add_argument("--output", type=Path, required=True); example_import.add_argument("--dry-run", action="store_true")
     example_import.add_argument("--json", action="store_true")
 
-    remote = sub.add_parser("remote", help=None)
+    remote = sub.add_parser("remote", help=_COMMANDS_BY_NAME["remote"].description)
     remote_sub = remote.add_subparsers(dest="action", required=True)
     package = remote_sub.add_parser("package")
     package.add_argument("campaign"); package.add_argument("--output", type=Path)
@@ -530,15 +587,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="optional explicit destination for an accepted external cluster profile",
     )
     env_import.add_argument("--dry-run", action="store_true"); env_import.add_argument("--json", action="store_true")
-    # Keep compatibility parsers addressable without advertising them as part
-    # of the installed product contract.  argparse stores help-only pseudo
-    # actions separately from the parsers used for actual dispatch.
-    legacy_domains = {
-        "project", "fdf", "input", "environment", "pseudo", "campaign",
-        "workflow", "scientific", "results", "examples", "remote",
-    }
+    # Keep compatibility parsers dispatchable, but exclude them from normal
+    # command discovery.  Their public spellings are ``qraft run FDF`` and
+    # ``qraft env`` respectively.
     sub._choices_actions[:] = [
-        action for action in sub._choices_actions if action.dest not in legacy_domains
+        action for action in sub._choices_actions
+        if action.dest not in {"_fdf-run", "environment"}
     ]
     return parser
 

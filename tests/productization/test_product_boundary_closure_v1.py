@@ -8,16 +8,18 @@ from pathlib import Path
 import pytest
 
 import qraft
-from qraft.cli import build_parser
+from qraft.cli import build_parser, public_command_surface
 from qraft.protocols.single_fdf import resolve_execution_spec
 
 
-def test_public_help_exposes_only_installed_product_commands() -> None:
+def test_public_help_exposes_the_installed_product_commands() -> None:
     text = build_parser().format_help()
-    for command in ("env", "config", "profile", "validate", "plan", "run", "status", "resume"):
-        assert command in text
-    for legacy in ("project", "environment", "workflow", "examples", "remote"):
-        assert f"    {legacy}" not in text
+    compact_help = " ".join(text.split())
+    for command in public_command_surface():
+        assert f"    {command.name}" in text
+        assert command.description in compact_help
+    assert "_fdf-run" not in text
+    assert "    environment" not in text
 
 
 def test_mpi_never_invents_a_launcher() -> None:

@@ -60,10 +60,11 @@ professional human-readable campaign view and CSV files are derived views.
 - installed mode as the normal deployment path;
 - standalone controller bundles as a deployment fallback.
 
-The installed public CLI is `env`, `config`, `profile`, `validate`, `plan`,
-`run`, `status`, `resume`, and the interactive `qraft>` shell. Historical and
-experimental commands are retained for checked-out project workflows but are
-not part of the installed product surface.
+The installed CLI provides the core `init`, `env`, `config`, `profile`,
+`validate`, `plan`, `render`, `run`, `status`, and `resume` commands, plus
+advanced supported families for projects, inputs, workflows, campaigns,
+results, examples, and remote artifacts. Run `qraft --help` for the installed
+surface and see the [user guide](docs/user-guide/) for concise usage guidance.
 
 Distribution documentation is available from the repository rather than from
 paths assumed to exist beside an installed wheel: [quick start](https://github.com/Jairomcarmona/siestaflow/blob/main/docs/user/QUICK_START.md),
