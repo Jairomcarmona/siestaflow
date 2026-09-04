@@ -20,7 +20,7 @@ from .engines.siesta.models import FDFBlock, FDFInclude, FDFScalar, FDFUnknown
 from .engines.siesta.pseudopotentials import PseudopotentialManifest, PseudopotentialVerifier
 from .engines.siesta.validation_catalog import SiestaValidationCatalog
 from .engines.siesta.validation_profile import SiestaValidationProfile
-from .errors import QraftError
+from .errors import PreflightError, QraftError
 from .examples import ExampleRegistry, ExampleService
 from .models import AuthorizationEnvelope, CampaignManifest, TaskSpec, primitive
 from .project_packages import ProjectPackageLoader, load_structured
@@ -128,6 +128,27 @@ class CommandOption:
 
 
 @dataclass(frozen=True)
+class CliOutputPolicy:
+    """Resolved process-wide output and input policy for one CLI invocation."""
+
+    json_requested: bool
+    no_input: bool
+    color_enabled: bool
+
+
+@dataclass(frozen=True)
+class ExpectedUserError(Exception):
+    """A user-correctable CLI failure with safe human and JSON renderings."""
+
+    code: str
+    message: str
+    expected: str | None = None
+    why: str | None = None
+    fix: str | None = None
+    next_command: str | None = None
+
+
+@dataclass(frozen=True)
 class CommandSurface:
     """Immutable command-tree record and sole current presentation authority."""
 
@@ -157,6 +178,8 @@ class CommandSurface:
 
 _SHARED_COMMAND_OPTIONS = (
     CommandOption("output.json", ("--json",), "emit the command result as JSON"),
+    CommandOption("output.no-color", ("--no-color",), "disable ANSI color output"),
+    CommandOption("input.no-input", ("--no-input",), "refuse interactive input"),
     CommandOption("execution.profile", ("--profile",), "select an execution profile"),
     CommandOption("execution.resolution", ("--project-config", "--recipe"), "supply execution resolution inputs"),
     CommandOption("execution.runs-root", ("--runs-root",), "select persistent run state"),
@@ -348,6 +371,132 @@ def public_command_help() -> tuple[tuple[str, str], ...]:
     return tuple((command.name, command.summary) for command in public_command_surface())
 
 
+def resolve_cli_output_policy(
+    raw: list[str], *, environ: Mapping[str, str] | None = None,
+    stdout_isatty: bool | None = None,
+) -> CliOutputPolicy:
+    """Resolve output policy without adding color or prompts to current routes."""
+
+    environment = os.environ if environ is None else environ
+    isatty = sys.stdout.isatty() if stdout_isatty is None else stdout_isatty
+    json_requested = "--json" in raw
+    no_input = "--no-input" in raw
+    no_color = "--no-color" in raw
+    return CliOutputPolicy(
+        json_requested=json_requested,
+        no_input=no_input,
+        color_enabled=not (
+            json_requested or no_color or "NO_COLOR" in environment or not isatty
+        ),
+    )
+
+
+def _strip_global_policy_flags(raw: list[str]) -> list[str]:
+    """Allow current global input/color flags before or after any command."""
+
+    return [token for token in raw if token not in {"--no-input", "--no-color"}]
+
+
+def _render_expected_user_error(error: ExpectedUserError) -> str:
+    """Render the frozen human error shape without ANSI or traceback text."""
+
+    lines = [f"BLOCKED [{error.code}]: {error.message}"]
+    for label, value in (
+        ("Expected", error.expected),
+        ("Why", error.why),
+        ("Fix", error.fix),
+    ):
+        if value:
+            lines.extend(("", f"{label}:", f"  {value}"))
+    if error.next_command:
+        lines.extend(("", "Then run:", f"  {error.next_command}"))
+    return "\n".join(lines)
+
+
+def _emit_expected_user_error(error: ExpectedUserError, *, as_json: bool) -> None:
+    """Keep JSON stdout machine-only and human failures on stderr."""
+
+    if as_json:
+        details = {
+            key: value for key, value in {
+                "code": error.code,
+                "message": error.message,
+                "why": error.why,
+                "fix": error.fix,
+                "next_command": error.next_command,
+            }.items() if value is not None
+        }
+        print(json.dumps({"status": "BLOCKED", "error": details}, sort_keys=True))
+        return
+    print(_render_expected_user_error(error), file=sys.stderr)
+
+
+def _emit_internal_error() -> None:
+    """Keep unexpected failures distinct from user-correctable blocks."""
+
+    print("QRAFT_INTERNAL_ERROR: unexpected internal failure", file=sys.stderr)
+
+
+def _expected_user_error(
+    exc: Exception, *, invocation: str,
+) -> ExpectedUserError:
+    """Adapt the established CLI-boundary user failures without schema changes."""
+
+    message = str(exc)
+    if isinstance(exc, FileNotFoundError) or "does not exist" in message:
+        return ExpectedUserError(
+            "INPUT_NOT_FOUND",
+            message,
+            expected="an existing readable input path",
+            why="QRAFT could not read the requested input",
+            fix="create the file or provide its correct path",
+            next_command=invocation,
+        )
+    if isinstance(exc, PermissionError):
+        return ExpectedUserError(
+            "INPUT_PERMISSION_DENIED",
+            message,
+            why="QRAFT does not have the required filesystem access",
+            fix="adjust the path permissions and try again",
+            next_command=invocation,
+        )
+    if isinstance(exc, PreflightError):
+        return ExpectedUserError(
+            "PREFLIGHT_BLOCKED",
+            message,
+            why="the declared execution preflight did not pass",
+            fix="resolve the reported preflight finding",
+            next_command=invocation,
+        )
+    if "pseudopotential" in message.casefold():
+        return ExpectedUserError(
+            "PSEUDOPOTENTIAL_MISSING",
+            message,
+            why="the input species does not resolve to one usable pseudopotential",
+            fix="add the matching pseudopotential or correct its declared path",
+            next_command=invocation,
+        )
+    return ExpectedUserError(
+        "INVALID_INPUT",
+        message,
+        why="the command input does not satisfy the current QRAFT contract",
+        fix="correct the input and try again",
+        next_command=invocation,
+    )
+
+
+def _enforce_input_policy(args: argparse.Namespace, policy: CliOutputPolicy) -> None:
+    """Wire command-spec input policy without introducing prompts in Phase 2."""
+
+    command = command_spec((args.domain,))
+    if policy.no_input and command.input_policy is not CommandInputPolicy.NEVER_PROMPT:
+        raise ExpectedUserError(
+            "INTERACTIVE_INPUT_DISABLED",
+            "this command requires interactive input",
+            fix="supply all required command options or rerun without --no-input",
+        )
+
+
 def _add_single_fdf_arguments(command: argparse.ArgumentParser, *, execute: bool) -> None:
     command.add_argument("fdf", type=Path)
     command.add_argument("--pseudo-manifest", type=Path)
@@ -378,6 +527,12 @@ def _add_single_fdf_arguments(command: argparse.ArgumentParser, *, execute: bool
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="qraft", description="SIESTA preparation, allocation-local execution, and evidence handling")
     parser.add_argument("--version", action="version", version=f"QRAFT {__version__}")
+    parser.add_argument(
+        "--json", dest="_global_json", action="store_true",
+        help="emit the command result as JSON",
+    )
+    parser.add_argument("--no-input", action="store_true", help="refuse interactive input")
+    parser.add_argument("--no-color", action="store_true", help="disable ANSI color output")
     parser.add_argument("--workspace", type=Path, default=Path(".qraft-work"))
     parser.add_argument("--examples-root", type=Path, default=Path("examples"), help=argparse.SUPPRESS)
     sub = parser.add_subparsers(
@@ -823,6 +978,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     raw = list(sys.argv[1:] if argv is None else argv)
+    policy = resolve_cli_output_policy(raw)
+    raw = _strip_global_policy_flags(raw)
     if not raw:
         from .repl import run_repl
 
@@ -851,10 +1008,30 @@ def main(argv: list[str] | None = None) -> int:
         ):
             raw[domain_index] = "_fdf-run"
     invocation = shlex.join(("qraft", *raw))
-    args = build_parser().parse_args(raw)
-    args._invocation = invocation
     try:
+        args = build_parser().parse_args(raw)
+    except SystemExit as exc:
+        if exc.code == 2 and policy.json_requested:
+            _emit_expected_user_error(ExpectedUserError(
+                "INVALID_ARGUMENTS",
+                "the command arguments are invalid",
+                why="argparse could not resolve the requested command invocation",
+                fix="review the command usage and provide the required arguments",
+                next_command="qraft --help",
+            ), as_json=True)
+            return 2
+        raise
+    except Exception:
+        _emit_internal_error()
+        return 1
+    try:
+        args.json = bool(getattr(args, "json", False) or args._global_json)
+        args._invocation = invocation
+        _enforce_input_policy(args, policy)
         return _dispatch(args)
+    except ExpectedUserError as exc:
+        _emit_expected_user_error(exc, as_json=bool(args.json))
+        return 2
     except (
         OSError,
         ValueError,
@@ -863,8 +1040,14 @@ def main(argv: list[str] | None = None) -> int:
         KeyError,
         QraftError,
     ) as exc:
-        print(f"QRAFT_ERROR: {exc}", file=sys.stderr)
+        _emit_expected_user_error(
+            _expected_user_error(exc, invocation=invocation),
+            as_json=bool(args.json),
+        )
         return 2
+    except Exception:
+        _emit_internal_error()
+        return 1
 
 
 def _dispatch(args: argparse.Namespace) -> int:

@@ -778,7 +778,10 @@ def test_rejected_convergence_decision_cannot_propagate_a_profile(tmp_path: Path
         "scientific", "profile", str(report), "--approval", str(rejection),
         "--profile-id", "not-allowed", "--output", str(tmp_path / "profile.json"), "--json",
     ]) == 2
-    assert "rejected" in capsys.readouterr().err
+    captured = capsys.readouterr()
+    error = json.loads(captured.out.splitlines()[-1])
+    assert "rejected" in error["error"]["message"]
+    assert captured.err == ""
 
 
 def test_observation_producer_recipe_builds_a_canonical_postprocess_node(tmp_path: Path) -> None:
