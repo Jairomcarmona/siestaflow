@@ -43,24 +43,26 @@ def test_public_surface_has_one_visible_help_authority() -> None:
     assert "{init,env,config,profile,validate,plan,render,run,status,resume}" not in text
     compact_help = " ".join(text.split())
     for command in public_command_surface():
-        assert command.classification in {"PUBLIC", "ADVANCED_PUBLIC"}
+        assert command.classification in {
+            "CORE", "GROUPED_PUBLIC", "ADVANCED",
+        }
         assert f"    {command.name}" in text
         assert command.description in compact_help
     assert "_fdf-run" not in text
     assert "    environment" not in text
 
 
-def test_current_public_surface_is_unchanged() -> None:
+def test_phase3_public_surface_introduces_canonical_groups() -> None:
     assert tuple(command.name for command in public_command_surface()) == (
-        "init", "env", "config", "profile", "validate", "plan", "render",
-        "run", "status", "resume", "project", "fdf", "input", "pseudo",
-        "campaign", "workflow", "scientific", "results", "examples", "remote",
+        "init", "run", "status", "resume", "results", "examples",
+        "setup", "inspect", "advanced",
     )
     assert {
         command.classification for command in public_command_surface()
     } == {
-        CommandClassification.PUBLIC,
-        CommandClassification.ADVANCED_PUBLIC,
+        CommandClassification.CORE,
+        CommandClassification.GROUPED_PUBLIC,
+        CommandClassification.ADVANCED,
     }
 
 
@@ -133,7 +135,7 @@ def test_hidden_and_internal_commands_remain_dispatchable_but_undiscoverable() -
         command.visibility is CommandVisibility.HIDDEN
         for command in command_surface()
         if command.classification in {
-            CommandClassification.LEGACY,
+                CommandClassification.LEGACY_ALIAS,
             CommandClassification.INTERNAL,
         }
     )
@@ -146,9 +148,16 @@ def test_every_parser_command_has_one_specification_record() -> None:
         if isinstance(action, argparse._SubParsersAction)
     )
 
-    assert {(name,) for name in subparsers.choices} == {
-        command.path for command in command_surface()
+    expected_roots = {
+        command.path[0]
+        for command in command_surface()
+        if len(command.path) == 1
+    } | {
+        command.dispatch_path[0]
+        for command in command_surface()
+        if command.dispatch_path is not None
     }
+    assert set(subparsers.choices) == expected_roots
     assert {action.dest for action in subparsers._choices_actions} == {
         command.name for command in parser_visible_command_surface()
     }

@@ -37,7 +37,8 @@ def test_json_expected_error_is_one_json_value_on_stdout(
     assert payload["status"] == "BLOCKED"
     assert payload["error"]["code"] == "INPUT_NOT_FOUND"
     assert "BLOCKED [" not in captured.out
-    assert captured.err == ""
+    assert captured.err.count("DEPRECATED:") == 1
+    assert "qraft check" in captured.err
 
 
 def test_json_argument_error_keeps_stdout_machine_readable(capsys) -> None:

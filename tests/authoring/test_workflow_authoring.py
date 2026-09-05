@@ -770,12 +770,12 @@ def test_rejected_convergence_decision_cannot_propagate_a_profile(tmp_path: Path
     evaluate_mesh_files(tmp_path / raw["parameters"]["rule"], [tmp_path / item for item in raw["parameters"]["observations"]], report)
     rejection = tmp_path / "rejection.json"
     assert main([
-        "scientific", "decide", str(report), "--approval-id", "mesh-rejection-01",
+        "advanced", "scientific", "decide", str(report), "--approval-id", "mesh-rejection-01",
         "--decision", "REJECT", "--actor", "researcher", "--decided-at", "2026-08-02T00:00:00Z",
         "--output", str(rejection), "--json",
     ]) == 0
     assert main([
-        "scientific", "profile", str(report), "--approval", str(rejection),
+        "advanced", "scientific", "profile", str(report), "--approval", str(rejection),
         "--profile-id", "not-allowed", "--output", str(tmp_path / "profile.json"), "--json",
     ]) == 2
     captured = capsys.readouterr()

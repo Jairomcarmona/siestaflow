@@ -25,6 +25,15 @@ Los argumentos recurrentes de `validate`, `plan`, `run` y `resume` incluyen
 `--profile` y `--json` donde aplique. Los launchers actuales son `direct`,
 `hydra`, `openmpi` y `srun`.
 
+## Navegación canónica V2
+
+La agrupación canónica introduce `setup` para entorno/configuración/perfiles,
+`inspect` para FDF, inputs, reglas, pseudopotenciales y planes, y `advanced`
+para las familias de arquitectura. Las rutas históricas siguen funcionando
+durante la ventana de compatibilidad y escriben su aviso de migración en
+stderr. Consulte `qraft setup --help`, `qraft inspect --help` y
+`qraft advanced --help` para descubrir los hijos directos.
+
 ## Comandos avanzados
 
 Estas familias son capacidades soportadas para preparación reproducible,

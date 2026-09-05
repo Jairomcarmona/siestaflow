@@ -79,11 +79,12 @@ from .execution.adapters import launcher_registry
 
 
 class CommandClassification(str, Enum):
-    """Current-surface classification, retained until the V2 hierarchy lands."""
+    """Frozen V2 command classifications."""
 
-    PUBLIC = "PUBLIC"
-    ADVANCED_PUBLIC = "ADVANCED_PUBLIC"
-    LEGACY = "LEGACY"
+    CORE = "CORE"
+    GROUPED_PUBLIC = "GROUPED_PUBLIC"
+    ADVANCED = "ADVANCED"
+    LEGACY_ALIAS = "LEGACY_ALIAS"
     INTERNAL = "INTERNAL"
 
 
@@ -91,7 +92,9 @@ class CommandVisibility(str, Enum):
     """Whether a command is included in ordinary parser discovery."""
 
     PRIMARY = "PRIMARY"
+    GROUPED = "GROUPED"
     ADVANCED = "ADVANCED"
+    MIGRATION = "MIGRATION"
     HIDDEN = "HIDDEN"
 
 
@@ -113,9 +116,12 @@ class CommandInputPolicy(str, Enum):
 
 @dataclass(frozen=True)
 class CommandAlias:
-    """A future-compatible alternate spelling owned by one command spec."""
+    """A compatibility spelling owned by one canonical command spec."""
 
     path: tuple[str, ...]
+    since: str = "2.0"
+    warning: str | None = None
+    behavior_mode: str = "DELEGATE"
 
 
 @dataclass(frozen=True)
@@ -164,10 +170,13 @@ class CommandSurface:
     examples: tuple[str, ...]
     aliases: tuple[CommandAlias, ...]
     handler_id: str
+    dispatch_path: tuple[str, ...] | None
     json_supported: bool
     side_effect: CommandSideEffect
     input_policy: CommandInputPolicy
     option_ids: tuple[str, ...] = ()
+    canonical_replacement: tuple[str, ...] | None = None
+    frozen_handler: bool = False
 
     @property
     def name(self) -> str:
@@ -187,17 +196,22 @@ _SHARED_COMMAND_OPTIONS = (
 
 
 def _command(
-    id: str, name: str, classification: CommandClassification,
+    id: str, path: tuple[str, ...], classification: CommandClassification,
     visibility: CommandVisibility, order: int, summary: str, *,
-    usage: str | None, handler_id: str, json_supported: bool,
-    side_effect: CommandSideEffect, option_ids: tuple[str, ...] = (),
+    parent_id: str | None = None, usage: str | None = None,
+    aliases: tuple[CommandAlias, ...] = (), handler_id: str,
+    dispatch_path: tuple[str, ...] | None = None, json_supported: bool,
+    side_effect: CommandSideEffect,
+    option_ids: tuple[str, ...] = (),
+    canonical_replacement: tuple[str, ...] | None = None,
+    frozen_handler: bool = False,
 ) -> CommandSurface:
-    """Keep the current flat surface concise while preparing a command tree."""
+    """Build one immutable V2 command specification record."""
 
     return CommandSurface(
         id=id,
-        path=(name,),
-        parent_id=None,
+        path=path,
+        parent_id=parent_id,
         classification=classification,
         visibility=visibility,
         order=order,
@@ -205,42 +219,77 @@ def _command(
         description=summary,
         usage=usage,
         examples=(),
-        aliases=(),
+        aliases=aliases,
         handler_id=handler_id,
+        dispatch_path=dispatch_path,
         json_supported=json_supported,
         side_effect=side_effect,
         input_policy=CommandInputPolicy.NEVER_PROMPT,
         option_ids=option_ids,
+        canonical_replacement=canonical_replacement,
+        frozen_handler=frozen_handler,
     )
 
 
-# This registry is the current command-specification authority. Parser
-# definitions consume its help, visibility, classification, and handler
-# metadata; the REPL consumes the same public discovery API. The V2 grouped
-# hierarchy is deliberately not introduced in this phase.
+def _alias(*path: str, behavior_mode: str = "DELEGATE") -> tuple[CommandAlias, ...]:
+    return (CommandAlias(path, behavior_mode=behavior_mode),)
+
+
+# Canonical paths, compatibility aliases, and parser dispatch destinations live
+# together here. Canonical routing and deprecation rendering both consume this
+# registry; handlers below remain unchanged.
 _COMMAND_SURFACE = (
-    _command("qraft.init", "init", CommandClassification.PUBLIC, CommandVisibility.PRIMARY, 10, "create a minimal editable CampaignSpec template", usage="qraft init [PATH] [--force] [--json]", handler_id="init", json_supported=True, side_effect=CommandSideEffect.WRITE_LOCAL, option_ids=("output.json",)),
-    _command("qraft.env", "env", CommandClassification.PUBLIC, CommandVisibility.PRIMARY, 20, "inspect installed execution capabilities", usage="qraft env [execution options] [--json]", handler_id="env", json_supported=True, side_effect=CommandSideEffect.READ_ONLY, option_ids=("execution.profile", "execution.resolution", "output.json")),
-    _command("qraft.config", "config", CommandClassification.PUBLIC, CommandVisibility.PRIMARY, 30, "show effective execution configuration", usage="qraft config [execution options] [--json]", handler_id="config", json_supported=True, side_effect=CommandSideEffect.READ_ONLY, option_ids=("execution.profile", "execution.resolution", "output.json")),
-    _command("qraft.profile", "profile", CommandClassification.PUBLIC, CommandVisibility.PRIMARY, 40, "list, show or validate execution profiles", usage="qraft profile {list,show,validate} ...", handler_id="profile", json_supported=False, side_effect=CommandSideEffect.READ_ONLY),
-    _command("qraft.validate", "validate", CommandClassification.PUBLIC, CommandVisibility.PRIMARY, 50, "validate one FDF and its execution preflight", usage="qraft validate FDF [execution options] [--json]", handler_id="validate", json_supported=True, side_effect=CommandSideEffect.READ_ONLY, option_ids=("execution.profile", "execution.resolution", "output.json")),
-    _command("qraft.plan", "plan", CommandClassification.PUBLIC, CommandVisibility.PRIMARY, 60, "resolve an executable three-node plan from one FDF", usage="qraft plan FDF [execution options] [--json]", handler_id="plan", json_supported=True, side_effect=CommandSideEffect.READ_ONLY, option_ids=("execution.profile", "execution.resolution", "output.json")),
-    _command("qraft.render", "render", CommandClassification.PUBLIC, CommandVisibility.PRIMARY, 70, "materialize CampaignSpec FDF variants without execution", usage="qraft render FDF [--output PATH] [--json]", handler_id="render", json_supported=True, side_effect=CommandSideEffect.WRITE_LOCAL, option_ids=("output.json",)),
-    _command("qraft.run", "run", CommandClassification.PUBLIC, CommandVisibility.PRIMARY, 80, "execute one FDF or manage hash-bound run packages", usage="qraft run FDF [execution options] [--json]", handler_id="run", json_supported=True, side_effect=CommandSideEffect.EXECUTE, option_ids=("execution.profile", "execution.resolution", "execution.runs-root", "output.json")),
-    _command("qraft.status", "status", CommandClassification.PUBLIC, CommandVisibility.PRIMARY, 90, "inspect single-FDF campaign state", usage="qraft status [--runs-root PATH] [--json]", handler_id="status", json_supported=True, side_effect=CommandSideEffect.READ_ONLY, option_ids=("execution.runs-root", "output.json")),
-    _command("qraft.resume", "resume", CommandClassification.PUBLIC, CommandVisibility.PRIMARY, 100, "resume the saved single-FDF session", usage="qraft resume [FDF] [execution options] [--json]", handler_id="resume", json_supported=True, side_effect=CommandSideEffect.EXECUTE, option_ids=("execution.profile", "execution.runs-root", "output.json")),
-    _command("qraft.project", "project", CommandClassification.ADVANCED_PUBLIC, CommandVisibility.ADVANCED, 110, "advanced: prepare and inspect reproducible project packages", usage="qraft project {init,inspect,validate,load} ...", handler_id="project", json_supported=False, side_effect=CommandSideEffect.MIXED),
-    _command("qraft.fdf", "fdf", CommandClassification.ADVANCED_PUBLIC, CommandVisibility.ADVANCED, 120, "advanced: inspect parsed SIESTA FDF inputs", usage="qraft fdf inspect PATH [--json]", handler_id="fdf", json_supported=False, side_effect=CommandSideEffect.READ_ONLY),
-    _command("qraft.input", "input", CommandClassification.ADVANCED_PUBLIC, CommandVisibility.ADVANCED, 130, "advanced: validate SIESTA inputs and view validation rules", usage="qraft input {validate,rules} ...", handler_id="input", json_supported=False, side_effect=CommandSideEffect.READ_ONLY),
-    _command("qraft.environment", "environment", CommandClassification.LEGACY, CommandVisibility.HIDDEN, 140, "legacy spelling for the public env inspection", usage="qraft environment check ...", handler_id="environment", json_supported=False, side_effect=CommandSideEffect.READ_ONLY),
-    _command("qraft.pseudo", "pseudo", CommandClassification.ADVANCED_PUBLIC, CommandVisibility.ADVANCED, 150, "advanced: verify pseudopotential manifests", usage="qraft pseudo verify MANIFEST [--json]", handler_id="pseudo", json_supported=False, side_effect=CommandSideEffect.READ_ONLY),
-    _command("qraft.campaign", "campaign", CommandClassification.ADVANCED_PUBLIC, CommandVisibility.ADVANCED, 160, "advanced: manage allocation-controller campaigns", usage="qraft campaign ACTION ...", handler_id="campaign", json_supported=False, side_effect=CommandSideEffect.MIXED),
-    _command("qraft.workflow", "workflow", CommandClassification.ADVANCED_PUBLIC, CommandVisibility.ADVANCED, 170, "advanced: author, validate and compile workflow definitions", usage="qraft workflow ACTION ...", handler_id="workflow", json_supported=False, side_effect=CommandSideEffect.MIXED),
-    _command("qraft.scientific", "scientific", CommandClassification.ADVANCED_PUBLIC, CommandVisibility.ADVANCED, 180, "advanced: record reviewed scientific decisions and profiles", usage="qraft scientific {decide,profile} ...", handler_id="scientific", json_supported=False, side_effect=CommandSideEffect.WRITE_LOCAL),
-    _command("qraft.results", "results", CommandClassification.ADVANCED_PUBLIC, CommandVisibility.ADVANCED, 190, "advanced: export verified SIESTA result tables", usage="qraft results {dos-pdos,bands,optics} ...", handler_id="results", json_supported=False, side_effect=CommandSideEffect.WRITE_LOCAL),
-    _command("qraft.examples", "examples", CommandClassification.ADVANCED_PUBLIC, CommandVisibility.ADVANCED, 200, "advanced: inspect and package curated examples", usage="qraft examples ACTION ...", handler_id="examples", json_supported=False, side_effect=CommandSideEffect.MIXED),
-    _command("qraft.remote", "remote", CommandClassification.ADVANCED_PUBLIC, CommandVisibility.ADVANCED, 210, "advanced: create or inspect non-submitting remote artifacts", usage="qraft remote ACTION ...", handler_id="remote", json_supported=False, side_effect=CommandSideEffect.PACKAGE_ONLY),
-    _command("qraft.internal.fdf-run", "_fdf-run", CommandClassification.INTERNAL, CommandVisibility.HIDDEN, 220, "internal compatibility adapter for single-FDF runs", usage=None, handler_id="_fdf-run", json_supported=True, side_effect=CommandSideEffect.EXECUTE, option_ids=("execution.profile", "execution.resolution", "execution.runs-root", "output.json")),
+    _command("qraft.init", ("init",), CommandClassification.CORE, CommandVisibility.PRIMARY, 10, "create a minimal editable CampaignSpec template", usage="qraft init [PATH] [--force] [--json]", handler_id="init", dispatch_path=("init",), json_supported=True, side_effect=CommandSideEffect.WRITE_LOCAL, option_ids=("output.json",)),
+    _command("qraft.run", ("run",), CommandClassification.CORE, CommandVisibility.PRIMARY, 20, "execute one FDF or CampaignSpec target", usage="qraft run TARGET [execution options] [--json]", handler_id="run-target", dispatch_path=("run",), json_supported=True, side_effect=CommandSideEffect.EXECUTE, option_ids=("execution.profile", "execution.resolution", "execution.runs-root", "output.json")),
+    _command("qraft.status", ("status",), CommandClassification.CORE, CommandVisibility.PRIMARY, 30, "inspect single-FDF campaign state", usage="qraft status [--runs-root PATH] [--json]", handler_id="status", dispatch_path=("status",), json_supported=True, side_effect=CommandSideEffect.READ_ONLY, option_ids=("execution.runs-root", "output.json")),
+    _command("qraft.resume", ("resume",), CommandClassification.CORE, CommandVisibility.PRIMARY, 40, "resume the saved single-FDF session", usage="qraft resume [FDF] [execution options] [--json]", handler_id="resume", dispatch_path=("resume",), json_supported=True, side_effect=CommandSideEffect.EXECUTE, option_ids=("execution.profile", "execution.runs-root", "output.json")),
+    _command("qraft.results", ("results",), CommandClassification.CORE, CommandVisibility.PRIMARY, 50, "export verified SIESTA result tables", usage="qraft results {dos-pdos,bands,optics} ...", handler_id="results", dispatch_path=("results",), json_supported=False, side_effect=CommandSideEffect.WRITE_LOCAL),
+    _command("qraft.examples", ("examples",), CommandClassification.CORE, CommandVisibility.PRIMARY, 60, "inspect and package curated examples", usage="qraft examples ACTION ...", handler_id="examples", dispatch_path=("examples",), json_supported=False, side_effect=CommandSideEffect.MIXED),
+
+    _command("qraft.setup", ("setup",), CommandClassification.GROUPED_PUBLIC, CommandVisibility.GROUPED, 70, "configure execution environments and profiles", handler_id="group.setup", json_supported=False, side_effect=CommandSideEffect.READ_ONLY),
+    _command("qraft.setup.env", ("setup", "env"), CommandClassification.GROUPED_PUBLIC, CommandVisibility.GROUPED, 10, "inspect installed execution capabilities", parent_id="qraft.setup", usage="qraft setup env [execution options] [--json]", aliases=_alias("env"), handler_id="env", dispatch_path=("env",), json_supported=True, side_effect=CommandSideEffect.READ_ONLY, option_ids=("execution.profile", "execution.resolution", "output.json")),
+    _command("qraft.setup.config", ("setup", "config"), CommandClassification.GROUPED_PUBLIC, CommandVisibility.GROUPED, 20, "show effective execution configuration", parent_id="qraft.setup", usage="qraft setup config [execution options] [--json]", aliases=_alias("config"), handler_id="config", dispatch_path=("config",), json_supported=True, side_effect=CommandSideEffect.READ_ONLY, option_ids=("execution.profile", "execution.resolution", "output.json")),
+    _command("qraft.setup.profile", ("setup", "profile"), CommandClassification.GROUPED_PUBLIC, CommandVisibility.GROUPED, 30, "list, show or validate execution profiles", parent_id="qraft.setup", usage="qraft setup profile {list,show,validate} ...", aliases=_alias("profile"), handler_id="profile", dispatch_path=("profile",), json_supported=True, side_effect=CommandSideEffect.READ_ONLY, option_ids=("output.json",)),
+
+    _command("qraft.inspect", ("inspect",), CommandClassification.GROUPED_PUBLIC, CommandVisibility.GROUPED, 80, "inspect inputs, rules, pseudopotentials, and plans", aliases=_alias("input"), handler_id="group.inspect", json_supported=False, side_effect=CommandSideEffect.READ_ONLY),
+    _command("qraft.inspect.fdf", ("inspect", "fdf"), CommandClassification.GROUPED_PUBLIC, CommandVisibility.GROUPED, 10, "inspect a parsed SIESTA FDF", parent_id="qraft.inspect", usage="qraft inspect fdf PATH [--json]", aliases=(CommandAlias(("fdf",)), CommandAlias(("fdf", "inspect"))), handler_id="fdf", dispatch_path=("fdf", "inspect"), json_supported=True, side_effect=CommandSideEffect.READ_ONLY),
+    _command("qraft.inspect.input", ("inspect", "input"), CommandClassification.GROUPED_PUBLIC, CommandVisibility.GROUPED, 20, "validate a SIESTA input", parent_id="qraft.inspect", usage="qraft inspect input PATH [--json]", aliases=_alias("input", "validate"), handler_id="input.validate", dispatch_path=("input", "validate"), json_supported=True, side_effect=CommandSideEffect.READ_ONLY),
+    _command("qraft.inspect.rules", ("inspect", "rules"), CommandClassification.GROUPED_PUBLIC, CommandVisibility.GROUPED, 30, "list versioned SIESTA validation rules", parent_id="qraft.inspect", usage="qraft inspect rules [--json]", aliases=_alias("input", "rules"), handler_id="input.rules", dispatch_path=("input", "rules"), json_supported=True, side_effect=CommandSideEffect.READ_ONLY),
+    _command("qraft.inspect.pseudo", ("inspect", "pseudo"), CommandClassification.GROUPED_PUBLIC, CommandVisibility.GROUPED, 40, "verify a pseudopotential manifest", parent_id="qraft.inspect", usage="qraft inspect pseudo MANIFEST [--json]", aliases=(CommandAlias(("pseudo",)), CommandAlias(("pseudo", "verify"))), handler_id="pseudo", dispatch_path=("pseudo", "verify"), json_supported=True, side_effect=CommandSideEffect.READ_ONLY),
+    _command("qraft.inspect.plan", ("inspect", "plan"), CommandClassification.GROUPED_PUBLIC, CommandVisibility.GROUPED, 50, "resolve a non-submitting execution plan", parent_id="qraft.inspect", usage="qraft inspect plan TARGET [execution options] [--json]", aliases=_alias("plan"), handler_id="plan", dispatch_path=("plan",), json_supported=True, side_effect=CommandSideEffect.READ_ONLY, option_ids=("execution.profile", "execution.resolution", "output.json")),
+
+    _command("qraft.advanced", ("advanced",), CommandClassification.ADVANCED, CommandVisibility.ADVANCED, 90, "discover architecture-facing workflows", handler_id="group.advanced", json_supported=False, side_effect=CommandSideEffect.MIXED),
+    _command("qraft.advanced.project", ("advanced", "project"), CommandClassification.ADVANCED, CommandVisibility.ADVANCED, 10, "prepare and inspect reproducible project packages", parent_id="qraft.advanced", aliases=_alias("project"), handler_id="project", dispatch_path=("project",), json_supported=True, side_effect=CommandSideEffect.MIXED),
+    _command("qraft.advanced.campaign", ("advanced", "campaign"), CommandClassification.ADVANCED, CommandVisibility.ADVANCED, 20, "manage allocation-controller campaigns", parent_id="qraft.advanced", aliases=_alias("campaign"), handler_id="campaign", dispatch_path=("campaign",), json_supported=True, side_effect=CommandSideEffect.MIXED),
+    _command("qraft.advanced.campaign.render", ("advanced", "campaign", "render"), CommandClassification.ADVANCED, CommandVisibility.ADVANCED, 25, "materialize CampaignSpec FDF variants without execution", parent_id="qraft.advanced.campaign", aliases=_alias("render"), handler_id="render", dispatch_path=("render",), json_supported=True, side_effect=CommandSideEffect.WRITE_LOCAL),
+    _command("qraft.advanced.workflow", ("advanced", "workflow"), CommandClassification.ADVANCED, CommandVisibility.ADVANCED, 30, "author, validate and compile workflow definitions", parent_id="qraft.advanced", aliases=_alias("workflow"), handler_id="workflow", dispatch_path=("workflow",), json_supported=True, side_effect=CommandSideEffect.MIXED),
+    _command("qraft.advanced.scientific", ("advanced", "scientific"), CommandClassification.ADVANCED, CommandVisibility.ADVANCED, 40, "record reviewed scientific decisions and profiles", parent_id="qraft.advanced", aliases=_alias("scientific"), handler_id="scientific", dispatch_path=("scientific",), json_supported=True, side_effect=CommandSideEffect.WRITE_LOCAL),
+    _command("qraft.advanced.execution", ("advanced", "execution"), CommandClassification.ADVANCED, CommandVisibility.ADVANCED, 50, "manage hash-bound execution packages", parent_id="qraft.advanced", handler_id="group.execution", json_supported=False, side_effect=CommandSideEffect.MIXED),
+    *tuple(_command(f"qraft.advanced.execution.{action}", ("advanced", "execution", action), CommandClassification.ADVANCED, CommandVisibility.ADVANCED, order, summary, parent_id="qraft.advanced.execution", aliases=_alias("run", action), handler_id=f"run.{action}", dispatch_path=("run", action), json_supported=True, side_effect=side_effect) for order, action, summary, side_effect in (
+        (10, "prepare", "prepare a self-contained Slurm package", CommandSideEffect.PACKAGE_ONLY),
+        (20, "candidates", "rank saved scheduler candidates", CommandSideEffect.READ_ONLY),
+        (30, "discover", "capture live scheduler capabilities", CommandSideEffect.WRITE_LOCAL),
+        (40, "resources", "show live scheduler resources", CommandSideEffect.READ_ONLY),
+        (50, "placement", "derive explicit live scheduler placement", CommandSideEffect.WRITE_LOCAL),
+        (60, "snapshot-import", "import saved scheduler command output", CommandSideEffect.WRITE_LOCAL),
+        (70, "inspect", "inspect a prepared package", CommandSideEffect.READ_ONLY),
+        (80, "status", "show prepared-package status", CommandSideEffect.READ_ONLY),
+        (90, "resume", "produce a prepared-package resume plan", CommandSideEffect.READ_ONLY),
+    )),
+    _command("qraft.advanced.example", ("advanced", "example"), CommandClassification.ADVANCED, CommandVisibility.ADVANCED, 60, "manage curated example assets", parent_id="qraft.advanced", handler_id="group.example", json_supported=False, side_effect=CommandSideEffect.MIXED),
+    *tuple(_command(f"qraft.advanced.example.{canonical}", ("advanced", "example", canonical), CommandClassification.ADVANCED, CommandVisibility.ADVANCED, order, summary, parent_id="qraft.advanced.example", aliases=_alias(*legacy), handler_id=f"examples.{canonical}", dispatch_path=dispatch, json_supported=True, side_effect=side_effect) for order, canonical, legacy, dispatch, summary, side_effect in (
+        (10, "inspect", ("examples", "inspect"), ("examples", "inspect"), "inspect an installed example", CommandSideEffect.READ_ONLY),
+        (20, "validate", ("examples", "validate"), ("examples", "validate"), "validate an installed example", CommandSideEffect.READ_ONLY),
+        (30, "stage", ("examples", "stage"), ("examples", "stage"), "stage example pseudopotentials", CommandSideEffect.WRITE_LOCAL),
+        (40, "package", ("examples", "package"), ("examples", "package"), "package an installed example", CommandSideEffect.PACKAGE_ONLY),
+        (50, "simulate", ("examples", "run"), ("examples", "run"), "simulate an installed example", CommandSideEffect.EXECUTE),
+        (60, "import-results", ("examples", "results", "import"), ("examples", "results", "import"), "import an example results bundle", CommandSideEffect.WRITE_LOCAL),
+    )),
+    _command("qraft.advanced.remote", ("advanced", "remote"), CommandClassification.ADVANCED, CommandVisibility.ADVANCED, 70, "create or inspect non-submitting remote artifacts", parent_id="qraft.advanced", aliases=_alias("remote"), handler_id="remote", dispatch_path=("remote",), json_supported=True, side_effect=CommandSideEffect.PACKAGE_ONLY),
+
+    _command("qraft.legacy.validate", ("validate",), CommandClassification.LEGACY_ALIAS, CommandVisibility.HIDDEN, 200, "preserve legacy FDF validation semantics", usage="qraft validate FDF [execution options] [--json]", handler_id="validate.frozen", dispatch_path=("validate",), json_supported=True, side_effect=CommandSideEffect.READ_ONLY, option_ids=("execution.profile", "execution.resolution", "output.json"), canonical_replacement=("check",), frozen_handler=True),
+    _command("qraft.legacy.environment", ("environment",), CommandClassification.LEGACY_ALIAS, CommandVisibility.HIDDEN, 210, "preserve historical environment check envelope", usage="qraft environment check ...", handler_id="environment.frozen", dispatch_path=("environment",), json_supported=True, side_effect=CommandSideEffect.READ_ONLY, canonical_replacement=("setup", "env"), frozen_handler=True),
+    _command("qraft.internal.fdf-run", ("_fdf-run",), CommandClassification.INTERNAL, CommandVisibility.HIDDEN, 220, "internal compatibility adapter for single-FDF runs", handler_id="_fdf-run", dispatch_path=("_fdf-run",), json_supported=True, side_effect=CommandSideEffect.EXECUTE, option_ids=("execution.profile", "execution.resolution", "execution.runs-root", "output.json")),
 )
 
 
@@ -296,6 +345,12 @@ def validate_command_surface(commands: tuple[CommandSurface, ...]) -> None:
 
 validate_command_surface(_COMMAND_SURFACE)
 _COMMAND_SPECS_BY_PATH = {command.path: command for command in _COMMAND_SURFACE}
+_COMMAND_SPECS_BY_ID = {command.id: command for command in _COMMAND_SURFACE}
+_COMMAND_ALIAS_OWNERS = {
+    alias.path: (command, alias)
+    for command in _COMMAND_SURFACE
+    for alias in command.aliases
+}
 _COMMAND_OPTION_SPECS_BY_ID = {option.id: option for option in _SHARED_COMMAND_OPTIONS}
 
 
@@ -348,14 +403,12 @@ def parser_visible_command_surface() -> tuple[CommandSurface, ...]:
 
 
 def public_command_surface() -> tuple[CommandSurface, ...]:
-    """Return every command presented to installed-product users."""
+    """Return the top-level V2 surface presented in ordinary discovery."""
 
     return tuple(
         command for command in _COMMAND_SURFACE
-        if command.classification in {
-            CommandClassification.PUBLIC,
-            CommandClassification.ADVANCED_PUBLIC,
-        }
+        if len(command.path) == 1
+        and command.visibility is not CommandVisibility.HIDDEN
     )
 
 
@@ -369,6 +422,94 @@ def public_command_help() -> tuple[tuple[str, str], ...]:
     """Return stable, concise command discovery rows for the REPL and tests."""
 
     return tuple((command.name, command.summary) for command in public_command_surface())
+
+
+def command_children(parent_id: str) -> tuple[CommandSurface, ...]:
+    """Return direct canonical children in deterministic registry order."""
+
+    return tuple(sorted(
+        (command for command in _COMMAND_SURFACE if command.parent_id == parent_id),
+        key=lambda command: command.order,
+    ))
+
+
+@dataclass(frozen=True)
+class ResolvedCommandRoute:
+    """One canonical command plus optional legacy spelling provenance."""
+
+    command: CommandSurface
+    matched_path: tuple[str, ...]
+    alias: CommandAlias | None = None
+
+    @property
+    def is_legacy(self) -> bool:
+        return (
+            self.alias is not None
+            or self.command.classification is CommandClassification.LEGACY_ALIAS
+        )
+
+
+def resolve_command_route(tokens: list[str]) -> ResolvedCommandRoute | None:
+    """Resolve the longest canonical or alias prefix from the one registry."""
+
+    matches: list[ResolvedCommandRoute] = []
+    for command in _COMMAND_SURFACE:
+        if tuple(tokens[:len(command.path)]) == command.path:
+            matches.append(ResolvedCommandRoute(command, command.path))
+        for alias in command.aliases:
+            if tuple(tokens[:len(alias.path)]) == alias.path:
+                matches.append(ResolvedCommandRoute(command, alias.path, alias))
+    if not matches:
+        return None
+    return max(matches, key=lambda route: len(route.matched_path))
+
+
+def _render_deprecation(route: ResolvedCommandRoute) -> str:
+    """Render one registry-owned legacy diagnostic for stderr."""
+
+    legacy = " ".join(route.matched_path)
+    replacement = route.command.canonical_replacement or route.command.path
+    behavior = (
+        " with its frozen behavior"
+        if route.command.frozen_handler
+        else " for compatibility"
+    )
+    first_line = (
+        route.alias.warning
+        if route.alias is not None and route.alias.warning is not None
+        else f"DEPRECATED: 'qraft {legacy}' remains supported{behavior}."
+    )
+    return f"{first_line}\nUse:\n  qraft {' '.join(replacement)}"
+
+
+def _route_parser_argv(
+    raw: list[str], *, domain_index: int,
+) -> tuple[list[str], ResolvedCommandRoute | None]:
+    """Adapt canonical/legacy spellings to an existing parser handler."""
+
+    route = resolve_command_route(raw[domain_index:])
+    if route is None or route.command.dispatch_path is None:
+        return raw, route
+    if (
+        route.alias is not None
+        and route.matched_path[:1] == ("run",)
+        and len(route.matched_path) == 2
+        and Path(route.matched_path[1]).exists()
+    ):
+        action = route.matched_path[1]
+        raise ExpectedUserError(
+            "AMBIGUOUS_RUN_TARGET",
+            f"'{action}' is both a legacy execution action and a filesystem target",
+            why="QRAFT will not guess between core execution and package management",
+            fix=(
+                f"use 'qraft run -- {action}' for the target, or use the canonical "
+                f"'qraft advanced execution {action}' route"
+            ),
+            next_command=f"qraft advanced execution {action} --help",
+        )
+    start = domain_index
+    end = start + len(route.matched_path)
+    return [*raw[:start], *route.command.dispatch_path, *raw[end:]], route
 
 
 def resolve_cli_output_policy(
@@ -488,7 +629,12 @@ def _expected_user_error(
 def _enforce_input_policy(args: argparse.Namespace, policy: CliOutputPolicy) -> None:
     """Wire command-spec input policy without introducing prompts in Phase 2."""
 
-    command = command_spec((args.domain,))
+    command_id = getattr(args, "_command_spec_id", None)
+    command = (
+        _COMMAND_SPECS_BY_ID[command_id]
+        if command_id is not None
+        else command_spec((args.domain,))
+    )
     if policy.no_input and command.input_policy is not CommandInputPolicy.NEVER_PROMPT:
         raise ExpectedUserError(
             "INTERACTIVE_INPUT_DISABLED",
@@ -541,6 +687,18 @@ def build_parser() -> argparse.ArgumentParser:
         metavar=public_command_metavar(),
     )
 
+    def add_canonical_group(group_path: tuple[str, ...]) -> None:
+        group_spec = command_spec(group_path)
+        group = sub.add_parser(group_spec.name, help=group_spec.summary)
+        children = group.add_subparsers(dest="canonical_child", required=True)
+        for child_spec in command_children(group_spec.id):
+            if len(child_spec.path) == len(group_path) + 1:
+                child = children.add_parser(child_spec.name, help=child_spec.summary)
+                child.add_argument("canonical_args", nargs=argparse.REMAINDER)
+
+    for group_path in (("setup",), ("inspect",), ("advanced",)):
+        add_canonical_group(group_path)
+
     def add_resolution_options(command: argparse.ArgumentParser) -> None:
         command.add_argument("--profile")
         command.add_argument("--project-config", type=Path)
@@ -554,9 +712,9 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("--walltime-seconds", type=int)
         command.add_argument("--json", action="store_true")
 
-    env = sub.add_parser("env", help=command_spec(("env",)).summary)
+    env = sub.add_parser("env", help=command_spec(("setup", "env")).summary)
     add_resolution_options(env)
-    config = sub.add_parser("config", help=command_spec(("config",)).summary)
+    config = sub.add_parser("config", help=command_spec(("setup", "config")).summary)
     add_resolution_options(config)
     init = sub.add_parser("init", help=command_spec(("init",)).summary)
     init.add_argument("path", nargs="?", type=Path, default=Path("campaign.yaml"))
@@ -564,11 +722,11 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument("--json", action="store_true")
     validate = sub.add_parser("validate", help=command_spec(("validate",)).summary)
     _add_single_fdf_arguments(validate, execute=False)
-    render = sub.add_parser("render", help=command_spec(("render",)).summary)
+    render = sub.add_parser("render", help=command_spec(("advanced", "campaign", "render")).summary)
     render.add_argument("fdf", type=Path)
     render.add_argument("--output", type=Path, default=Path(".qraft-render"))
     render.add_argument("--json", action="store_true")
-    profiles = sub.add_parser("profile", help=command_spec(("profile",)).summary)
+    profiles = sub.add_parser("profile", help=command_spec(("setup", "profile")).summary)
     profile_sub = profiles.add_subparsers(dest="action", required=True)
     profile_sub.add_parser("list").add_argument("--json", action="store_true")
     for action in ("show", "validate"):
@@ -592,13 +750,13 @@ def build_parser() -> argparse.ArgumentParser:
     resume.add_argument("--json", action="store_true")
 
     single_plan = sub.add_parser(
-        "plan", help=command_spec(("plan",)).summary
+        "plan", help=command_spec(("inspect", "plan")).summary
     )
     _add_single_fdf_arguments(single_plan, execute=False)
     single_run = sub.add_parser("_fdf-run", prog="qraft run", help=command_spec(("_fdf-run",)).summary)
     _add_single_fdf_arguments(single_run, execute=True)
 
-    project = sub.add_parser("project", help=command_spec(("project",)).summary)
+    project = sub.add_parser("project", help=command_spec(("advanced", "project")).summary)
     project_sub = project.add_subparsers(dest="action", required=True)
     project_init = project_sub.add_parser(
         "init",
@@ -622,13 +780,13 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("path", type=Path)
         command.add_argument("--json", action="store_true")
 
-    fdf = sub.add_parser("fdf", help=command_spec(("fdf",)).summary)
+    fdf = sub.add_parser("fdf", help=command_spec(("inspect", "fdf")).summary)
     fdf_sub = fdf.add_subparsers(dest="action", required=True)
     fdf_inspect = fdf_sub.add_parser("inspect")
     fdf_inspect.add_argument("path", type=Path)
     fdf_inspect.add_argument("--json", action="store_true")
 
-    inp = sub.add_parser("input", help=command_spec(("input",)).summary)
+    inp = sub.add_parser("input", help=command_spec(("inspect", "input")).summary)
     inp_sub = inp.add_subparsers(dest="action", required=True)
     inp_validate = inp_sub.add_parser("validate")
     inp_validate.add_argument("path", type=Path)
@@ -674,14 +832,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     environment_check.add_argument("--json", action="store_true")
 
-    pseudo = sub.add_parser("pseudo", help=command_spec(("pseudo",)).summary)
+    pseudo = sub.add_parser("pseudo", help=command_spec(("inspect", "pseudo")).summary)
     pseudo_sub = pseudo.add_subparsers(dest="action", required=True)
     pseudo_verify = pseudo_sub.add_parser("verify")
     pseudo_verify.add_argument("manifest", type=Path)
     pseudo_verify.add_argument("--species", nargs="*")
     pseudo_verify.add_argument("--json", action="store_true")
 
-    campaign = sub.add_parser("campaign", help=command_spec(("campaign",)).summary)
+    campaign = sub.add_parser("campaign", help=command_spec(("advanced", "campaign")).summary)
     campaign_sub = campaign.add_subparsers(dest="action", required=True)
     create = campaign_sub.add_parser("create")
     create.add_argument("--project", type=Path, required=True)
@@ -709,7 +867,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     watch.add_argument("--json", action="store_true")
 
-    workflow = sub.add_parser("workflow", help=command_spec(("workflow",)).summary)
+    workflow = sub.add_parser("workflow", help=command_spec(("advanced", "workflow")).summary)
     workflow_sub = workflow.add_subparsers(dest="action", required=True)
     workflow_recipes = workflow_sub.add_parser(
         "recipes", help="list registered workflow recipes"
@@ -772,7 +930,7 @@ def build_parser() -> argparse.ArgumentParser:
     workflow_compile.add_argument("--dry-run", action="store_true")
     workflow_compile.add_argument("--json", action="store_true")
 
-    scientific = sub.add_parser("scientific", help=command_spec(("scientific",)).summary)
+    scientific = sub.add_parser("scientific", help=command_spec(("advanced", "scientific")).summary)
     scientific_sub = scientific.add_subparsers(dest="action", required=True)
     scientific_decide = scientific_sub.add_parser(
         "decide", help="record APPROVE or REJECT for reviewed convergence evidence"
@@ -922,7 +1080,7 @@ def build_parser() -> argparse.ArgumentParser:
     example_import.add_argument("--output", type=Path, required=True); example_import.add_argument("--dry-run", action="store_true")
     example_import.add_argument("--json", action="store_true")
 
-    remote = sub.add_parser("remote", help=command_spec(("remote",)).summary)
+    remote = sub.add_parser("remote", help=command_spec(("advanced", "remote")).summary)
     remote_sub = remote.add_subparsers(dest="action", required=True)
     package = remote_sub.add_parser("package")
     package.add_argument("campaign"); package.add_argument("--output", type=Path)
@@ -954,9 +1112,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="optional explicit destination for an accepted external cluster profile",
     )
     env_import.add_argument("--dry-run", action="store_true"); env_import.add_argument("--json", action="store_true")
-    expected_paths = {
-        command.path for command in command_surface() if len(command.path) == 1
+    expected_roots = {
+        command.path[0]
+        for command in command_surface()
+        if len(command.path) == 1
+    } | {
+        command.dispatch_path[0]
+        for command in command_surface()
+        if command.dispatch_path is not None
     }
+    expected_paths = {(name,) for name in expected_roots}
     actual_paths = {(name,) for name in sub.choices}
     if actual_paths != expected_paths:
         missing = ", ".join(" ".join(path) for path in sorted(expected_paths - actual_paths))
@@ -984,6 +1149,8 @@ def main(argv: list[str] | None = None) -> int:
         from .repl import run_repl
 
         return run_repl()
+    user_raw = list(raw)
+    legacy_invocation = shlex.join(("qraft", *user_raw))
     legacy_run_actions = {
         "prepare", "candidates", "discover", "resources", "placement",
         "snapshot-import",
@@ -998,16 +1165,35 @@ def main(argv: list[str] | None = None) -> int:
         if token.startswith(("--workspace=", "--examples-root=")):
             domain_index += 1
             continue
+        if token == "--json":
+            domain_index += 1
+            continue
         break
+    try:
+        raw, route = _route_parser_argv(raw, domain_index=domain_index)
+    except ExpectedUserError as exc:
+        _emit_expected_user_error(exc, as_json=policy.json_requested)
+        return 2
+    if route is not None and route.is_legacy:
+        print(_render_deprecation(route), file=sys.stderr)
+    if route is None:
+        invocation = legacy_invocation
+    else:
+        canonical_raw = [
+            *user_raw[:domain_index],
+            *route.command.path,
+            *user_raw[domain_index + len(route.matched_path):],
+        ]
+        invocation = shlex.join(("qraft", *canonical_raw))
     if domain_index < len(raw) and raw[domain_index] == "run":
         following = raw[domain_index + 1] if domain_index + 1 < len(raw) else None
         if (
             following is None
             or following in {"-h", "--help"}
+            or following == "--"
             or (following not in legacy_run_actions and not following.startswith("-"))
         ):
             raw[domain_index] = "_fdf-run"
-    invocation = shlex.join(("qraft", *raw))
     try:
         args = build_parser().parse_args(raw)
     except SystemExit as exc:
@@ -1027,6 +1213,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         args.json = bool(getattr(args, "json", False) or args._global_json)
         args._invocation = invocation
+        args._legacy_invocation = legacy_invocation if route and route.is_legacy else None
+        args._command_spec_id = route.command.id if route is not None else None
         _enforce_input_policy(args, policy)
         return _dispatch(args)
     except ExpectedUserError as exc:
