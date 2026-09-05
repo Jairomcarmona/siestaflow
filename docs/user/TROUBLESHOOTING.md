@@ -16,7 +16,7 @@
   SCF failure is not repaired automatically.
 - Resume: run from the project containing `.qraft-runs/session.json`, or pass
   `--runs-root`.
-- Output location: `qraft status` and REPL `paths`/`attempts` show exact paths.
+- Output location: `qraft status` shows exact paths.
 
 `qraft env` is read-only and is the first diagnostic command.
 

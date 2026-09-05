@@ -54,7 +54,7 @@ def test_public_surface_has_one_visible_help_authority() -> None:
 
 def test_phase3_public_surface_introduces_canonical_groups() -> None:
     assert tuple(command.name for command in public_command_surface()) == (
-        "init", "run", "status", "resume", "results", "examples",
+        "init", "check", "run", "status", "resume", "results", "examples",
         "setup", "inspect", "advanced",
     )
     assert {

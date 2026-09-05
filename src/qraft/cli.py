@@ -70,6 +70,7 @@ from .validation_render import render_validation_report
 from .workflow_preflight import WorkflowPreflightValidator
 from .workflow_authoring import WorkflowAuthoringService
 from .scientific_approvals import create_approved_profile, create_decision
+from .target_classifier import TargetClassificationError, classify_target
 from .application import (
     ApplicationConfiguration, QraftApplication, render_config, render_plan,
     render_preflight,
@@ -239,26 +240,27 @@ def _alias(*path: str, behavior_mode: str = "DELEGATE") -> tuple[CommandAlias, .
 # together here. Canonical routing and deprecation rendering both consume this
 # registry; handlers below remain unchanged.
 _COMMAND_SURFACE = (
-    _command("qraft.init", ("init",), CommandClassification.CORE, CommandVisibility.PRIMARY, 10, "create a minimal editable CampaignSpec template", usage="qraft init [PATH] [--force] [--json]", handler_id="init", dispatch_path=("init",), json_supported=True, side_effect=CommandSideEffect.WRITE_LOCAL, option_ids=("output.json",)),
-    _command("qraft.run", ("run",), CommandClassification.CORE, CommandVisibility.PRIMARY, 20, "execute one FDF or CampaignSpec target", usage="qraft run TARGET [execution options] [--json]", handler_id="run-target", dispatch_path=("run",), json_supported=True, side_effect=CommandSideEffect.EXECUTE, option_ids=("execution.profile", "execution.resolution", "execution.runs-root", "output.json")),
-    _command("qraft.status", ("status",), CommandClassification.CORE, CommandVisibility.PRIMARY, 30, "inspect single-FDF campaign state", usage="qraft status [--runs-root PATH] [--json]", handler_id="status", dispatch_path=("status",), json_supported=True, side_effect=CommandSideEffect.READ_ONLY, option_ids=("execution.runs-root", "output.json")),
-    _command("qraft.resume", ("resume",), CommandClassification.CORE, CommandVisibility.PRIMARY, 40, "resume the saved single-FDF session", usage="qraft resume [FDF] [execution options] [--json]", handler_id="resume", dispatch_path=("resume",), json_supported=True, side_effect=CommandSideEffect.EXECUTE, option_ids=("execution.profile", "execution.runs-root", "output.json")),
-    _command("qraft.results", ("results",), CommandClassification.CORE, CommandVisibility.PRIMARY, 50, "export verified SIESTA result tables", usage="qraft results {dos-pdos,bands,optics} ...", handler_id="results", dispatch_path=("results",), json_supported=False, side_effect=CommandSideEffect.WRITE_LOCAL),
-    _command("qraft.examples", ("examples",), CommandClassification.CORE, CommandVisibility.PRIMARY, 60, "inspect and package curated examples", usage="qraft examples ACTION ...", handler_id="examples", dispatch_path=("examples",), json_supported=False, side_effect=CommandSideEffect.MIXED),
+    _command("qraft.init", ("init",), CommandClassification.CORE, CommandVisibility.PRIMARY, 10, "Create an editable campaign file", usage="qraft init [PATH] [--force] [--json]", handler_id="init", dispatch_path=("init",), json_supported=True, side_effect=CommandSideEffect.WRITE_LOCAL, option_ids=("output.json",)),
+    _command("qraft.check", ("check",), CommandClassification.CORE, CommandVisibility.PRIMARY, 20, "Check whether a target is ready to run", usage="qraft check TARGET [--json]", handler_id="check.phase4-guard", dispatch_path=("check",), json_supported=True, side_effect=CommandSideEffect.READ_ONLY, option_ids=("output.json",)),
+    _command("qraft.run", ("run",), CommandClassification.CORE, CommandVisibility.PRIMARY, 30, "Run a checked campaign or calculation", usage="qraft run TARGET [execution options] [--json]", handler_id="run-target", dispatch_path=("run",), json_supported=True, side_effect=CommandSideEffect.EXECUTE, option_ids=("execution.profile", "execution.resolution", "execution.runs-root", "output.json")),
+    _command("qraft.status", ("status",), CommandClassification.CORE, CommandVisibility.PRIMARY, 40, "Show progress and the next available action", usage="qraft status [--runs-root PATH] [--json]", handler_id="status", dispatch_path=("status",), json_supported=True, side_effect=CommandSideEffect.READ_ONLY, option_ids=("execution.runs-root", "output.json")),
+    _command("qraft.resume", ("resume",), CommandClassification.CORE, CommandVisibility.PRIMARY, 50, "Continue using saved recovery state", usage="qraft resume [FDF] [execution options] [--json]", handler_id="resume", dispatch_path=("resume",), json_supported=True, side_effect=CommandSideEffect.EXECUTE, option_ids=("execution.profile", "execution.runs-root", "output.json")),
+    _command("qraft.results", ("results",), CommandClassification.CORE, CommandVisibility.PRIMARY, 60, "Find verified outputs and export supported tables", usage="qraft results {dos-pdos,bands,optics} ...", handler_id="results", dispatch_path=("results",), json_supported=False, side_effect=CommandSideEffect.WRITE_LOCAL),
+    _command("qraft.examples", ("examples",), CommandClassification.CORE, CommandVisibility.PRIMARY, 70, "Show copyable workflows", usage="qraft examples ACTION ...", handler_id="examples", dispatch_path=("examples",), json_supported=False, side_effect=CommandSideEffect.MIXED),
 
-    _command("qraft.setup", ("setup",), CommandClassification.GROUPED_PUBLIC, CommandVisibility.GROUPED, 70, "configure execution environments and profiles", handler_id="group.setup", json_supported=False, side_effect=CommandSideEffect.READ_ONLY),
+    _command("qraft.setup", ("setup",), CommandClassification.GROUPED_PUBLIC, CommandVisibility.GROUPED, 80, "configure execution environments and profiles", handler_id="group.setup", json_supported=False, side_effect=CommandSideEffect.READ_ONLY),
     _command("qraft.setup.env", ("setup", "env"), CommandClassification.GROUPED_PUBLIC, CommandVisibility.GROUPED, 10, "inspect installed execution capabilities", parent_id="qraft.setup", usage="qraft setup env [execution options] [--json]", aliases=_alias("env"), handler_id="env", dispatch_path=("env",), json_supported=True, side_effect=CommandSideEffect.READ_ONLY, option_ids=("execution.profile", "execution.resolution", "output.json")),
     _command("qraft.setup.config", ("setup", "config"), CommandClassification.GROUPED_PUBLIC, CommandVisibility.GROUPED, 20, "show effective execution configuration", parent_id="qraft.setup", usage="qraft setup config [execution options] [--json]", aliases=_alias("config"), handler_id="config", dispatch_path=("config",), json_supported=True, side_effect=CommandSideEffect.READ_ONLY, option_ids=("execution.profile", "execution.resolution", "output.json")),
     _command("qraft.setup.profile", ("setup", "profile"), CommandClassification.GROUPED_PUBLIC, CommandVisibility.GROUPED, 30, "list, show or validate execution profiles", parent_id="qraft.setup", usage="qraft setup profile {list,show,validate} ...", aliases=_alias("profile"), handler_id="profile", dispatch_path=("profile",), json_supported=True, side_effect=CommandSideEffect.READ_ONLY, option_ids=("output.json",)),
 
-    _command("qraft.inspect", ("inspect",), CommandClassification.GROUPED_PUBLIC, CommandVisibility.GROUPED, 80, "inspect inputs, rules, pseudopotentials, and plans", aliases=_alias("input"), handler_id="group.inspect", json_supported=False, side_effect=CommandSideEffect.READ_ONLY),
+    _command("qraft.inspect", ("inspect",), CommandClassification.GROUPED_PUBLIC, CommandVisibility.GROUPED, 90, "inspect inputs, rules, pseudopotentials, and plans", aliases=_alias("input"), handler_id="group.inspect", json_supported=False, side_effect=CommandSideEffect.READ_ONLY),
     _command("qraft.inspect.fdf", ("inspect", "fdf"), CommandClassification.GROUPED_PUBLIC, CommandVisibility.GROUPED, 10, "inspect a parsed SIESTA FDF", parent_id="qraft.inspect", usage="qraft inspect fdf PATH [--json]", aliases=(CommandAlias(("fdf",)), CommandAlias(("fdf", "inspect"))), handler_id="fdf", dispatch_path=("fdf", "inspect"), json_supported=True, side_effect=CommandSideEffect.READ_ONLY),
     _command("qraft.inspect.input", ("inspect", "input"), CommandClassification.GROUPED_PUBLIC, CommandVisibility.GROUPED, 20, "validate a SIESTA input", parent_id="qraft.inspect", usage="qraft inspect input PATH [--json]", aliases=_alias("input", "validate"), handler_id="input.validate", dispatch_path=("input", "validate"), json_supported=True, side_effect=CommandSideEffect.READ_ONLY),
     _command("qraft.inspect.rules", ("inspect", "rules"), CommandClassification.GROUPED_PUBLIC, CommandVisibility.GROUPED, 30, "list versioned SIESTA validation rules", parent_id="qraft.inspect", usage="qraft inspect rules [--json]", aliases=_alias("input", "rules"), handler_id="input.rules", dispatch_path=("input", "rules"), json_supported=True, side_effect=CommandSideEffect.READ_ONLY),
     _command("qraft.inspect.pseudo", ("inspect", "pseudo"), CommandClassification.GROUPED_PUBLIC, CommandVisibility.GROUPED, 40, "verify a pseudopotential manifest", parent_id="qraft.inspect", usage="qraft inspect pseudo MANIFEST [--json]", aliases=(CommandAlias(("pseudo",)), CommandAlias(("pseudo", "verify"))), handler_id="pseudo", dispatch_path=("pseudo", "verify"), json_supported=True, side_effect=CommandSideEffect.READ_ONLY),
     _command("qraft.inspect.plan", ("inspect", "plan"), CommandClassification.GROUPED_PUBLIC, CommandVisibility.GROUPED, 50, "resolve a non-submitting execution plan", parent_id="qraft.inspect", usage="qraft inspect plan TARGET [execution options] [--json]", aliases=_alias("plan"), handler_id="plan", dispatch_path=("plan",), json_supported=True, side_effect=CommandSideEffect.READ_ONLY, option_ids=("execution.profile", "execution.resolution", "output.json")),
 
-    _command("qraft.advanced", ("advanced",), CommandClassification.ADVANCED, CommandVisibility.ADVANCED, 90, "discover architecture-facing workflows", handler_id="group.advanced", json_supported=False, side_effect=CommandSideEffect.MIXED),
+    _command("qraft.advanced", ("advanced",), CommandClassification.ADVANCED, CommandVisibility.ADVANCED, 100, "discover architecture-facing workflows", handler_id="group.advanced", json_supported=False, side_effect=CommandSideEffect.MIXED),
     _command("qraft.advanced.project", ("advanced", "project"), CommandClassification.ADVANCED, CommandVisibility.ADVANCED, 10, "prepare and inspect reproducible project packages", parent_id="qraft.advanced", aliases=_alias("project"), handler_id="project", dispatch_path=("project",), json_supported=True, side_effect=CommandSideEffect.MIXED),
     _command("qraft.advanced.campaign", ("advanced", "campaign"), CommandClassification.ADVANCED, CommandVisibility.ADVANCED, 20, "manage allocation-controller campaigns", parent_id="qraft.advanced", aliases=_alias("campaign"), handler_id="campaign", dispatch_path=("campaign",), json_supported=True, side_effect=CommandSideEffect.MIXED),
     _command("qraft.advanced.campaign.render", ("advanced", "campaign", "render"), CommandClassification.ADVANCED, CommandVisibility.ADVANCED, 25, "materialize CampaignSpec FDF variants without execution", parent_id="qraft.advanced.campaign", aliases=_alias("render"), handler_id="render", dispatch_path=("render",), json_supported=True, side_effect=CommandSideEffect.WRITE_LOCAL),
@@ -352,6 +354,56 @@ _COMMAND_ALIAS_OWNERS = {
     for alias in command.aliases
 }
 _COMMAND_OPTION_SPECS_BY_ID = {option.id: option for option in _SHARED_COMMAND_OPTIONS}
+
+
+_TOP_LEVEL_ORIENTATION_LAYOUT = (
+    ("GET STARTED", (
+        ("qraft.init", "[PATH]"),
+        ("qraft.check", "TARGET"),
+        ("qraft.run", "TARGET"),
+    )),
+    ("MONITOR / CONTINUE", (
+        ("qraft.status", "[TARGET]"),
+        ("qraft.resume", "[TARGET]"),
+    )),
+    ("RESULTS", (("qraft.results", "[TARGET]"),)),
+    ("LEARN", (("qraft.examples", "[TOPIC]"),)),
+)
+
+
+def render_top_level_orientation() -> str:
+    """Render the frozen V2 first screen from command-spec identities."""
+
+    lines = ["QRAFT — run reproducible scientific campaigns"]
+    for heading, entries in _TOP_LEVEL_ORIENTATION_LAYOUT:
+        lines.extend(("", heading))
+        for command_id, operand in entries:
+            command = _COMMAND_SPECS_BY_ID[command_id]
+            label = f"{command.name} {operand}".rstrip()
+            lines.append(f"  {label:<18}{command.summary}")
+
+    command_name = lambda command_id: _COMMAND_SPECS_BY_ID[command_id].name
+    lines.extend((
+        "",
+        "Complete workflow:",
+        f"  qraft {command_name('qraft.init')} campaign.yaml",
+        "  # edit campaign.yaml",
+        f"  qraft {command_name('qraft.check')} campaign.yaml",
+        f"  qraft {command_name('qraft.run')} campaign.yaml",
+        f"  qraft {command_name('qraft.status')}",
+        f"  qraft {command_name('qraft.results')}",
+        "",
+        "Setup and diagnostics:",
+        f"  qraft {command_name('qraft.setup')} --help",
+        f"  qraft {command_name('qraft.inspect')} --help",
+        "",
+        "Advanced workflows and compatibility:",
+        f"  qraft {command_name('qraft.advanced')} --help",
+        "  qraft help migration",
+        "",
+        "Use 'qraft COMMAND --help' for examples and options.",
+    ))
+    return "\n".join(lines)
 
 
 def shared_command_options() -> tuple[CommandOption, ...]:
@@ -584,6 +636,15 @@ def _expected_user_error(
     """Adapt the established CLI-boundary user failures without schema changes."""
 
     message = str(exc)
+    if isinstance(exc, TargetClassificationError):
+        return ExpectedUserError(
+            exc.code,
+            message,
+            expected=exc.expected,
+            why=exc.why,
+            fix=exc.fix,
+            next_command=invocation,
+        )
     if isinstance(exc, FileNotFoundError) or "does not exist" in message:
         return ExpectedUserError(
             "INPUT_NOT_FOUND",
@@ -720,6 +781,9 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument("path", nargs="?", type=Path, default=Path("campaign.yaml"))
     init.add_argument("--force", action="store_true", help="replace an existing template")
     init.add_argument("--json", action="store_true")
+    check = sub.add_parser("check", help=command_spec(("check",)).summary)
+    check.add_argument("target", type=Path)
+    check.add_argument("--json", action="store_true")
     validate = sub.add_parser("validate", help=command_spec(("validate",)).summary)
     _add_single_fdf_arguments(validate, execute=False)
     render = sub.add_parser("render", help=command_spec(("advanced", "campaign", "render")).summary)
@@ -1145,10 +1209,9 @@ def main(argv: list[str] | None = None) -> int:
     raw = list(sys.argv[1:] if argv is None else argv)
     policy = resolve_cli_output_policy(raw)
     raw = _strip_global_policy_flags(raw)
-    if not raw:
-        from .repl import run_repl
-
-        return run_repl()
+    if not raw or raw in (["--help"], ["-h"]):
+        print(render_top_level_orientation())
+        return 0
     user_raw = list(raw)
     legacy_invocation = shlex.join(("qraft", *user_raw))
     legacy_run_actions = {
@@ -1239,6 +1302,18 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _dispatch(args: argparse.Namespace) -> int:
+    if args.domain == "check":
+        classification = classify_target(args.target)
+        raise ExpectedUserError(
+            "CHECK_NOT_IMPLEMENTED_PHASE_4",
+            (
+                "readiness aggregation is not implemented in Phase 4 "
+                f"(classified target: {classification.kind.value})"
+            ),
+            why="Phase 4 exposes target discovery but does not evaluate readiness",
+            fix="use the existing validation or planning command until Phase 5",
+            next_command="qraft check TARGET",
+        )
     if args.domain == "init":
         path = args.path.resolve()
         if path.exists() and not args.force:
@@ -1250,14 +1325,14 @@ def _dispatch(args: argparse.Namespace) -> int:
         result = {
             "status": "CREATED",
             "path": str(path),
-            "next_step": f"edit {path.name}, then run: qraft validate {path}",
+            "next_step": f"edit {path.name}, then run: qraft check {path}",
         }
         if args.json:
             _emit(result, True)
         else:
             print(f"Created campaign template: {path}")
-            print("Edit the FDF and pseudopotential paths, then validate it:")
-            print(f"  qraft validate {path}")
+            print("Edit the FDF and pseudopotential paths, then check it:")
+            print(f"  qraft check {path}")
         return 0
     if args.domain in {"env", "config"}:
         overrides = {

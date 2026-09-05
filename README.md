@@ -44,9 +44,9 @@ qraft status
 qraft resume
 ```
 
-Running `qraft` without arguments opens the interactive `qraft>` shell. Profiles
-live in `.qraft/profiles/` in a project or `~/.config/qraft/profiles/` for a
-user; no Python editing is required.
+Running `qraft` without arguments prints the task-oriented V2 command guide and
+exits without prompting. Profiles live in `.qraft/profiles/` in a project or
+`~/.config/qraft/profiles/` for a user; no Python editing is required.
 
 The authoritative execution record is Event/State/Evidence. `qraft.out` is the
 professional human-readable campaign view and CSV files are derived views.

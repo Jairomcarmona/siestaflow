@@ -1,6 +1,9 @@
-# Interactive shell
+# Internal compatibility shell
 
-Run `qraft` with no arguments:
+The legacy shell remains in the source for compatibility testing, but it has
+no public CLI entry point. Running `qraft` with no arguments now prints the V2
+task orientation and exits. The historical command language retained
+internally is:
 
 ```text
 qraft> env

@@ -1,15 +1,16 @@
 # Referencia de CLI
 
-`qraft --help` es la autoridad de la versión instalada. Cada comando acepta
-`qraft COMANDO --help`; use `qraft` y luego `cli` para ver la misma superficie
-desde la interfaz interactiva. Los errores de argumentos y preflight usan una
-salida distinta de cero. `--json` está disponible donde se indica.
+`qraft` y `qraft --help` muestran la misma orientación de la versión instalada
+y terminan sin abrir un prompt. Cada comando acepta `qraft COMANDO --help`.
+Los errores de argumentos y preflight usan una salida distinta de cero.
+`--json` está disponible donde se indica.
 
 ## Comandos principales
 
 | Comando | Propósito | Uso habitual |
 |---|---|---|
 | `init [PATH]` | Crea un template editable de CampaignSpec. | `qraft init campaign.yaml` |
+| `check TARGET` | Clasifica un target; la agregación de readiness se incorpora en la fase siguiente. | `qraft check campaign.yaml` |
 | `env` | Inspecciona capacidades instaladas de ejecución. | `qraft env --profile local` |
 | `config` | Muestra la configuración efectiva y su procedencia. | `qraft config --profile local` |
 | `profile` | Lista, muestra o valida perfiles de ejecución. | `qraft profile list` |

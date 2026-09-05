@@ -5,6 +5,9 @@
 ```text
 qraft --version        installed package version
 qraft --help           command discovery
+qraft                  same task-oriented command discovery
+qraft init [PATH]      create an editable campaign file
+qraft check TARGET     classify a target (readiness arrives in Phase 5)
 qraft env              inspect external capabilities
 qraft config           show effective configuration/provenance
 qraft profile ...      list/show/validate execution profiles
@@ -13,7 +16,6 @@ qraft plan FDF         resolve ScientificIdentity, ExecutionSpec and DAG
 qraft run FDF          preflight and execute single_fdf
 qraft status           read single_fdf state
 qraft resume           recover the saved single_fdf session
-qraft                  interactive shell
 ```
 
 Use `COMMAND --help` for all options. Paths may be absolute or relative and

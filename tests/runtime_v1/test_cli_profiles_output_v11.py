@@ -143,11 +143,16 @@ def test_launcher_registry_is_extensible_and_openmpi_builds_coordinated_command(
     assert scheduler_registry.require("slurm").describe().startswith("SLURM")
 
 
-def test_zero_argument_cli_enters_repl(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_zero_argument_cli_prints_orientation_without_repl(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
     entered: list[bool] = []
     monkeypatch.setattr("qraft.repl.run_repl", lambda: entered.append(True) or 0)
     assert main([]) == 0
-    assert entered == [True]
+    captured = capsys.readouterr()
+    assert "QRAFT — run reproducible scientific campaigns" in captured.out
+    assert captured.err == ""
+    assert entered == []
 
 
 def test_cli_and_repl_use_the_same_resolved_backend_and_plan_never_submits(
