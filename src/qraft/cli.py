@@ -2223,8 +2223,8 @@ _CAMPAIGN_TEMPLATE = """# QRAFT CampaignSpec template
 #
 # Edit the FDF and pseudopotential manifest paths below. Runtime and placement
 # stay outside this scientific campaign: use a profile or CLI options, e.g.
-#   qraft validate campaign.yaml --profile local
-#   qraft validate campaign.yaml --siesta /path/to/siesta
+#   qraft check campaign.yaml --profile local
+#   qraft check campaign.yaml --siesta /path/to/siesta
 schema_version: "1.0"
 campaign_id: my-siesta-campaign
 engine: siesta

@@ -11,9 +11,9 @@ qraft init campaign.yaml
 Edita `campaign.yaml`: cambia `system.fdf` por tu FDF. Si tu FDF ya resuelve sus pseudopotenciales desde su propio directorio, elimina la línea de ejemplo `pseudo_manifest: pseudos/manifest.yaml`; copia allí los pseudos que el FDF requiere. Si usas un manifiesto de pseudos de tu proyecto, sustituye esa ruta por el manifiesto válido. Después:
 
 ```bash
-qraft validate campaign.yaml --siesta /ruta/a/siesta
-qraft plan campaign.yaml --partition local --launcher openmpi --siesta /ruta/a/siesta
-qraft render campaign.yaml --output rendered
+qraft check campaign.yaml --siesta /ruta/a/siesta
+qraft inspect plan campaign.yaml --partition local --launcher openmpi --siesta /ruta/a/siesta
+qraft advanced campaign render campaign.yaml --output rendered
 qraft run campaign.yaml --runs-root .qraft-runs \
   --partition local --nodes 1 --np 4 --cpus-per-rank 1 \
   --launcher openmpi --siesta /ruta/a/siesta

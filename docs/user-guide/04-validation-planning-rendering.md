@@ -3,9 +3,9 @@
 Estos tres pasos no sustituyen a `run`:
 
 ```bash
-qraft validate campaign.yaml --siesta /ruta/a/siesta
-qraft plan campaign.yaml --partition local --launcher openmpi --siesta /ruta/a/siesta
-qraft render campaign.yaml --output rendered
+qraft check campaign.yaml --siesta /ruta/a/siesta
+qraft inspect plan campaign.yaml --partition local --launcher openmpi --siesta /ruta/a/siesta
+qraft advanced campaign render campaign.yaml --output rendered
 ```
 
 - **`validate`** comprueba la campaña, el FDF y la evidencia de entrada disponible. Un resultado `BLOCKED` debe corregirse antes de ejecutar.

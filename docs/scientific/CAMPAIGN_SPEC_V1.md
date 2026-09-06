@@ -35,9 +35,9 @@ criterion:
 Inspect before execution:
 
 ```bash
-qraft validate campaign.yaml
-qraft plan campaign.yaml --profile local-wsl
-qraft render campaign.yaml --output rendered
+qraft check campaign.yaml
+qraft inspect plan campaign.yaml --profile local-wsl
+qraft advanced campaign render campaign.yaml --output rendered
 qraft run campaign.yaml --profile local-wsl --runs-root runs
 ```
 

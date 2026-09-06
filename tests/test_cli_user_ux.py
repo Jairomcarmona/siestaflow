@@ -34,7 +34,7 @@ def test_init_creates_editable_schema_valid_template(tmp_path: Path, capsys: pyt
     assert main(["init", str(target)]) == 0
     text = target.read_text(encoding="utf-8")
     assert "pseudo_manifest: pseudos/manifest.yaml" in text
-    assert "qraft validate campaign.yaml --siesta /path/to/siesta" in text
+    assert "qraft check campaign.yaml --siesta /path/to/siesta" in text
     assert "relaxation:" in text and "enabled: false" in text
     assert "Created campaign template:" in capsys.readouterr().out
     assert CampaignSpec.load(target).campaign_id == "my-siesta-campaign"

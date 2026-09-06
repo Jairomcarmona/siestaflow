@@ -4,10 +4,10 @@ This route performs no hidden submission and requires no Python editing.
 
 ```bash
 qraft --version
-qraft env
-qraft config --profile local
-qraft validate calc.fdf --profile local
-qraft plan calc.fdf --profile local
+qraft setup env
+qraft setup config --profile local
+qraft check calc.fdf --profile local
+qraft inspect plan calc.fdf --profile local
 qraft run calc.fdf --profile local
 qraft status
 qraft resume

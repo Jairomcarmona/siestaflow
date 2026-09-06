@@ -8,11 +8,11 @@ qraft --help           command discovery
 qraft                  same task-oriented command discovery
 qraft init [PATH]      create an editable campaign file
 qraft check TARGET     classify a target (readiness arrives in Phase 5)
-qraft env              inspect external capabilities
-qraft config           show effective configuration/provenance
-qraft profile ...      list/show/validate execution profiles
-qraft validate FDF     non-executing calculation preflight
-qraft plan FDF         resolve ScientificIdentity, ExecutionSpec and DAG
+qraft setup env         inspect external capabilities
+qraft setup config      show effective configuration/provenance
+qraft setup profile ... list/show/validate execution profiles
+qraft check TARGET      evaluate readiness without execution
+qraft inspect plan FDF  resolve ScientificIdentity, ExecutionSpec and DAG
 qraft run FDF          preflight and execute single_fdf
 qraft status           read single_fdf state
 qraft resume           recover the saved single_fdf session

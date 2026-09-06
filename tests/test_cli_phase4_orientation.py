@@ -144,7 +144,7 @@ def test_init_guidance_points_to_check_without_changing_template(
     assert payload["status"] == "CREATED"
     assert payload["path"] == str(target.resolve())
     assert "qraft check" in payload["next_step"]
-    assert "qraft validate campaign.yaml --profile local" in target.read_text(
+    assert "qraft check campaign.yaml --profile local" in target.read_text(
         encoding="utf-8"
     )
     assert captured.err == ""

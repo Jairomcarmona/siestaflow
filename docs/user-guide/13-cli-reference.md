@@ -11,12 +11,12 @@ Los errores de argumentos y preflight usan una salida distinta de cero.
 |---|---|---|
 | `init [PATH]` | Crea un template editable de CampaignSpec. | `qraft init campaign.yaml` |
 | `check TARGET` | Clasifica un target; la agregación de readiness se incorpora en la fase siguiente. | `qraft check campaign.yaml` |
-| `env` | Inspecciona capacidades instaladas de ejecución. | `qraft env --profile local` |
-| `config` | Muestra la configuración efectiva y su procedencia. | `qraft config --profile local` |
-| `profile` | Lista, muestra o valida perfiles de ejecución. | `qraft profile list` |
-| `validate FDF` | Valida el FDF y ejecuta el preflight no ejecutable. | `qraft validate calc.fdf --siesta /ruta/siesta` |
-| `plan FDF` | Resuelve y muestra el plan de tres nodos. | `qraft plan calc.fdf --profile local` |
-| `render FDF` | Materializa variantes FDF sin ejecutar el engine. | `qraft render calc.fdf --output rendered` |
+| `setup env` | Inspecciona capacidades instaladas de ejecución. | `qraft setup env --profile local` |
+| `setup config` | Muestra la configuración efectiva y su procedencia. | `qraft setup config --profile local` |
+| `setup profile` | Lista, muestra o valida perfiles de ejecución. | `qraft setup profile list` |
+| `check` | Comprueba readiness sin ejecutar el engine. | `qraft check calc.fdf --siesta /ruta/siesta` |
+| `inspect plan` | Resuelve y muestra el plan de tres nodos. | `qraft inspect plan calc.fdf --profile local` |
+| `advanced campaign render` | Materializa variantes FDF sin ejecutar el engine. | `qraft advanced campaign render calc.fdf --output rendered` |
 | `run FDF` | Ejecuta una campaña de un FDF y conserva intentos. | `qraft run calc.fdf --runs-root .qraft-runs` |
 | `status` | Consulta el estado de una campaña de un FDF. | `qraft status --runs-root .qraft-runs` |
 | `resume [FDF]` | Reanuda o reutiliza una sesión guardada. | `qraft resume calc.fdf --runs-root .qraft-runs` |

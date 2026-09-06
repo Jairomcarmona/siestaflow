@@ -21,7 +21,7 @@ The current `single_fdf` layout is:
             staged scientific inputs
 ```
 
-Use `qraft validate` and `qraft plan` before `qraft run`. QRAFT never calls
+Use `qraft check` and `qraft inspect plan` before `qraft run`. QRAFT never calls
 `sbatch` for the single-FDF installed route; allocation-required launchers must
 run inside a compatible allocation. A technical PASS is evidence that process,
 parser, termination and required-artifact rules passed—not that the physical
