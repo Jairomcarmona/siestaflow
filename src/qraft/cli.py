@@ -72,6 +72,7 @@ from .workflow_authoring import WorkflowAuthoringService
 from .scientific_approvals import create_approved_profile, create_decision
 from .target_classifier import TargetClassificationError, classify_target
 from .readiness import ReadinessChecker, ReadinessOptions, render_readiness
+from .core_views import render_results, render_status, results_view, status_view
 from .application import (
     ApplicationConfiguration, QraftApplication, render_config, render_plan,
     render_preflight,
@@ -179,13 +180,24 @@ class CommandSurface:
     option_ids: tuple[str, ...] = ()
     canonical_replacement: tuple[str, ...] | None = None
     frozen_handler: bool = False
+    example_topics: tuple["ExampleTopic", ...] = ()
 
     @property
     def name(self) -> str:
         """Compatibility accessor for the existing top-level surface API."""
-
         return self.path[-1]
 
+@dataclass(frozen=True)
+class ExampleTopic:
+    """Read-only learning metadata owned by the canonical examples command."""
+
+    name: str
+    title: str
+    maturity: str
+    source_assets: tuple[str, ...]
+    commands: tuple[str, ...]
+    execution: str
+    required_software: tuple[str, ...]
 
 _SHARED_COMMAND_OPTIONS = (
     CommandOption("output.json", ("--json",), "emit the command result as JSON"),
@@ -207,6 +219,7 @@ def _command(
     option_ids: tuple[str, ...] = (),
     canonical_replacement: tuple[str, ...] | None = None,
     frozen_handler: bool = False,
+    example_topics: tuple[ExampleTopic, ...] = (),
 ) -> CommandSurface:
     """Build one immutable V2 command specification record."""
 
@@ -230,11 +243,33 @@ def _command(
         option_ids=option_ids,
         canonical_replacement=canonical_replacement,
         frozen_handler=frozen_handler,
+        example_topics=example_topics,
     )
 
 
 def _alias(*path: str, behavior_mode: str = "DELEGATE") -> tuple[CommandAlias, ...]:
     return (CommandAlias(path, behavior_mode=behavior_mode),)
+
+
+_CORE_EXAMPLE_TOPICS = (
+    ExampleTopic("minimal", "Minimal local input", "AVAILABLE",
+                 ("examples/generic/minimal_siesta_smoke",),
+                 ("qraft init campaign.yaml", "qraft check campaign.yaml"),
+                 "SYNTHETIC_DEMONSTRATION", ("SIESTA input files",)),
+    ExampleTopic("convergence", "Convergence campaign", "AVAILABLE",
+                 ("examples/generic/minimal_siesta_smoke/campaigns/mesh_series.yaml",),
+                 ("qraft check examples/generic/minimal_siesta_smoke/campaigns/mesh_series.yaml",),
+                 "SYNTHETIC_DEMONSTRATION — does not run SIESTA", ("SIESTA for real execution",)),
+    ExampleTopic("relaxation", "Relaxation workflow", "DOCUMENTATION",
+                 ("examples/workflows/restart_chain_compile_only",),
+                 ("qraft advanced workflow validate examples/workflows/restart_chain_compile_only/workflow.json",),
+                 "DISPLAY_ONLY", ("SIESTA for real execution",)),
+    ExampleTopic("resume", "Recovery and resume", "DOCUMENTATION",
+                 ("tests/fixtures/phase3/yoltla_job_781100",),
+                 ("qraft status", "qraft resume"), "DISPLAY_ONLY", ()),
+    ExampleTopic("slurm", "Slurm execution", "COMING_LATER", (), (),
+                 "NOT_AVAILABLE", ("Slurm",)),
+)
 
 
 # Canonical paths, compatibility aliases, and parser dispatch destinations live
@@ -244,10 +279,10 @@ _COMMAND_SURFACE = (
     _command("qraft.init", ("init",), CommandClassification.CORE, CommandVisibility.PRIMARY, 10, "Create an editable campaign file", usage="qraft init [PATH] [--force] [--json]", handler_id="init", dispatch_path=("init",), json_supported=True, side_effect=CommandSideEffect.WRITE_LOCAL, option_ids=("output.json",)),
     _command("qraft.check", ("check",), CommandClassification.CORE, CommandVisibility.PRIMARY, 20, "Check whether a target is ready to run", usage="qraft check TARGET [execution options] [--json]", handler_id="check", dispatch_path=("check",), json_supported=True, side_effect=CommandSideEffect.READ_ONLY, option_ids=("execution.profile", "execution.resolution", "execution.runs-root", "output.json")),
     _command("qraft.run", ("run",), CommandClassification.CORE, CommandVisibility.PRIMARY, 30, "Run a checked campaign or calculation", usage="qraft run TARGET [execution options] [--json]", handler_id="run-target", dispatch_path=("run",), json_supported=True, side_effect=CommandSideEffect.EXECUTE, option_ids=("execution.profile", "execution.resolution", "execution.runs-root", "output.json")),
-    _command("qraft.status", ("status",), CommandClassification.CORE, CommandVisibility.PRIMARY, 40, "Show progress and the next available action", usage="qraft status [--runs-root PATH] [--json]", handler_id="status", dispatch_path=("status",), json_supported=True, side_effect=CommandSideEffect.READ_ONLY, option_ids=("execution.runs-root", "output.json")),
+    _command("qraft.status", ("status",), CommandClassification.CORE, CommandVisibility.PRIMARY, 40, "Show progress and the next available action", usage="qraft status [TARGET] [--runs-root PATH] [--json]", handler_id="status", dispatch_path=("status",), json_supported=True, side_effect=CommandSideEffect.READ_ONLY, option_ids=("execution.runs-root", "output.json")),
     _command("qraft.resume", ("resume",), CommandClassification.CORE, CommandVisibility.PRIMARY, 50, "Continue using saved recovery state", usage="qraft resume [FDF] [execution options] [--json]", handler_id="resume", dispatch_path=("resume",), json_supported=True, side_effect=CommandSideEffect.EXECUTE, option_ids=("execution.profile", "execution.runs-root", "output.json")),
-    _command("qraft.results", ("results",), CommandClassification.CORE, CommandVisibility.PRIMARY, 60, "Find verified outputs and export supported tables", usage="qraft results {dos-pdos,bands,optics} ...", handler_id="results", dispatch_path=("results",), json_supported=False, side_effect=CommandSideEffect.WRITE_LOCAL),
-    _command("qraft.examples", ("examples",), CommandClassification.CORE, CommandVisibility.PRIMARY, 70, "Show copyable workflows", usage="qraft examples ACTION ...", handler_id="examples", dispatch_path=("examples",), json_supported=False, side_effect=CommandSideEffect.MIXED),
+    _command("qraft.results", ("results",), CommandClassification.CORE, CommandVisibility.PRIMARY, 60, "Inventory recorded outputs and route supported exports", usage="qraft results [TARGET] | qraft results export TYPE ...", handler_id="results", dispatch_path=("results",), json_supported=True, side_effect=CommandSideEffect.MIXED),
+    _command("qraft.examples", ("examples",), CommandClassification.CORE, CommandVisibility.PRIMARY, 70, "Show fixture-backed learning topics", usage="qraft examples [TOPIC] [--json]", handler_id="examples", dispatch_path=("examples",), json_supported=True, side_effect=CommandSideEffect.READ_ONLY, option_ids=("output.json",), example_topics=_CORE_EXAMPLE_TOPICS),
 
     _command("qraft.setup", ("setup",), CommandClassification.GROUPED_PUBLIC, CommandVisibility.GROUPED, 80, "configure execution environments and profiles", handler_id="group.setup", json_supported=False, side_effect=CommandSideEffect.READ_ONLY),
     _command("qraft.setup.env", ("setup", "env"), CommandClassification.GROUPED_PUBLIC, CommandVisibility.GROUPED, 10, "inspect installed execution capabilities", parent_id="qraft.setup", usage="qraft setup env [execution options] [--json]", aliases=_alias("env"), handler_id="env", dispatch_path=("env",), json_supported=True, side_effect=CommandSideEffect.READ_ONLY, option_ids=("execution.profile", "execution.resolution", "output.json")),
@@ -823,6 +858,7 @@ def build_parser() -> argparse.ArgumentParser:
         profile_command.add_argument("reference", nargs="?")
         profile_command.add_argument("--json", action="store_true")
     status = sub.add_parser("status", help=command_spec(("status",)).summary)
+    status.add_argument("target", nargs="?", type=Path)
     status.add_argument("--runs-root", type=Path, default=Path(".qraft-runs"))
     status.add_argument("--json", action="store_true")
     resume = sub.add_parser("resume", help=command_spec(("resume",)).summary)
@@ -1128,6 +1164,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     results = sub.add_parser("results", help=command_spec(("results",)).summary)
     results_sub = results.add_subparsers(dest="action", required=True)
+    inventory = results_sub.add_parser("inventory", help="inventory recorded artifacts without interpretation")
+    inventory.add_argument("target", nargs="?", type=Path)
+    inventory.add_argument("--runs-root", type=Path, default=Path(".qraft-runs"))
+    inventory.add_argument("--json", action="store_true")
+    export = results_sub.add_parser("export", help="route an existing result exporter")
+    export_sub = export.add_subparsers(dest="export_type", required=True)
+    for export_type in ("dos-pdos", "bands", "optics"):
+        command = export_sub.add_parser(export_type)
+        command.add_argument("package", type=Path)
+        command.add_argument("--output", type=Path, required=True)
+        command.add_argument("--dry-run", action="store_true")
+        command.add_argument("--json", action="store_true")
     dos_pdos = results_sub.add_parser(
         "dos-pdos", help="export total DOS table and PDOS provenance without interpretation"
     )
@@ -1148,6 +1196,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     examples = sub.add_parser("examples", help=command_spec(("examples",)).summary)
     example_sub = examples.add_subparsers(dest="action", required=True)
+    topic = example_sub.add_parser("topic", help="show a read-only learning topic")
+    topic.add_argument("topic", nargs="?")
+    topic.add_argument("--json", action="store_true")
     example_sub.add_parser("list").add_argument("--json", action="store_true")
     for action in ("inspect", "validate"):
         command = example_sub.add_parser(action)
@@ -1282,6 +1333,16 @@ def main(argv: list[str] | None = None) -> int:
             or (following not in legacy_run_actions and not following.startswith("-"))
         ):
             raw[domain_index] = "_fdf-run"
+    if domain_index < len(raw) and raw[domain_index] == "results":
+        result_actions = {"inventory", "export", "dos-pdos", "bands", "optics"}
+        following = raw[domain_index + 1] if domain_index + 1 < len(raw) else None
+        if following is None or following.startswith("-") or following not in result_actions:
+            raw.insert(domain_index + 1, "inventory")
+    if domain_index < len(raw) and raw[domain_index] == "examples":
+        example_actions = {"topic", "list", "inspect", "validate", "stage", "package", "run", "results"}
+        following = raw[domain_index + 1] if domain_index + 1 < len(raw) else None
+        if following is None or following.startswith("-") or following not in example_actions:
+            raw.insert(domain_index + 1, "topic")
     try:
         args = build_parser().parse_args(raw)
     except SystemExit as exc:
@@ -1405,10 +1466,8 @@ def _dispatch(args: argparse.Namespace) -> int:
         _emit(result, args.json)
         return 0
     if args.domain == "status":
-        result = QraftApplication(ApplicationConfiguration(
-            runs_root=args.runs_root,
-        )).status()
-        _emit(result, True) if args.json else print(_render_compact_status(result))
+        result = status_view(args.target, runs_root=args.runs_root)
+        _emit(result, True) if args.json else print(render_status(result))
         return 0
     if args.domain == "resume":
         overrides = {
@@ -1510,7 +1569,12 @@ def _dispatch(args: argparse.Namespace) -> int:
             return 0 if result["technical_validation"] == "PASS" else 3
         return 0 if result["status"] == "REUSED_VALIDATED_ATTEMPT" or result["attempt"]["result"]["technical_validation"]["status"] == "PASS" else 3
     if args.domain == "results":
-        exporter = {"dos-pdos": DOSPDOSResultExporter, "bands": BandResultExporter, "optics": OpticalResultExporter}[args.action]()
+        if args.action == "inventory":
+            result = results_view(args.target, runs_root=args.runs_root)
+            _emit(result, True) if args.json else print(render_results(result))
+            return 0
+        export_type = args.export_type if args.action == "export" else args.action
+        exporter = {"dos-pdos": DOSPDOSResultExporter, "bands": BandResultExporter, "optics": OpticalResultExporter}[export_type]()
         _emit(exporter.export(args.package, args.output, dry_run=args.dry_run), args.json)
         return 0
     if args.domain == "scientific":
@@ -1987,6 +2051,10 @@ def _dispatch(args: argparse.Namespace) -> int:
         result = PseudopotentialVerifier().verify(manifest, tuple(args.species or [entry.species for entry in manifest.entries]))
         _emit(primitive(result), args.json); return 0 if result.status.value == "PASS" else 2
     if args.domain == "examples":
+        if args.action == "topic":
+            result = _example_topic_view(args.topic)
+            _emit(result, True) if args.json else print(_render_example_topic(result))
+            return 2 if result.get("maturity") == "COMING_LATER" else 0
         service = ExampleService(ExampleRegistry((args.examples_root,)))
         if args.action == "list":
             data = [{"name": name, "path": str(path)} for name, path in service.registry.list()]; _emit(data, args.json); return 0
@@ -2217,6 +2285,53 @@ def _render_compact_status(data: Mapping[str, Any]) -> str:
     elif campaign.get("execution_state") == "FAILED":
         detail = downstream.get("technical_validation") if downstream else campaign.get("technical_validation")
         lines.append(f"Failure: {detail or 'see qraft status --json for details'}")
+    return "\n".join(lines)
+
+
+def _example_topic_view(name: str | None) -> dict[str, Any]:
+    """Project canonical, immutable examples metadata into a read-only view."""
+    topics = command_spec(("examples",)).example_topics
+    if name is None:
+        return {
+            "available": [_example_topic_data(item) for item in topics if item.maturity == "AVAILABLE"],
+            "documentation": [_example_topic_data(item) for item in topics if item.maturity == "DOCUMENTATION"],
+            "coming_later": [_example_topic_data(item) for item in topics if item.maturity == "COMING_LATER"],
+        }
+    selected = next((item for item in topics if item.name == name), None)
+    if selected is None:
+        raise ExpectedUserError(
+            "EXAMPLE_TOPIC_UNKNOWN", f"unknown example topic: {name}",
+            expected="one of: " + ", ".join(item.name for item in topics),
+            why="example topics are a fixed registry owned by the canonical command specification",
+            fix="choose an available topic shown by qraft examples",
+            next_command="qraft examples",
+        )
+    return _example_topic_data(selected)
+
+
+def _example_topic_data(topic: ExampleTopic) -> dict[str, Any]:
+    return {
+        "name": topic.name, "title": topic.title, "maturity": topic.maturity,
+        "source_assets": list(topic.source_assets), "commands": list(topic.commands),
+        "execution": topic.execution,
+        "required_external_software": list(topic.required_software),
+        "read_only": True,
+    }
+
+
+def _render_example_topic(data: Mapping[str, Any]) -> str:
+    if "available" in data:
+        lines = ["QRAFT EXAMPLES", "", "AVAILABLE"]
+        lines.extend(f"  {item['name']:<14}{item['title']} ({item['execution']})" for item in data["available"])
+        lines.extend(("", "DOCUMENTATION"))
+        lines.extend(f"  {item['name']:<14}{item['title']} (display only)" for item in data["documentation"])
+        lines.extend(("", "COMING LATER"))
+        lines.extend(f"  {item['name']:<14}{item['title']}" for item in data["coming_later"])
+        return "\n".join(lines)
+    lines = [f"QRAFT EXAMPLE — {data['name']}", "", str(data["title"]), f"MATURITY     {data['maturity']}", f"EXECUTION    {data['execution']}"]
+    if data["commands"]:
+        lines.extend(("", "COMMANDS"))
+        lines.extend(f"  {command}" for command in data["commands"])
     return "\n".join(lines)
 
 

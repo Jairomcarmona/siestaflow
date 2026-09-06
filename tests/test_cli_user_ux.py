@@ -65,14 +65,13 @@ def test_status_human_output_is_compact_and_json_remains_complete(
     root = _status_root(tmp_path, campaign_status=campaign_status, downstream_status=downstream_status)
     assert main(["status", "--runs-root", str(root)]) == 0
     rendered = capsys.readouterr().out
-    assert expected in rendered
-    assert "Progress: 3/3 convergence points" in rendered
-    assert "Selected MeshCutoff: 100 Ry" in rendered
-    assert f"Relaxation: {downstream_status}" in rendered
+    assert "QRAFT STATUS" in rendered
+    assert f"STATE        {campaign_status}" in rendered
+    assert "PROGRESS     3/3" in rendered
     assert main(["status", "--runs-root", str(root), "--json"]) == 0
     payload = json.loads(capsys.readouterr().out)
-    assert payload["campaign"]["execution_state"] == campaign_status
-    assert payload["campaign"]["downstream"]["selected_parameter"]["value"] == 100
+    assert payload["recorded"]["campaign"]["execution_state"] == campaign_status
+    assert payload["recorded"]["campaign"]["downstream"]["selected_parameter"]["value"] == 100
 
 
 def test_human_qraft_out_hides_internal_fdf_run_command(tmp_path: Path) -> None:
