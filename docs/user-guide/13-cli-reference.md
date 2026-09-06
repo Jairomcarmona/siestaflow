@@ -10,21 +10,17 @@ Los errores de argumentos y preflight usan una salida distinta de cero.
 | Comando | Propósito | Uso habitual |
 |---|---|---|
 | `init [PATH]` | Crea un template editable de CampaignSpec. | `qraft init campaign.yaml` |
-| `check TARGET` | Clasifica un target; la agregación de readiness se incorpora en la fase siguiente. | `qraft check campaign.yaml` |
-| `setup env` | Inspecciona capacidades instaladas de ejecución. | `qraft setup env --profile local` |
-| `setup config` | Muestra la configuración efectiva y su procedencia. | `qraft setup config --profile local` |
-| `setup profile` | Lista, muestra o valida perfiles de ejecución. | `qraft setup profile list` |
-| `check` | Comprueba readiness sin ejecutar el engine. | `qraft check calc.fdf --siesta /ruta/siesta` |
-| `inspect plan` | Resuelve y muestra el plan de tres nodos. | `qraft inspect plan calc.fdf --profile local` |
-| `advanced campaign render` | Materializa variantes FDF sin ejecutar el engine. | `qraft advanced campaign render calc.fdf --output rendered` |
-| `run FDF` | Ejecuta una campaña de un FDF y conserva intentos. | `qraft run calc.fdf --runs-root .qraft-runs` |
-| `status` | Consulta el estado de una campaña de un FDF. | `qraft status --runs-root .qraft-runs` |
-| `resume [FDF]` | Reanuda o reutiliza una sesión guardada. | `qraft resume calc.fdf --runs-root .qraft-runs` |
+| `check TARGET` | Evalúa input/model, consistencia científica, evidencia numérica y entorno de ejecución mediante las autoridades existentes; no ejecuta el engine ni envía trabajo. | `qraft check campaign.yaml` |
+| `run TARGET` | Ejecuta una campaña o cálculo que ya pasó `check` y conserva intentos. | `qraft run calc.fdf --runs-root .qraft-runs` |
+| `status [TARGET]` | Consulta el progreso y la siguiente acción disponible. | `qraft status --runs-root .qraft-runs` |
+| `resume [FDF]` | Continúa usando el estado de recuperación guardado. | `qraft resume calc.fdf --runs-root .qraft-runs` |
+| `results [TARGET]` | Inventaría outputs registrados y dirige las exportaciones soportadas. | `qraft results` |
+| `examples [TOPIC]` | Muestra temas de aprendizaje respaldados por fixtures. | `qraft examples` |
 
-Los argumentos recurrentes de `validate`, `plan`, `run` y `resume` incluyen
-`--partition`, `--nodes`, `--np`, `--cpus-per-rank`, `--launcher`, `--siesta`,
-`--profile` y `--json` donde aplique. Los launchers actuales son `direct`,
-`hydra`, `openmpi` y `srun`.
+Las opciones disponibles dependen de cada comando. Consulte `qraft check --help`,
+`qraft inspect plan --help`, `qraft run --help` y `qraft resume --help` antes
+de combinar opciones de ejecución; `--json` está disponible donde la ayuda del
+comando lo indica.
 
 ## Navegación canónica V2
 
@@ -34,6 +30,14 @@ para las familias de arquitectura. Las rutas históricas siguen funcionando
 durante la ventana de compatibilidad y escriben su aviso de migración en
 stderr. Consulte `qraft setup --help`, `qraft inspect --help` y
 `qraft advanced --help` para descubrir los hijos directos.
+
+| Ruta canónica | Propósito | Uso habitual |
+|---|---|---|
+| `setup env` | Inspecciona capacidades instaladas de ejecución. | `qraft setup env --profile local` |
+| `setup config` | Muestra la configuración efectiva y su procedencia. | `qraft setup config --profile local` |
+| `setup profile` | Lista, muestra o valida perfiles de ejecución. | `qraft setup profile list` |
+| `inspect plan TARGET` | Resuelve y muestra un plan sin enviarlo. | `qraft inspect plan calc.fdf --profile local` |
+| `advanced campaign render TARGET` | Materializa variantes FDF sin ejecutar el engine. | `qraft advanced campaign render calc.fdf --output rendered` |
 
 ## Comandos avanzados
 

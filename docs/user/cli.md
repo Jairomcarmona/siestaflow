@@ -7,16 +7,17 @@ qraft --version        installed package version
 qraft --help           command discovery
 qraft                  same task-oriented command discovery
 qraft init [PATH]      create an editable campaign file
-qraft check TARGET     classify a target (readiness arrives in Phase 5)
-qraft setup env         inspect external capabilities
-qraft setup config      show effective configuration/provenance
-qraft setup profile ... list/show/validate execution profiles
-qraft check TARGET      evaluate readiness without execution
-qraft inspect plan FDF  resolve ScientificIdentity, ExecutionSpec and DAG
-qraft run FDF          preflight and execute single_fdf
-qraft status           read single_fdf state
-qraft resume           recover the saved single_fdf session
+qraft check TARGET     evaluate readiness without execution
+qraft run TARGET       run a checked campaign or calculation
+qraft status [TARGET]  show progress and the next available action
+qraft resume [FDF]     continue using saved recovery state
+qraft results [TARGET] inventory recorded outputs and route supported exports
+qraft examples [TOPIC] show fixture-backed learning topics
 ```
+
+For environment and execution-plan inspection, use `qraft setup --help` and
+`qraft inspect --help`. Architecture families are available through
+`qraft advanced --help`.
 
 Use `COMMAND --help` for all options. Paths may be absolute or relative and
 paths with spaces are supported. CLI overrides have the highest precedence and
