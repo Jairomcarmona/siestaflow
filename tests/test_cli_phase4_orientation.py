@@ -120,7 +120,7 @@ def test_phase4_discovery_help_routes_exit_zero(command: str) -> None:
     assert result.value.code == 0
 
 
-def test_check_classifies_but_never_claims_readiness(
+def test_check_classifies_without_scientific_overclaim(
     tmp_path: Path, capsys: pytest.CaptureFixture[str],
 ) -> None:
     campaign = _campaign(tmp_path / "campaign.yaml")
@@ -128,9 +128,9 @@ def test_check_classifies_but_never_claims_readiness(
     captured = capsys.readouterr()
     payload = json.loads(captured.out)
     assert payload["status"] == "BLOCKED"
-    assert payload["error"]["code"] == "CHECK_NOT_IMPLEMENTED_PHASE_4"
-    assert "CAMPAIGN_SPEC" in payload["error"]["message"]
-    assert "ready" not in payload["error"]["message"].casefold()
+    assert payload["target_kind"] == "CAMPAIGN_SPEC"
+    assert payload["scientifically_ready"] is None
+    assert payload["dimensions"]["input_model"]["status"] == "BLOCKED"
     assert captured.err == ""
 
 

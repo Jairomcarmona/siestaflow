@@ -71,6 +71,7 @@ from .workflow_preflight import WorkflowPreflightValidator
 from .workflow_authoring import WorkflowAuthoringService
 from .scientific_approvals import create_approved_profile, create_decision
 from .target_classifier import TargetClassificationError, classify_target
+from .readiness import ReadinessChecker, ReadinessOptions, render_readiness
 from .application import (
     ApplicationConfiguration, QraftApplication, render_config, render_plan,
     render_preflight,
@@ -241,7 +242,7 @@ def _alias(*path: str, behavior_mode: str = "DELEGATE") -> tuple[CommandAlias, .
 # registry; handlers below remain unchanged.
 _COMMAND_SURFACE = (
     _command("qraft.init", ("init",), CommandClassification.CORE, CommandVisibility.PRIMARY, 10, "Create an editable campaign file", usage="qraft init [PATH] [--force] [--json]", handler_id="init", dispatch_path=("init",), json_supported=True, side_effect=CommandSideEffect.WRITE_LOCAL, option_ids=("output.json",)),
-    _command("qraft.check", ("check",), CommandClassification.CORE, CommandVisibility.PRIMARY, 20, "Check whether a target is ready to run", usage="qraft check TARGET [--json]", handler_id="check.phase4-guard", dispatch_path=("check",), json_supported=True, side_effect=CommandSideEffect.READ_ONLY, option_ids=("output.json",)),
+    _command("qraft.check", ("check",), CommandClassification.CORE, CommandVisibility.PRIMARY, 20, "Check whether a target is ready to run", usage="qraft check TARGET [execution options] [--json]", handler_id="check", dispatch_path=("check",), json_supported=True, side_effect=CommandSideEffect.READ_ONLY, option_ids=("execution.profile", "execution.resolution", "execution.runs-root", "output.json")),
     _command("qraft.run", ("run",), CommandClassification.CORE, CommandVisibility.PRIMARY, 30, "Run a checked campaign or calculation", usage="qraft run TARGET [execution options] [--json]", handler_id="run-target", dispatch_path=("run",), json_supported=True, side_effect=CommandSideEffect.EXECUTE, option_ids=("execution.profile", "execution.resolution", "execution.runs-root", "output.json")),
     _command("qraft.status", ("status",), CommandClassification.CORE, CommandVisibility.PRIMARY, 40, "Show progress and the next available action", usage="qraft status [--runs-root PATH] [--json]", handler_id="status", dispatch_path=("status",), json_supported=True, side_effect=CommandSideEffect.READ_ONLY, option_ids=("execution.runs-root", "output.json")),
     _command("qraft.resume", ("resume",), CommandClassification.CORE, CommandVisibility.PRIMARY, 50, "Continue using saved recovery state", usage="qraft resume [FDF] [execution options] [--json]", handler_id="resume", dispatch_path=("resume",), json_supported=True, side_effect=CommandSideEffect.EXECUTE, option_ids=("execution.profile", "execution.runs-root", "output.json")),
@@ -781,8 +782,32 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument("path", nargs="?", type=Path, default=Path("campaign.yaml"))
     init.add_argument("--force", action="store_true", help="replace an existing template")
     init.add_argument("--json", action="store_true")
-    check = sub.add_parser("check", help=command_spec(("check",)).summary)
+    check = sub.add_parser(
+        "check",
+        help=command_spec(("check",)).summary,
+        description=(
+            "Evaluates input/model, scientific consistency, numerical evidence, "
+            "and execution environment independently. Does not run SIESTA or "
+            "submit work."
+        ),
+    )
     check.add_argument("target", type=Path)
+    check.add_argument("--pseudo-manifest", type=Path)
+    check.add_argument("--profile")
+    check.add_argument("--project-config", type=Path)
+    check.add_argument("--recipe", type=Path)
+    check.add_argument("--partition")
+    check.add_argument("--nodes", type=int)
+    check.add_argument("--np", dest="mpi_ranks", type=int)
+    check.add_argument("--cpus-per-rank", type=int)
+    check.add_argument("--memory-mb", type=int)
+    check.add_argument("--launcher", choices=launcher_registry.names())
+    check.add_argument("--siesta", dest="executable")
+    check.add_argument("--siesta-argument", action="append", default=None)
+    check.add_argument("--walltime-seconds", type=int)
+    check.add_argument("--launcher-command", nargs="+")
+    check.add_argument("--launcher-argument", action="append", default=None)
+    check.add_argument("--runs-root", type=Path, default=Path(".qraft-runs"))
     check.add_argument("--json", action="store_true")
     validate = sub.add_parser("validate", help=command_spec(("validate",)).summary)
     _add_single_fdf_arguments(validate, execute=False)
@@ -1304,16 +1329,31 @@ def main(argv: list[str] | None = None) -> int:
 def _dispatch(args: argparse.Namespace) -> int:
     if args.domain == "check":
         classification = classify_target(args.target)
-        raise ExpectedUserError(
-            "CHECK_NOT_IMPLEMENTED_PHASE_4",
-            (
-                "readiness aggregation is not implemented in Phase 4 "
-                f"(classified target: {classification.kind.value})"
+        result = ReadinessChecker().check(
+            classification,
+            ReadinessOptions(
+                profile=args.profile,
+                project_config=args.project_config,
+                recipe=args.recipe,
+                pseudo_manifest=args.pseudo_manifest,
+                runs_root=args.runs_root,
+                overrides={
+                    "partition": args.partition,
+                    "nodes": args.nodes,
+                    "mpi_ranks": args.mpi_ranks,
+                    "cpus_per_rank": args.cpus_per_rank,
+                    "memory_mb": args.memory_mb,
+                    "launcher": args.launcher,
+                    "executable": args.executable,
+                    "executable_arguments": args.siesta_argument,
+                    "walltime_seconds": args.walltime_seconds,
+                    "launcher_command": args.launcher_command,
+                    "launcher_arguments": args.launcher_argument,
+                },
             ),
-            why="Phase 4 exposes target discovery but does not evaluate readiness",
-            fix="use the existing validation or planning command until Phase 5",
-            next_command="qraft check TARGET",
         )
+        _emit(result.to_dict(), True) if args.json else print(render_readiness(result))
+        return result.exit_code
     if args.domain == "init":
         path = args.path.resolve()
         if path.exists() and not args.force:
