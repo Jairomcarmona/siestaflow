@@ -35,12 +35,11 @@ pip install -e '.[dev]'
 ## First calculation
 
 ```bash
-qraft env
-qraft config
-qraft validate calc.fdf --profile local
-qraft plan calc.fdf --profile local
-qraft run calc.fdf --profile local
+qraft init campaign.yaml
+qraft check campaign.yaml
+qraft run campaign.yaml
 qraft status
+qraft results
 qraft resume
 ```
 
@@ -60,11 +59,11 @@ professional human-readable campaign view and CSV files are derived views.
 - installed mode as the normal deployment path;
 - standalone controller bundles as a deployment fallback.
 
-The installed CLI provides the core `init`, `env`, `config`, `profile`,
-`validate`, `plan`, `render`, `run`, `status`, and `resume` commands, plus
-advanced supported families for projects, inputs, workflows, campaigns,
-results, examples, and remote artifacts. Run `qraft --help` for the installed
-surface and see the [user guide](docs/user-guide/) for concise usage guidance.
+The installed CLI starts with the core `init`, `check`, `run`, `status`,
+`resume`, `results`, and `examples` tasks. Run `qraft --help` for the installed
+surface, consult the generated [CLI reference](docs/user/CLI_REFERENCE.md), and
+use the [user guide](docs/user-guide/) for task-oriented guidance. Legacy
+routes remain available during the compatibility window.
 
 Distribution documentation is available from the repository rather than from
 paths assumed to exist beside an installed wheel: [quick start](https://github.com/Jairomcarmona/siestaflow/blob/main/docs/user/QUICK_START.md),

@@ -1,147 +1,464 @@
-# CLI reference
+# QRAFT CLI reference
 
-All commands use `python -m qraft.cli [--workspace PATH] [--examples-root PATH]`. Success is exit `0`; invalid input, blocked validation, hash mismatch, or failed evidence is exit `2`. `--dry-run` predicts actions and produces zero filesystem effects.
+<!-- Generated from `src/qraft/cli.py`; do not edit manually. -->
 
-```text
-environment check [--siesta PATH_OR_COMMAND] [--launcher {auto,direct,srun,mpiexec,mpirun}] [--require-slurm] [--working-directory PATH] [--json]
-project init PATH --project-id ID --title TITLE --system-id ID --fdf PATH --structure PATH --pseudo-manifest PATH [--dry-run] [--json]
-project inspect PATH [--json]
-project validate PATH [--json]
-project load PATH [--json]
-fdf inspect PATH [--json]
-input validate PATH [--pseudo-manifest PATH] [--require-pseudos] [--profile PATH] [--engine-version 5.4.2] [--explain] [--json]
-input rules [--engine-version 5.4.2] [--json]
-pseudo verify MANIFEST [--species SPECIES ...] [--json]
-workflow recipes [--json]
-workflow recipe RECIPE_ID [--json]
-workflow create INTENT --output PATH [--dry-run] [--json]
-workflow compose INTENT --output PATH [--dry-run] [--json]
-workflow validate DEFINITION [--json]
-workflow preflight DEFINITION [--profile PATH] [--pseudo-manifest PATH] [--require-pseudos] [--json]
-workflow plan DEFINITION [--json]
-workflow graph DEFINITION [--format {text,mermaid,json}]
-workflow compile DEFINITION --output PATH [--force] [--dry-run] [--json]
-run prepare WORKFLOW_LOCK --source-root PATH --profile EXECUTION_PROFILE --output PATH --run-id ID [--dry-run] [--json]
-run candidates --workflow WORKFLOW_LOCK --profile EXECUTION_PROFILE --snapshot SNAPSHOT [--json]
-run discover --cluster-id ID --output SNAPSHOT [--json]
-run snapshot-import --cluster-id ID --output SNAPSHOT [--sinfo FILE] [--scontrol-partitions FILE] [--scontrol-nodes FILE] [--sacctmgr FILE] [--sjstat FILE] [--observed-at TIMESTAMP] [--json]
-run inspect PACKAGE [--json]
-run status PACKAGE [--json]
-run resume PACKAGE [--previous-job-terminal] [--json]
-results dos-pdos PACKAGE --output DIRECTORY [--dry-run] [--json]
-results bands PACKAGE --output DIRECTORY [--dry-run] [--json]
-results optics PACKAGE --output DIRECTORY [--dry-run] [--json]
-campaign create --project PATH --campaign-id ID [--dry-run] [--json]
-campaign validate CAMPAIGN [--dry-run] [--json]
-campaign simulate CAMPAIGN [--dry-run] [--json]
-campaign status CAMPAIGN [--dry-run] [--json]
-campaign worker CAMPAIGN_FILE [--root PATH] [--json]
-campaign progress PACKAGE_OR_CAMPAIGN_FILE [--json]
-campaign watch PACKAGE_OR_CAMPAIGN_FILE [--interval SECONDS] [--iterations N] [--json]
-examples list [--json]
-examples inspect EXAMPLE [--json]
-examples validate EXAMPLE [--json]
-examples stage EXAMPLE --pseudo-root PATH --output PATH --policy {copy,link} [--dry-run] [--json]
-examples package EXAMPLE --output PATH [--dry-run] [--json]
-examples run EXAMPLE --campaign-id ID [--json]
-examples results import BUNDLE --output PATH [--campaign-id ID] [--dry-run] [--json]
-remote package CAMPAIGN [--output PATH] [--dry-run] [--json]
-remote controller-package CAMPAIGN_FILE --output PATH [--dry-run] [--json]
-remote results import BUNDLE [--campaign-id ID] [--output PATH] [--dry-run] [--json]
-remote environment package [--output PATH] [--pseudo-manifest PATH] [--status-labels PATH] [--dry-run] [--json]
-remote environment import BUNDLE [--output PATH] [--dry-run] [--json]
-```
+The core workflow is `init`, `check`, `run`, `status`, `results`, and `examples`. Use `qraft --help` for task-oriented discovery.
 
-`environment check` is read-only. It identifies Python, the requested SIESTA
-executable, MPI capability, the selected launcher, optional SLURM clients, and
-workspace accessibility. It neither submits jobs nor claims scientific
-validity.
+## Core commands
 
-`project init` creates a preparation-only ProjectPackage from explicit existing
-files. It preserves their bytes, validates the FDF and species-to-manifest
-coverage, writes an idempotency lock, and refuses conflicting reuse of the
-destination. It does not select functionals, Hubbard U, spin, grids,
-pseudopotentials, resources, or convergence thresholds.
+### `qraft init`
 
-`input validate` emits the common explainable validation contract. Each finding
-contains a stable rule code, decision, scope, location where available,
-evidence, and a remediation hint. `--profile` adds researcher-declared context
-for periodicity, required outputs, and cost-review limits. `--explain` makes
-the intent explicit; the human renderer always includes evidence and
-remediation. With `--require-pseudos`, a manifest is mandatory and the
-pseudopotential files and hashes are checked.
+Create an editable campaign file
 
-`input rules` lists the immutable built-in rule catalog, its SIESTA version,
-manual source, per-rule evidence class, and ruleset SHA-256. The initial
-catalog supports SIESTA 5.4.2 only.
+**Usage:**
 
-`workflow preflight` first compiles and hash-resolves the DAG, then applies the
-same input validator to every external artifact declared as
-`text/x-siesta-fdf` or `application/x-siesta-fdf`. It is read-only, does not
-resolve arbitrary FDF includes, and never authorizes execution.
+`qraft init [PATH] [--force] [--json]`
 
-`remote package` and `remote environment package` generate `PREVIEW` artifacts only and never submit. Environment import returns `0` for review/incomplete and `2` for invalid/failed evidence; only a real complete bundle can become `REMOTE_VERIFIED`.
+**Example:**
 
-`remote controller-package` creates a deterministic, self-contained package
-for a schema-1 or schema-2 allocation-controller campaign. It never calls
-`sbatch`. `campaign worker` is intended to run only inside the generated SLURM
-allocation. `campaign progress` and `watch` are read-only.
+`qraft init --help`
 
-The `workflow` command family implements compilation plus read-only preflight.
-Validation, preflight, planning and graph rendering are read-only.
-`workflow compile` writes a canonical, hash-bound
-`siestaflow.workflow-lock@1.0` envelope and never authorizes or starts
-execution.
+### `qraft check`
 
-`workflow recipes` lists the registered scientific recipes; `workflow recipe`
-describes one recipe; `workflow create` materializes an explicit scientific
-intent as a canonical definition; and `workflow compose` creates a selected
-modular composition. They do not choose scientific values on the researcher's
-behalf.
+Check whether a target is ready to run
 
-`run prepare` is the strict bridge from a compiled workflow to the persistent
-allocation controller. It rechecks workflow-lock integrity, external artifact
-size and SHA-256, SIESTA FDF preflight, task placement, allocation fit, and the
-external Slurm profile. Exact workflow input destinations are preserved;
-artifact edges become parent-to-child transfers. The resulting directory and
-ZIP include `workflow.lock.json`, `execution-profile.json`,
-`run.lock.json`, the protected inputs, controller runtime, verifier,
-`progress.sh`, and `submit.slurm`. It never executes the submit script.
+**Usage:**
 
-`run inspect` verifies all immutable package files and cross-checks workflow,
-profile, run, campaign, and task identities. `run status` adds validated
-mutable progress. `run resume` only prints a fail-closed resubmission plan; it
-never contacts Slurm or invokes `sbatch`. A noninitial resubmission requires
-the researcher to confirm scheduler evidence with `--previous-job-terminal`;
-the flag records that assertion but still performs no submission.
+`qraft check TARGET [execution options] [--json]`
 
-`run discover` captures read-only scheduler capability data on a cluster.
-`run snapshot-import` combines saved scheduler output, including optional
-site-specific capacity evidence such as `sjstat -c`, into a hash-bound
-snapshot. `run candidates` ranks snapshot variants deterministically; it is
-not a queue-time predictor and never submits work. A confirmed snapshot
-candidate or a compatibility-evidence-bound manual resolution is then supplied
-to `run prepare`.
+**Example:**
 
-`results dos-pdos` is a read-only consumer for a completed, canonical prepared
-run that declares exactly one DOS/PDOS-producing task. It first applies the
-same immutable package verification as `run inspect`, then requires successful
-termination, SCF convergence, manifest-backed DOS/PDOS hashes, and—when the
-task consumes a density matrix—evidence that SIESTA read that DM. It writes a
-fresh directory containing `total_dos.csv` and `dos_pdos_export.json`. The
-manifest binds the table to the workflow lock, run lock, task attempt, raw DOS,
-raw PDOS, and any restart transfer. It exports numbers only: it never infers a
-gap, peak, orbital assignment, or scientific conclusion.
+`qraft check --help`
 
-`results bands` is the equivalent read-only consumer for one completed task
-that declares a SIESTA `.bands` artifact. It verifies immutable provenance,
-successful SCF completion, and the artifact hash, then writes `bands.csv` in
-long form plus `bands_export.json`. The latter records the Fermi energy and the
-declared k/energy ranges exactly as written by SIESTA. It does not shift bands,
-identify a gap, generate a k-path, or assign physical meaning to the result.
+### `qraft run`
 
-`results optics` verifies one completed `EPSIMG` artifact and exports
-`epsimg.csv` plus `optical_export.json`. It preserves energy and epsilon-2
-values exactly as written by SIESTA and binds them to the package locks and
-artifact hash. It does not infer absorption edges, peaks, dielectric constants,
-or any optical property.
+Run a checked campaign or calculation
+
+**Usage:**
+
+`qraft run TARGET [execution options] [--json]`
+
+**Example:**
+
+`qraft run --help`
+
+### `qraft status`
+
+Show progress and the next available action
+
+**Usage:**
+
+`qraft status [TARGET] [--runs-root PATH] [--json]`
+
+**Example:**
+
+`qraft status --help`
+
+### `qraft resume`
+
+Continue using saved recovery state
+
+**Usage:**
+
+`qraft resume [FDF] [execution options] [--json]`
+
+**Example:**
+
+`qraft resume --help`
+
+### `qraft results`
+
+Inventory recorded outputs and route supported exports
+
+**Usage:**
+
+`qraft results [TARGET] | qraft results export TYPE ...`
+
+**Example:**
+
+`qraft results --help`
+
+### `qraft examples`
+
+Show fixture-backed learning topics
+
+**Usage:**
+
+`qraft examples [TOPIC] [--json]`
+
+**Example:**
+
+`qraft examples --help`
+
+## Setup and inspection
+
+### `qraft setup`
+
+configure execution environments and profiles
+
+**Example:**
+
+`qraft setup --help`
+
+### `qraft setup env`
+
+inspect installed execution capabilities
+
+**Usage:**
+
+`qraft setup env [execution options] [--json]`
+
+**Example:**
+
+`qraft setup env --help`
+
+**Compatibility aliases:** `qraft env`
+
+### `qraft setup config`
+
+show effective execution configuration
+
+**Usage:**
+
+`qraft setup config [execution options] [--json]`
+
+**Example:**
+
+`qraft setup config --help`
+
+**Compatibility aliases:** `qraft config`
+
+### `qraft setup profile`
+
+list, show or validate execution profiles
+
+**Usage:**
+
+`qraft setup profile {list,show,validate} ...`
+
+**Example:**
+
+`qraft setup profile --help`
+
+**Compatibility aliases:** `qraft profile`
+
+### `qraft inspect`
+
+inspect inputs, rules, pseudopotentials, and plans
+
+**Example:**
+
+`qraft inspect --help`
+
+**Compatibility aliases:** `qraft input`
+
+### `qraft inspect fdf`
+
+inspect a parsed SIESTA FDF
+
+**Usage:**
+
+`qraft inspect fdf PATH [--json]`
+
+**Example:**
+
+`qraft inspect fdf --help`
+
+**Compatibility aliases:** `qraft fdf`, `qraft fdf inspect`
+
+### `qraft inspect input`
+
+validate a SIESTA input
+
+**Usage:**
+
+`qraft inspect input PATH [--json]`
+
+**Example:**
+
+`qraft inspect input --help`
+
+**Compatibility aliases:** `qraft input validate`
+
+### `qraft inspect rules`
+
+list versioned SIESTA validation rules
+
+**Usage:**
+
+`qraft inspect rules [--json]`
+
+**Example:**
+
+`qraft inspect rules --help`
+
+**Compatibility aliases:** `qraft input rules`
+
+### `qraft inspect pseudo`
+
+verify a pseudopotential manifest
+
+**Usage:**
+
+`qraft inspect pseudo MANIFEST [--json]`
+
+**Example:**
+
+`qraft inspect pseudo --help`
+
+**Compatibility aliases:** `qraft pseudo`, `qraft pseudo verify`
+
+### `qraft inspect plan`
+
+resolve a non-submitting execution plan
+
+**Usage:**
+
+`qraft inspect plan TARGET [execution options] [--json]`
+
+**Example:**
+
+`qraft inspect plan --help`
+
+**Compatibility aliases:** `qraft plan`
+
+## Advanced commands
+
+### `qraft advanced`
+
+discover architecture-facing workflows
+
+**Example:**
+
+`qraft advanced --help`
+
+### `qraft advanced project`
+
+prepare and inspect reproducible project packages
+
+**Example:**
+
+`qraft advanced project --help`
+
+**Compatibility aliases:** `qraft project`
+
+### `qraft advanced campaign`
+
+manage allocation-controller campaigns
+
+**Example:**
+
+`qraft advanced campaign --help`
+
+**Compatibility aliases:** `qraft campaign`
+
+### `qraft advanced campaign render`
+
+materialize CampaignSpec FDF variants without execution
+
+**Example:**
+
+`qraft advanced campaign render --help`
+
+**Compatibility aliases:** `qraft render`
+
+### `qraft advanced workflow`
+
+author, validate and compile workflow definitions
+
+**Example:**
+
+`qraft advanced workflow --help`
+
+**Compatibility aliases:** `qraft workflow`
+
+### `qraft advanced scientific`
+
+record reviewed scientific decisions and profiles
+
+**Example:**
+
+`qraft advanced scientific --help`
+
+**Compatibility aliases:** `qraft scientific`
+
+### `qraft advanced execution`
+
+manage hash-bound execution packages
+
+**Example:**
+
+`qraft advanced execution --help`
+
+### `qraft advanced execution prepare`
+
+prepare a self-contained Slurm package
+
+**Example:**
+
+`qraft advanced execution prepare --help`
+
+**Compatibility aliases:** `qraft run prepare`
+
+### `qraft advanced execution candidates`
+
+rank saved scheduler candidates
+
+**Example:**
+
+`qraft advanced execution candidates --help`
+
+**Compatibility aliases:** `qraft run candidates`
+
+### `qraft advanced execution discover`
+
+capture live scheduler capabilities
+
+**Example:**
+
+`qraft advanced execution discover --help`
+
+**Compatibility aliases:** `qraft run discover`
+
+### `qraft advanced execution resources`
+
+show live scheduler resources
+
+**Example:**
+
+`qraft advanced execution resources --help`
+
+**Compatibility aliases:** `qraft run resources`
+
+### `qraft advanced execution placement`
+
+derive explicit live scheduler placement
+
+**Example:**
+
+`qraft advanced execution placement --help`
+
+**Compatibility aliases:** `qraft run placement`
+
+### `qraft advanced execution snapshot-import`
+
+import saved scheduler command output
+
+**Example:**
+
+`qraft advanced execution snapshot-import --help`
+
+**Compatibility aliases:** `qraft run snapshot-import`
+
+### `qraft advanced execution inspect`
+
+inspect a prepared package
+
+**Example:**
+
+`qraft advanced execution inspect --help`
+
+**Compatibility aliases:** `qraft run inspect`
+
+### `qraft advanced execution status`
+
+show prepared-package status
+
+**Example:**
+
+`qraft advanced execution status --help`
+
+**Compatibility aliases:** `qraft run status`
+
+### `qraft advanced execution resume`
+
+produce a prepared-package resume plan
+
+**Example:**
+
+`qraft advanced execution resume --help`
+
+**Compatibility aliases:** `qraft run resume`
+
+### `qraft advanced example`
+
+manage curated example assets
+
+**Example:**
+
+`qraft advanced example --help`
+
+### `qraft advanced example inspect`
+
+inspect an installed example
+
+**Example:**
+
+`qraft advanced example inspect --help`
+
+**Compatibility aliases:** `qraft examples inspect`
+
+### `qraft advanced example validate`
+
+validate an installed example
+
+**Example:**
+
+`qraft advanced example validate --help`
+
+**Compatibility aliases:** `qraft examples validate`
+
+### `qraft advanced example stage`
+
+stage example pseudopotentials
+
+**Example:**
+
+`qraft advanced example stage --help`
+
+**Compatibility aliases:** `qraft examples stage`
+
+### `qraft advanced example package`
+
+package an installed example
+
+**Example:**
+
+`qraft advanced example package --help`
+
+**Compatibility aliases:** `qraft examples package`
+
+### `qraft advanced example simulate`
+
+simulate an installed example
+
+**Example:**
+
+`qraft advanced example simulate --help`
+
+**Compatibility aliases:** `qraft examples run`
+
+### `qraft advanced example import-results`
+
+import an example results bundle
+
+**Example:**
+
+`qraft advanced example import-results --help`
+
+**Compatibility aliases:** `qraft examples results import`
+
+### `qraft advanced remote`
+
+create or inspect non-submitting remote artifacts
+
+**Example:**
+
+`qraft advanced remote --help`
+
+**Compatibility aliases:** `qraft remote`
+
+## Compatibility
+
+- `qraft validate` remains available; canonical replacement: `qraft check`.
+- `qraft environment` remains available; canonical replacement: `qraft setup env`.
