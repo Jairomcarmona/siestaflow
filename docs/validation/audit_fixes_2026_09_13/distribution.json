@@ -1,0 +1,15 @@
+{
+  "source_commit": "bde4058e60fd039481523ab2ad860ae0fe59ebbf",
+  "source_branch": "codex/audit-fixes",
+  "source_tree_dirty": false,
+  "source_worktree": "C:\\Users\\Jairo\\Downloads\\QRAFT\\.audit-worktrees\\integration",
+  "source_status_porcelain": "",
+  "wheel_sha256": "28d4d50011710dbc313a5221bd5a41ffe158f43c5056c669734539e0031e4996",
+  "sdist_sha256": "99a84ac65c68987c7a9c99e4c453dd53fc53289ea956ab5b9c6c5123d979b378",
+  "wheel_file_count": 151,
+  "sdist_file_count": 184,
+  "source_files_matched": 143,
+  "source_mismatches": [],
+  "required_engine_data_present": true,
+  "unexpected_files": []
+}

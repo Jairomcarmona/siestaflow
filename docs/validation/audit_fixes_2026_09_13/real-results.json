@@ -1,0 +1,189 @@
+{
+  "artifacts": [
+    {
+      "name": "campaign-result.json",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/campaign-result.json",
+      "status": "NOT_EVALUATED"
+    },
+    {
+      "name": "events.jsonl",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/events.jsonl",
+      "status": "PRESENT"
+    },
+    {
+      "name": "workflow_runtime.json",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/state/workflow_runtime.json",
+      "status": "PRESENT"
+    },
+    {
+      "name": "0_NORMAL_EXIT",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/work/run_siesta/attempt-0001/0_NORMAL_EXIT",
+      "status": "PRESENT"
+    },
+    {
+      "name": "BASIS_ENTHALPY",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/work/run_siesta/attempt-0001/BASIS_ENTHALPY",
+      "status": "PRESENT"
+    },
+    {
+      "name": "BASIS_HARRIS_ENTHALPY",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/work/run_siesta/attempt-0001/BASIS_HARRIS_ENTHALPY",
+      "status": "PRESENT"
+    },
+    {
+      "name": "CLOCK",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/work/run_siesta/attempt-0001/CLOCK",
+      "status": "PRESENT"
+    },
+    {
+      "name": "FORCE_STRESS",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/work/run_siesta/attempt-0001/FORCE_STRESS",
+      "status": "PRESENT"
+    },
+    {
+      "name": "MESSAGES",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/work/run_siesta/attempt-0001/MESSAGES",
+      "status": "PRESENT"
+    },
+    {
+      "name": "Mg.ion",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/work/run_siesta/attempt-0001/Mg.ion",
+      "status": "PRESENT"
+    },
+    {
+      "name": "Mg.ion.xml",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/work/run_siesta/attempt-0001/Mg.ion.xml",
+      "status": "PRESENT"
+    },
+    {
+      "name": "Mg.psf",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/work/run_siesta/attempt-0001/Mg.psf",
+      "status": "PRESENT"
+    },
+    {
+      "name": "MgO.BASIS_ENTHALPY",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/work/run_siesta/attempt-0001/MgO.BASIS_ENTHALPY",
+      "status": "PRESENT"
+    },
+    {
+      "name": "MgO.BONDS",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/work/run_siesta/attempt-0001/MgO.BONDS",
+      "status": "PRESENT"
+    },
+    {
+      "name": "MgO.BONDS_FINAL",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/work/run_siesta/attempt-0001/MgO.BONDS_FINAL",
+      "status": "PRESENT"
+    },
+    {
+      "name": "MgO.DM",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/work/run_siesta/attempt-0001/MgO.DM",
+      "status": "PRESENT"
+    },
+    {
+      "name": "MgO.EIG",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/work/run_siesta/attempt-0001/MgO.EIG",
+      "status": "PRESENT"
+    },
+    {
+      "name": "MgO.FA",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/work/run_siesta/attempt-0001/MgO.FA",
+      "status": "PRESENT"
+    },
+    {
+      "name": "MgO.HSX",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/work/run_siesta/attempt-0001/MgO.HSX",
+      "status": "PRESENT"
+    },
+    {
+      "name": "MgO.KP",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/work/run_siesta/attempt-0001/MgO.KP",
+      "status": "PRESENT"
+    },
+    {
+      "name": "MgO.ORB_INDX",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/work/run_siesta/attempt-0001/MgO.ORB_INDX",
+      "status": "PRESENT"
+    },
+    {
+      "name": "MgO.STRUCT_OUT",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/work/run_siesta/attempt-0001/MgO.STRUCT_OUT",
+      "status": "PRESENT"
+    },
+    {
+      "name": "MgO.XV",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/work/run_siesta/attempt-0001/MgO.XV",
+      "status": "PRESENT"
+    },
+    {
+      "name": "MgO.alloc",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/work/run_siesta/attempt-0001/MgO.alloc",
+      "status": "PRESENT"
+    },
+    {
+      "name": "MgO.bib",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/work/run_siesta/attempt-0001/MgO.bib",
+      "status": "PRESENT"
+    },
+    {
+      "name": "NON_TRIMMED_KP_LIST",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/work/run_siesta/attempt-0001/NON_TRIMMED_KP_LIST",
+      "status": "PRESENT"
+    },
+    {
+      "name": "O.ion",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/work/run_siesta/attempt-0001/O.ion",
+      "status": "PRESENT"
+    },
+    {
+      "name": "O.ion.xml",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/work/run_siesta/attempt-0001/O.ion.xml",
+      "status": "PRESENT"
+    },
+    {
+      "name": "O.psf",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/work/run_siesta/attempt-0001/O.psf",
+      "status": "PRESENT"
+    },
+    {
+      "name": "OUTVARS.yml",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/work/run_siesta/attempt-0001/OUTVARS.yml",
+      "status": "PRESENT"
+    },
+    {
+      "name": "PARALLEL_DIST",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/work/run_siesta/attempt-0001/PARALLEL_DIST",
+      "status": "PRESENT"
+    },
+    {
+      "name": "attempt.json",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/work/run_siesta/attempt-0001/attempt.json",
+      "status": "PRESENT"
+    },
+    {
+      "name": "fdf.20260913T161327.645.log",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/work/run_siesta/attempt-0001/fdf.20260913T161327.645.log",
+      "status": "PRESENT"
+    },
+    {
+      "name": "input.fdf",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/work/run_siesta/attempt-0001/input.fdf",
+      "status": "PRESENT"
+    },
+    {
+      "name": "stderr.txt",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/work/run_siesta/attempt-0001/stderr.txt",
+      "status": "PRESENT"
+    },
+    {
+      "name": "stdout.txt",
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/work/run_siesta/attempt-0001/stdout.txt",
+      "status": "PRESENT"
+    }
+  ],
+  "inventory_status": "RECORDED",
+  "next_action": "qraft status /tmp/qraft-final-e2e-20260913/user project/runs",
+  "runs_root": "/tmp/qraft-final-e2e-20260913/user project/runs",
+  "target": "/tmp/qraft-final-e2e-20260913/user project/runs",
+  "target_kind": "RUNS_ROOT"
+}

@@ -1,0 +1,718 @@
+* Creating isolated environment: venv+pip...
+* Installing packages in isolated environment:
+  - setuptools>=69
+* Getting build dependencies for sdist...
+running egg_info
+writing src/qraft.egg-info/PKG-INFO
+writing dependency_links to src/qraft.egg-info/dependency_links.txt
+writing entry points to src/qraft.egg-info/entry_points.txt
+writing requirements to src/qraft.egg-info/requires.txt
+writing top-level names to src/qraft.egg-info/top_level.txt
+reading manifest file 'src/qraft.egg-info/SOURCES.txt'
+adding license file 'LICENSE'
+writing manifest file 'src/qraft.egg-info/SOURCES.txt'
+* Installed build dependency versions:
+  - setuptools==84.0.0
+* Building sdist...
+running sdist
+running egg_info
+writing src/qraft.egg-info/PKG-INFO
+writing dependency_links to src/qraft.egg-info/dependency_links.txt
+writing entry points to src/qraft.egg-info/entry_points.txt
+writing requirements to src/qraft.egg-info/requires.txt
+writing top-level names to src/qraft.egg-info/top_level.txt
+reading manifest file 'src/qraft.egg-info/SOURCES.txt'
+adding license file 'LICENSE'
+writing manifest file 'src/qraft.egg-info/SOURCES.txt'
+running check
+creating qraft-0.2.0
+creating qraft-0.2.0/src/qraft
+creating qraft-0.2.0/src/qraft.egg-info
+creating qraft-0.2.0/src/qraft/contracts
+creating qraft-0.2.0/src/qraft/core
+creating qraft-0.2.0/src/qraft/engines
+creating qraft-0.2.0/src/qraft/engines/siesta
+creating qraft-0.2.0/src/qraft/engines/siesta/data
+creating qraft-0.2.0/src/qraft/execution
+creating qraft-0.2.0/src/qraft/output
+creating qraft-0.2.0/src/qraft/protocols
+creating qraft-0.2.0/src/qraft/symmetry
+creating qraft-0.2.0/src/qraft/validation
+creating qraft-0.2.0/src/qraft/workflows
+creating qraft-0.2.0/tests
+copying files to qraft-0.2.0...
+copying LICENSE -> qraft-0.2.0
+copying README.md -> qraft-0.2.0
+copying pyproject.toml -> qraft-0.2.0
+copying src/qraft/__init__.py -> qraft-0.2.0/src/qraft
+copying src/qraft/__main__.py -> qraft-0.2.0/src/qraft
+copying src/qraft/application.py -> qraft-0.2.0/src/qraft
+copying src/qraft/authorization.py -> qraft-0.2.0/src/qraft
+copying src/qraft/band_paths.py -> qraft-0.2.0/src/qraft
+copying src/qraft/band_results.py -> qraft-0.2.0/src/qraft
+copying src/qraft/campaign.py -> qraft-0.2.0/src/qraft
+copying src/qraft/campaign_spec.py -> qraft-0.2.0/src/qraft
+copying src/qraft/cli.py -> qraft-0.2.0/src/qraft
+copying src/qraft/cli_reference.py -> qraft-0.2.0/src/qraft
+copying src/qraft/contract_adapters.py -> qraft-0.2.0/src/qraft
+copying src/qraft/controller_package.py -> qraft-0.2.0/src/qraft
+copying src/qraft/core_views.py -> qraft-0.2.0/src/qraft
+copying src/qraft/dos_pdos_results.py -> qraft-0.2.0/src/qraft
+copying src/qraft/environment_check.py -> qraft-0.2.0/src/qraft
+copying src/qraft/environment_inspection.py -> qraft-0.2.0/src/qraft
+copying src/qraft/errors.py -> qraft-0.2.0/src/qraft
+copying src/qraft/examples.py -> qraft-0.2.0/src/qraft
+copying src/qraft/execution_profile.py -> qraft-0.2.0/src/qraft
+copying src/qraft/execution_profiles.py -> qraft-0.2.0/src/qraft
+copying src/qraft/filesystem.py -> qraft-0.2.0/src/qraft
+copying src/qraft/gates.py -> qraft-0.2.0/src/qraft
+copying src/qraft/hpc.py -> qraft-0.2.0/src/qraft
+copying src/qraft/local_execution.py -> qraft-0.2.0/src/qraft
+copying src/qraft/m4_remote_package.py -> qraft-0.2.0/src/qraft
+copying src/qraft/magnetism.py -> qraft-0.2.0/src/qraft
+copying src/qraft/models.py -> qraft-0.2.0/src/qraft
+copying src/qraft/optical_results.py -> qraft-0.2.0/src/qraft
+copying src/qraft/project.py -> qraft-0.2.0/src/qraft
+copying src/qraft/project_packages.py -> qraft-0.2.0/src/qraft
+copying src/qraft/project_scaffold.py -> qraft-0.2.0/src/qraft
+copying src/qraft/readiness.py -> qraft-0.2.0/src/qraft
+copying src/qraft/real_smoke.py -> qraft-0.2.0/src/qraft
+copying src/qraft/remote.py -> qraft-0.2.0/src/qraft
+copying src/qraft/remote_environment.py -> qraft-0.2.0/src/qraft
+copying src/qraft/repl.py -> qraft-0.2.0/src/qraft
+copying src/qraft/run_inspection.py -> qraft-0.2.0/src/qraft
+copying src/qraft/run_preparation.py -> qraft-0.2.0/src/qraft
+copying src/qraft/runtime_compatibility.py -> qraft-0.2.0/src/qraft
+copying src/qraft/runtime_evidence.py -> qraft-0.2.0/src/qraft
+copying src/qraft/scientific_approvals.py -> qraft-0.2.0/src/qraft
+copying src/qraft/scientific_convergence.py -> qraft-0.2.0/src/qraft
+copying src/qraft/scientific_kgrid.py -> qraft-0.2.0/src/qraft
+copying src/qraft/scientific_observations.py -> qraft-0.2.0/src/qraft
+copying src/qraft/siesta_campaigns.py -> qraft-0.2.0/src/qraft
+copying src/qraft/siesta_validation.py -> qraft-0.2.0/src/qraft
+copying src/qraft/slurm_renderer.py -> qraft-0.2.0/src/qraft
+copying src/qraft/slurm_resources.py -> qraft-0.2.0/src/qraft
+copying src/qraft/storage.py -> qraft-0.2.0/src/qraft
+copying src/qraft/target_classifier.py -> qraft-0.2.0/src/qraft
+copying src/qraft/validation_render.py -> qraft-0.2.0/src/qraft
+copying src/qraft/version.py -> qraft-0.2.0/src/qraft
+copying src/qraft/workflow_authoring.py -> qraft-0.2.0/src/qraft
+copying src/qraft/workflow_composition.py -> qraft-0.2.0/src/qraft
+copying src/qraft/workflow_preflight.py -> qraft-0.2.0/src/qraft
+copying src/qraft/workspace.py -> qraft-0.2.0/src/qraft
+copying src/qraft.egg-info/PKG-INFO -> qraft-0.2.0/src/qraft.egg-info
+copying src/qraft.egg-info/SOURCES.txt -> qraft-0.2.0/src/qraft.egg-info
+copying src/qraft.egg-info/dependency_links.txt -> qraft-0.2.0/src/qraft.egg-info
+copying src/qraft.egg-info/entry_points.txt -> qraft-0.2.0/src/qraft.egg-info
+copying src/qraft.egg-info/requires.txt -> qraft-0.2.0/src/qraft.egg-info
+copying src/qraft.egg-info/top_level.txt -> qraft-0.2.0/src/qraft.egg-info
+copying src/qraft/contracts/__init__.py -> qraft-0.2.0/src/qraft/contracts
+copying src/qraft/contracts/artifacts.py -> qraft-0.2.0/src/qraft/contracts
+copying src/qraft/contracts/catalog.py -> qraft-0.2.0/src/qraft/contracts
+copying src/qraft/contracts/events.py -> qraft-0.2.0/src/qraft/contracts
+copying src/qraft/contracts/execution.py -> qraft-0.2.0/src/qraft/contracts
+copying src/qraft/contracts/plugins.py -> qraft-0.2.0/src/qraft/contracts
+copying src/qraft/contracts/run.py -> qraft-0.2.0/src/qraft/contracts
+copying src/qraft/contracts/scientific.py -> qraft-0.2.0/src/qraft/contracts
+copying src/qraft/contracts/serialization.py -> qraft-0.2.0/src/qraft/contracts
+copying src/qraft/contracts/status.py -> qraft-0.2.0/src/qraft/contracts
+copying src/qraft/contracts/validation.py -> qraft-0.2.0/src/qraft/contracts
+copying src/qraft/contracts/versioning.py -> qraft-0.2.0/src/qraft/contracts
+copying src/qraft/contracts/workflow.py -> qraft-0.2.0/src/qraft/contracts
+copying src/qraft/core/__init__.py -> qraft-0.2.0/src/qraft/core
+copying src/qraft/core/runtime.py -> qraft-0.2.0/src/qraft/core
+copying src/qraft/engines/__init__.py -> qraft-0.2.0/src/qraft/engines
+copying src/qraft/engines/base.py -> qraft-0.2.0/src/qraft/engines
+copying src/qraft/engines/registry.py -> qraft-0.2.0/src/qraft/engines
+copying src/qraft/engines/siesta/__init__.py -> qraft-0.2.0/src/qraft/engines/siesta
+copying src/qraft/engines/siesta/adapter.py -> qraft-0.2.0/src/qraft/engines/siesta
+copying src/qraft/engines/siesta/artifacts.py -> qraft-0.2.0/src/qraft/engines/siesta
+copying src/qraft/engines/siesta/band_paths.py -> qraft-0.2.0/src/qraft/engines/siesta
+copying src/qraft/engines/siesta/campaign_adapter.py -> qraft-0.2.0/src/qraft/engines/siesta
+copying src/qraft/engines/siesta/command.py -> qraft-0.2.0/src/qraft/engines/siesta
+copying src/qraft/engines/siesta/effective_fdf.py -> qraft-0.2.0/src/qraft/engines/siesta
+copying src/qraft/engines/siesta/electronic_properties.py -> qraft-0.2.0/src/qraft/engines/siesta
+copying src/qraft/engines/siesta/fdf_parser.py -> qraft-0.2.0/src/qraft/engines/siesta
+copying src/qraft/engines/siesta/fdf_registry.py -> qraft-0.2.0/src/qraft/engines/siesta
+copying src/qraft/engines/siesta/fdf_renderer.py -> qraft-0.2.0/src/qraft/engines/siesta
+copying src/qraft/engines/siesta/fdf_variants.py -> qraft-0.2.0/src/qraft/engines/siesta
+copying src/qraft/engines/siesta/ground_state.py -> qraft-0.2.0/src/qraft/engines/siesta
+copying src/qraft/engines/siesta/input_closure.py -> qraft-0.2.0/src/qraft/engines/siesta
+copying src/qraft/engines/siesta/input_validator.py -> qraft-0.2.0/src/qraft/engines/siesta
+copying src/qraft/engines/siesta/magnetism.py -> qraft-0.2.0/src/qraft/engines/siesta
+copying src/qraft/engines/siesta/models.py -> qraft-0.2.0/src/qraft/engines/siesta
+copying src/qraft/engines/siesta/output_parser.py -> qraft-0.2.0/src/qraft/engines/siesta
+copying src/qraft/engines/siesta/pseudopotentials.py -> qraft-0.2.0/src/qraft/engines/siesta
+copying src/qraft/engines/siesta/relaxation.py -> qraft-0.2.0/src/qraft/engines/siesta
+copying src/qraft/engines/siesta/validation_catalog.py -> qraft-0.2.0/src/qraft/engines/siesta
+copying src/qraft/engines/siesta/validation_profile.py -> qraft-0.2.0/src/qraft/engines/siesta
+copying src/qraft/engines/siesta/data/__init__.py -> qraft-0.2.0/src/qraft/engines/siesta/data
+copying src/qraft/engines/siesta/data/supported_fdf_registry_5.4.2.json -> qraft-0.2.0/src/qraft/engines/siesta/data
+copying src/qraft/engines/siesta/data/validation_rules_5.4.2.json -> qraft-0.2.0/src/qraft/engines/siesta/data
+copying src/qraft/execution/__init__.py -> qraft-0.2.0/src/qraft/execution
+copying src/qraft/execution/adapters.py -> qraft-0.2.0/src/qraft/execution
+copying src/qraft/execution/adaptive_gate.py -> qraft-0.2.0/src/qraft/execution
+copying src/qraft/execution/allocation_controller.py -> qraft-0.2.0/src/qraft/execution
+copying src/qraft/execution/allocation_controller_compat.py -> qraft-0.2.0/src/qraft/execution
+copying src/qraft/execution/campaign_progress.py -> qraft-0.2.0/src/qraft/execution
+copying src/qraft/execution/canonical_controller.py -> qraft-0.2.0/src/qraft/execution
+copying src/qraft/execution/capability_plugins.py -> qraft-0.2.0/src/qraft/execution
+copying src/qraft/execution/capability_runtime.py -> qraft-0.2.0/src/qraft/execution
+copying src/qraft/execution/command_capability.py -> qraft-0.2.0/src/qraft/execution
+copying src/qraft/execution/direct_launcher.py -> qraft-0.2.0/src/qraft/execution
+copying src/qraft/execution/hydra_launcher.py -> qraft-0.2.0/src/qraft/execution
+copying src/qraft/execution/legacy_translation.py -> qraft-0.2.0/src/qraft/execution
+copying src/qraft/execution/openmpi_launcher.py -> qraft-0.2.0/src/qraft/execution
+copying src/qraft/execution/placement_validation.py -> qraft-0.2.0/src/qraft/execution
+copying src/qraft/execution/resource_coordinator.py -> qraft-0.2.0/src/qraft/execution
+copying src/qraft/execution/runtime_composition.py -> qraft-0.2.0/src/qraft/execution
+copying src/qraft/execution/slurm_environment.py -> qraft-0.2.0/src/qraft/execution
+copying src/qraft/execution/srun_launcher.py -> qraft-0.2.0/src/qraft/execution
+copying src/qraft/output/__init__.py -> qraft-0.2.0/src/qraft/output
+copying src/qraft/output/contributor.py -> qraft-0.2.0/src/qraft/output
+copying src/qraft/output/csv_exporter.py -> qraft-0.2.0/src/qraft/output
+copying src/qraft/output/model.py -> qraft-0.2.0/src/qraft/output
+copying src/qraft/output/text_writer.py -> qraft-0.2.0/src/qraft/output
+copying src/qraft/protocols/__init__.py -> qraft-0.2.0/src/qraft/protocols
+copying src/qraft/protocols/chained_convergence.py -> qraft-0.2.0/src/qraft/protocols
+copying src/qraft/protocols/convergence.py -> qraft-0.2.0/src/qraft/protocols
+copying src/qraft/protocols/electronic_properties.py -> qraft-0.2.0/src/qraft/protocols
+copying src/qraft/protocols/ground_state.py -> qraft-0.2.0/src/qraft/protocols
+copying src/qraft/protocols/magnetic_selection.py -> qraft-0.2.0/src/qraft/protocols
+copying src/qraft/protocols/relaxation.py -> qraft-0.2.0/src/qraft/protocols
+copying src/qraft/protocols/single_fdf.py -> qraft-0.2.0/src/qraft/protocols
+copying src/qraft/symmetry/__init__.py -> qraft-0.2.0/src/qraft/symmetry
+copying src/qraft/symmetry/seekpath.py -> qraft-0.2.0/src/qraft/symmetry
+copying src/qraft/validation/__init__.py -> qraft-0.2.0/src/qraft/validation
+copying src/qraft/validation/embedded_code.py -> qraft-0.2.0/src/qraft/validation
+copying src/qraft/validation/scheduler_resolution.py -> qraft-0.2.0/src/qraft/validation
+copying src/qraft/validation/slurm_evidence.py -> qraft-0.2.0/src/qraft/validation
+copying src/qraft/workflows/__init__.py -> qraft-0.2.0/src/qraft/workflows
+copying src/qraft/workflows/compiler.py -> qraft-0.2.0/src/qraft/workflows
+copying src/qraft/workflows/diagnostics.py -> qraft-0.2.0/src/qraft/workflows
+copying src/qraft/workflows/lock_loader.py -> qraft-0.2.0/src/qraft/workflows
+copying src/qraft/workflows/models.py -> qraft-0.2.0/src/qraft/workflows
+copying src/qraft/workflows/parser.py -> qraft-0.2.0/src/qraft/workflows
+copying src/qraft/workflows/render.py -> qraft-0.2.0/src/qraft/workflows
+copying src/qraft/workflows/resolver.py -> qraft-0.2.0/src/qraft/workflows
+copying tests/test_band_results.py -> qraft-0.2.0/tests
+copying tests/test_cli_output_policy.py -> qraft-0.2.0/tests
+copying tests/test_cli_phase3_grouping.py -> qraft-0.2.0/tests
+copying tests/test_cli_phase4_orientation.py -> qraft-0.2.0/tests
+copying tests/test_cli_phase5_readiness.py -> qraft-0.2.0/tests
+copying tests/test_cli_phase6_core_views.py -> qraft-0.2.0/tests
+copying tests/test_cli_reference_generation.py -> qraft-0.2.0/tests
+copying tests/test_cli_single_fdf_views.py -> qraft-0.2.0/tests
+copying tests/test_cli_surface.py -> qraft-0.2.0/tests
+copying tests/test_cli_user_ux.py -> qraft-0.2.0/tests
+copying tests/test_dos_pdos_results.py -> qraft-0.2.0/tests
+copying tests/test_optical_results.py -> qraft-0.2.0/tests
+copying src/qraft.egg-info/SOURCES.txt -> qraft-0.2.0/src/qraft.egg-info
+Writing qraft-0.2.0/setup.cfg
+Creating tar archive
+removing 'qraft-0.2.0' (and everything under it)
+* Building wheel from sdist
+* Creating isolated environment: venv+pip...
+* Installing packages in isolated environment:
+  - setuptools>=69
+* Getting build dependencies for wheel...
+running egg_info
+writing src/qraft.egg-info/PKG-INFO
+writing dependency_links to src/qraft.egg-info/dependency_links.txt
+writing entry points to src/qraft.egg-info/entry_points.txt
+writing requirements to src/qraft.egg-info/requires.txt
+writing top-level names to src/qraft.egg-info/top_level.txt
+reading manifest file 'src/qraft.egg-info/SOURCES.txt'
+adding license file 'LICENSE'
+writing manifest file 'src/qraft.egg-info/SOURCES.txt'
+* Installed build dependency versions:
+  - setuptools==84.0.0
+* Building wheel...
+running bdist_wheel
+running build
+running build_py
+creating build/lib/qraft
+copying src/qraft/examples.py -> build/lib/qraft
+copying src/qraft/environment_check.py -> build/lib/qraft
+copying src/qraft/optical_results.py -> build/lib/qraft
+copying src/qraft/execution_profile.py -> build/lib/qraft
+copying src/qraft/project_scaffold.py -> build/lib/qraft
+copying src/qraft/workspace.py -> build/lib/qraft
+copying src/qraft/siesta_validation.py -> build/lib/qraft
+copying src/qraft/real_smoke.py -> build/lib/qraft
+copying src/qraft/remote.py -> build/lib/qraft
+copying src/qraft/models.py -> build/lib/qraft
+copying src/qraft/run_inspection.py -> build/lib/qraft
+copying src/qraft/core_views.py -> build/lib/qraft
+copying src/qraft/__main__.py -> build/lib/qraft
+copying src/qraft/authorization.py -> build/lib/qraft
+copying src/qraft/validation_render.py -> build/lib/qraft
+copying src/qraft/repl.py -> build/lib/qraft
+copying src/qraft/magnetism.py -> build/lib/qraft
+copying src/qraft/scientific_kgrid.py -> build/lib/qraft
+copying src/qraft/storage.py -> build/lib/qraft
+copying src/qraft/campaign.py -> build/lib/qraft
+copying src/qraft/environment_inspection.py -> build/lib/qraft
+copying src/qraft/filesystem.py -> build/lib/qraft
+copying src/qraft/run_preparation.py -> build/lib/qraft
+copying src/qraft/band_results.py -> build/lib/qraft
+copying src/qraft/scientific_observations.py -> build/lib/qraft
+copying src/qraft/cli.py -> build/lib/qraft
+copying src/qraft/version.py -> build/lib/qraft
+copying src/qraft/runtime_compatibility.py -> build/lib/qraft
+copying src/qraft/campaign_spec.py -> build/lib/qraft
+copying src/qraft/runtime_evidence.py -> build/lib/qraft
+copying src/qraft/scientific_convergence.py -> build/lib/qraft
+copying src/qraft/__init__.py -> build/lib/qraft
+copying src/qraft/target_classifier.py -> build/lib/qraft
+copying src/qraft/project.py -> build/lib/qraft
+copying src/qraft/execution_profiles.py -> build/lib/qraft
+copying src/qraft/contract_adapters.py -> build/lib/qraft
+copying src/qraft/workflow_preflight.py -> build/lib/qraft
+copying src/qraft/band_paths.py -> build/lib/qraft
+copying src/qraft/local_execution.py -> build/lib/qraft
+copying src/qraft/application.py -> build/lib/qraft
+copying src/qraft/workflow_authoring.py -> build/lib/qraft
+copying src/qraft/project_packages.py -> build/lib/qraft
+copying src/qraft/slurm_renderer.py -> build/lib/qraft
+copying src/qraft/errors.py -> build/lib/qraft
+copying src/qraft/remote_environment.py -> build/lib/qraft
+copying src/qraft/workflow_composition.py -> build/lib/qraft
+copying src/qraft/cli_reference.py -> build/lib/qraft
+copying src/qraft/hpc.py -> build/lib/qraft
+copying src/qraft/gates.py -> build/lib/qraft
+copying src/qraft/slurm_resources.py -> build/lib/qraft
+copying src/qraft/readiness.py -> build/lib/qraft
+copying src/qraft/dos_pdos_results.py -> build/lib/qraft
+copying src/qraft/controller_package.py -> build/lib/qraft
+copying src/qraft/scientific_approvals.py -> build/lib/qraft
+copying src/qraft/siesta_campaigns.py -> build/lib/qraft
+copying src/qraft/m4_remote_package.py -> build/lib/qraft
+creating build/lib/qraft/core
+copying src/qraft/core/runtime.py -> build/lib/qraft/core
+copying src/qraft/core/__init__.py -> build/lib/qraft/core
+creating build/lib/qraft/engines
+copying src/qraft/engines/registry.py -> build/lib/qraft/engines
+copying src/qraft/engines/__init__.py -> build/lib/qraft/engines
+copying src/qraft/engines/base.py -> build/lib/qraft/engines
+creating build/lib/qraft/output
+copying src/qraft/output/csv_exporter.py -> build/lib/qraft/output
+copying src/qraft/output/__init__.py -> build/lib/qraft/output
+copying src/qraft/output/contributor.py -> build/lib/qraft/output
+copying src/qraft/output/model.py -> build/lib/qraft/output
+copying src/qraft/output/text_writer.py -> build/lib/qraft/output
+creating build/lib/qraft/protocols
+copying src/qraft/protocols/chained_convergence.py -> build/lib/qraft/protocols
+copying src/qraft/protocols/relaxation.py -> build/lib/qraft/protocols
+copying src/qraft/protocols/ground_state.py -> build/lib/qraft/protocols
+copying src/qraft/protocols/convergence.py -> build/lib/qraft/protocols
+copying src/qraft/protocols/__init__.py -> build/lib/qraft/protocols
+copying src/qraft/protocols/single_fdf.py -> build/lib/qraft/protocols
+copying src/qraft/protocols/electronic_properties.py -> build/lib/qraft/protocols
+copying src/qraft/protocols/magnetic_selection.py -> build/lib/qraft/protocols
+creating build/lib/qraft/execution
+copying src/qraft/execution/legacy_translation.py -> build/lib/qraft/execution
+copying src/qraft/execution/srun_launcher.py -> build/lib/qraft/execution
+copying src/qraft/execution/hydra_launcher.py -> build/lib/qraft/execution
+copying src/qraft/execution/runtime_composition.py -> build/lib/qraft/execution
+copying src/qraft/execution/allocation_controller_compat.py -> build/lib/qraft/execution
+copying src/qraft/execution/capability_plugins.py -> build/lib/qraft/execution
+copying src/qraft/execution/placement_validation.py -> build/lib/qraft/execution
+copying src/qraft/execution/resource_coordinator.py -> build/lib/qraft/execution
+copying src/qraft/execution/__init__.py -> build/lib/qraft/execution
+copying src/qraft/execution/direct_launcher.py -> build/lib/qraft/execution
+copying src/qraft/execution/allocation_controller.py -> build/lib/qraft/execution
+copying src/qraft/execution/command_capability.py -> build/lib/qraft/execution
+copying src/qraft/execution/capability_runtime.py -> build/lib/qraft/execution
+copying src/qraft/execution/adapters.py -> build/lib/qraft/execution
+copying src/qraft/execution/canonical_controller.py -> build/lib/qraft/execution
+copying src/qraft/execution/campaign_progress.py -> build/lib/qraft/execution
+copying src/qraft/execution/openmpi_launcher.py -> build/lib/qraft/execution
+copying src/qraft/execution/slurm_environment.py -> build/lib/qraft/execution
+copying src/qraft/execution/adaptive_gate.py -> build/lib/qraft/execution
+creating build/lib/qraft/symmetry
+copying src/qraft/symmetry/seekpath.py -> build/lib/qraft/symmetry
+copying src/qraft/symmetry/__init__.py -> build/lib/qraft/symmetry
+creating build/lib/qraft/workflows
+copying src/qraft/workflows/models.py -> build/lib/qraft/workflows
+copying src/qraft/workflows/__init__.py -> build/lib/qraft/workflows
+copying src/qraft/workflows/parser.py -> build/lib/qraft/workflows
+copying src/qraft/workflows/render.py -> build/lib/qraft/workflows
+copying src/qraft/workflows/compiler.py -> build/lib/qraft/workflows
+copying src/qraft/workflows/diagnostics.py -> build/lib/qraft/workflows
+copying src/qraft/workflows/resolver.py -> build/lib/qraft/workflows
+copying src/qraft/workflows/lock_loader.py -> build/lib/qraft/workflows
+creating build/lib/qraft/contracts
+copying src/qraft/contracts/catalog.py -> build/lib/qraft/contracts
+copying src/qraft/contracts/plugins.py -> build/lib/qraft/contracts
+copying src/qraft/contracts/execution.py -> build/lib/qraft/contracts
+copying src/qraft/contracts/run.py -> build/lib/qraft/contracts
+copying src/qraft/contracts/versioning.py -> build/lib/qraft/contracts
+copying src/qraft/contracts/serialization.py -> build/lib/qraft/contracts
+copying src/qraft/contracts/events.py -> build/lib/qraft/contracts
+copying src/qraft/contracts/__init__.py -> build/lib/qraft/contracts
+copying src/qraft/contracts/validation.py -> build/lib/qraft/contracts
+copying src/qraft/contracts/scientific.py -> build/lib/qraft/contracts
+copying src/qraft/contracts/workflow.py -> build/lib/qraft/contracts
+copying src/qraft/contracts/status.py -> build/lib/qraft/contracts
+copying src/qraft/contracts/artifacts.py -> build/lib/qraft/contracts
+creating build/lib/qraft/validation
+copying src/qraft/validation/embedded_code.py -> build/lib/qraft/validation
+copying src/qraft/validation/scheduler_resolution.py -> build/lib/qraft/validation
+copying src/qraft/validation/__init__.py -> build/lib/qraft/validation
+copying src/qraft/validation/slurm_evidence.py -> build/lib/qraft/validation
+creating build/lib/qraft/engines/siesta
+copying src/qraft/engines/siesta/relaxation.py -> build/lib/qraft/engines/siesta
+copying src/qraft/engines/siesta/campaign_adapter.py -> build/lib/qraft/engines/siesta
+copying src/qraft/engines/siesta/command.py -> build/lib/qraft/engines/siesta
+copying src/qraft/engines/siesta/effective_fdf.py -> build/lib/qraft/engines/siesta
+copying src/qraft/engines/siesta/models.py -> build/lib/qraft/engines/siesta
+copying src/qraft/engines/siesta/magnetism.py -> build/lib/qraft/engines/siesta
+copying src/qraft/engines/siesta/validation_profile.py -> build/lib/qraft/engines/siesta
+copying src/qraft/engines/siesta/adapter.py -> build/lib/qraft/engines/siesta
+copying src/qraft/engines/siesta/output_parser.py -> build/lib/qraft/engines/siesta
+copying src/qraft/engines/siesta/ground_state.py -> build/lib/qraft/engines/siesta
+copying src/qraft/engines/siesta/fdf_parser.py -> build/lib/qraft/engines/siesta
+copying src/qraft/engines/siesta/fdf_variants.py -> build/lib/qraft/engines/siesta
+copying src/qraft/engines/siesta/__init__.py -> build/lib/qraft/engines/siesta
+copying src/qraft/engines/siesta/input_validator.py -> build/lib/qraft/engines/siesta
+copying src/qraft/engines/siesta/band_paths.py -> build/lib/qraft/engines/siesta
+copying src/qraft/engines/siesta/fdf_registry.py -> build/lib/qraft/engines/siesta
+copying src/qraft/engines/siesta/electronic_properties.py -> build/lib/qraft/engines/siesta
+copying src/qraft/engines/siesta/validation_catalog.py -> build/lib/qraft/engines/siesta
+copying src/qraft/engines/siesta/pseudopotentials.py -> build/lib/qraft/engines/siesta
+copying src/qraft/engines/siesta/fdf_renderer.py -> build/lib/qraft/engines/siesta
+copying src/qraft/engines/siesta/artifacts.py -> build/lib/qraft/engines/siesta
+copying src/qraft/engines/siesta/input_closure.py -> build/lib/qraft/engines/siesta
+creating build/lib/qraft/engines/siesta/data
+copying src/qraft/engines/siesta/data/__init__.py -> build/lib/qraft/engines/siesta/data
+running egg_info
+writing src/qraft.egg-info/PKG-INFO
+writing dependency_links to src/qraft.egg-info/dependency_links.txt
+writing entry points to src/qraft.egg-info/entry_points.txt
+writing requirements to src/qraft.egg-info/requires.txt
+writing top-level names to src/qraft.egg-info/top_level.txt
+reading manifest file 'src/qraft.egg-info/SOURCES.txt'
+adding license file 'LICENSE'
+writing manifest file 'src/qraft.egg-info/SOURCES.txt'
+copying src/qraft/engines/siesta/data/supported_fdf_registry_5.4.2.json -> build/lib/qraft/engines/siesta/data
+copying src/qraft/engines/siesta/data/validation_rules_5.4.2.json -> build/lib/qraft/engines/siesta/data
+installing to build/bdist.linux-x86_64/wheel
+running install
+running install_lib
+creating build/bdist.linux-x86_64/wheel
+creating build/bdist.linux-x86_64/wheel/qraft
+copying build/lib/qraft/examples.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/environment_check.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/optical_results.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/execution_profile.py -> build/bdist.linux-x86_64/wheel/./qraft
+creating build/bdist.linux-x86_64/wheel/qraft/core
+copying build/lib/qraft/core/runtime.py -> build/bdist.linux-x86_64/wheel/./qraft/core
+copying build/lib/qraft/core/__init__.py -> build/bdist.linux-x86_64/wheel/./qraft/core
+creating build/bdist.linux-x86_64/wheel/qraft/engines
+creating build/bdist.linux-x86_64/wheel/qraft/engines/siesta
+copying build/lib/qraft/engines/siesta/relaxation.py -> build/bdist.linux-x86_64/wheel/./qraft/engines/siesta
+copying build/lib/qraft/engines/siesta/campaign_adapter.py -> build/bdist.linux-x86_64/wheel/./qraft/engines/siesta
+copying build/lib/qraft/engines/siesta/command.py -> build/bdist.linux-x86_64/wheel/./qraft/engines/siesta
+copying build/lib/qraft/engines/siesta/effective_fdf.py -> build/bdist.linux-x86_64/wheel/./qraft/engines/siesta
+copying build/lib/qraft/engines/siesta/models.py -> build/bdist.linux-x86_64/wheel/./qraft/engines/siesta
+copying build/lib/qraft/engines/siesta/magnetism.py -> build/bdist.linux-x86_64/wheel/./qraft/engines/siesta
+copying build/lib/qraft/engines/siesta/validation_profile.py -> build/bdist.linux-x86_64/wheel/./qraft/engines/siesta
+creating build/bdist.linux-x86_64/wheel/qraft/engines/siesta/data
+copying build/lib/qraft/engines/siesta/data/validation_rules_5.4.2.json -> build/bdist.linux-x86_64/wheel/./qraft/engines/siesta/data
+copying build/lib/qraft/engines/siesta/data/__init__.py -> build/bdist.linux-x86_64/wheel/./qraft/engines/siesta/data
+copying build/lib/qraft/engines/siesta/data/supported_fdf_registry_5.4.2.json -> build/bdist.linux-x86_64/wheel/./qraft/engines/siesta/data
+copying build/lib/qraft/engines/siesta/adapter.py -> build/bdist.linux-x86_64/wheel/./qraft/engines/siesta
+copying build/lib/qraft/engines/siesta/output_parser.py -> build/bdist.linux-x86_64/wheel/./qraft/engines/siesta
+copying build/lib/qraft/engines/siesta/ground_state.py -> build/bdist.linux-x86_64/wheel/./qraft/engines/siesta
+copying build/lib/qraft/engines/siesta/fdf_parser.py -> build/bdist.linux-x86_64/wheel/./qraft/engines/siesta
+copying build/lib/qraft/engines/siesta/fdf_variants.py -> build/bdist.linux-x86_64/wheel/./qraft/engines/siesta
+copying build/lib/qraft/engines/siesta/__init__.py -> build/bdist.linux-x86_64/wheel/./qraft/engines/siesta
+copying build/lib/qraft/engines/siesta/input_validator.py -> build/bdist.linux-x86_64/wheel/./qraft/engines/siesta
+copying build/lib/qraft/engines/siesta/band_paths.py -> build/bdist.linux-x86_64/wheel/./qraft/engines/siesta
+copying build/lib/qraft/engines/siesta/fdf_registry.py -> build/bdist.linux-x86_64/wheel/./qraft/engines/siesta
+copying build/lib/qraft/engines/siesta/electronic_properties.py -> build/bdist.linux-x86_64/wheel/./qraft/engines/siesta
+copying build/lib/qraft/engines/siesta/validation_catalog.py -> build/bdist.linux-x86_64/wheel/./qraft/engines/siesta
+copying build/lib/qraft/engines/siesta/pseudopotentials.py -> build/bdist.linux-x86_64/wheel/./qraft/engines/siesta
+copying build/lib/qraft/engines/siesta/fdf_renderer.py -> build/bdist.linux-x86_64/wheel/./qraft/engines/siesta
+copying build/lib/qraft/engines/siesta/artifacts.py -> build/bdist.linux-x86_64/wheel/./qraft/engines/siesta
+copying build/lib/qraft/engines/siesta/input_closure.py -> build/bdist.linux-x86_64/wheel/./qraft/engines/siesta
+copying build/lib/qraft/engines/registry.py -> build/bdist.linux-x86_64/wheel/./qraft/engines
+copying build/lib/qraft/engines/__init__.py -> build/bdist.linux-x86_64/wheel/./qraft/engines
+copying build/lib/qraft/engines/base.py -> build/bdist.linux-x86_64/wheel/./qraft/engines
+copying build/lib/qraft/project_scaffold.py -> build/bdist.linux-x86_64/wheel/./qraft
+creating build/bdist.linux-x86_64/wheel/qraft/output
+copying build/lib/qraft/output/csv_exporter.py -> build/bdist.linux-x86_64/wheel/./qraft/output
+copying build/lib/qraft/output/__init__.py -> build/bdist.linux-x86_64/wheel/./qraft/output
+copying build/lib/qraft/output/contributor.py -> build/bdist.linux-x86_64/wheel/./qraft/output
+copying build/lib/qraft/output/model.py -> build/bdist.linux-x86_64/wheel/./qraft/output
+copying build/lib/qraft/output/text_writer.py -> build/bdist.linux-x86_64/wheel/./qraft/output
+copying build/lib/qraft/workspace.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/siesta_validation.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/real_smoke.py -> build/bdist.linux-x86_64/wheel/./qraft
+creating build/bdist.linux-x86_64/wheel/qraft/protocols
+copying build/lib/qraft/protocols/chained_convergence.py -> build/bdist.linux-x86_64/wheel/./qraft/protocols
+copying build/lib/qraft/protocols/relaxation.py -> build/bdist.linux-x86_64/wheel/./qraft/protocols
+copying build/lib/qraft/protocols/ground_state.py -> build/bdist.linux-x86_64/wheel/./qraft/protocols
+copying build/lib/qraft/protocols/convergence.py -> build/bdist.linux-x86_64/wheel/./qraft/protocols
+copying build/lib/qraft/protocols/__init__.py -> build/bdist.linux-x86_64/wheel/./qraft/protocols
+copying build/lib/qraft/protocols/single_fdf.py -> build/bdist.linux-x86_64/wheel/./qraft/protocols
+copying build/lib/qraft/protocols/electronic_properties.py -> build/bdist.linux-x86_64/wheel/./qraft/protocols
+copying build/lib/qraft/protocols/magnetic_selection.py -> build/bdist.linux-x86_64/wheel/./qraft/protocols
+creating build/bdist.linux-x86_64/wheel/qraft/execution
+copying build/lib/qraft/execution/legacy_translation.py -> build/bdist.linux-x86_64/wheel/./qraft/execution
+copying build/lib/qraft/execution/srun_launcher.py -> build/bdist.linux-x86_64/wheel/./qraft/execution
+copying build/lib/qraft/execution/hydra_launcher.py -> build/bdist.linux-x86_64/wheel/./qraft/execution
+copying build/lib/qraft/execution/runtime_composition.py -> build/bdist.linux-x86_64/wheel/./qraft/execution
+copying build/lib/qraft/execution/allocation_controller_compat.py -> build/bdist.linux-x86_64/wheel/./qraft/execution
+copying build/lib/qraft/execution/capability_plugins.py -> build/bdist.linux-x86_64/wheel/./qraft/execution
+copying build/lib/qraft/execution/placement_validation.py -> build/bdist.linux-x86_64/wheel/./qraft/execution
+copying build/lib/qraft/execution/resource_coordinator.py -> build/bdist.linux-x86_64/wheel/./qraft/execution
+copying build/lib/qraft/execution/__init__.py -> build/bdist.linux-x86_64/wheel/./qraft/execution
+copying build/lib/qraft/execution/direct_launcher.py -> build/bdist.linux-x86_64/wheel/./qraft/execution
+copying build/lib/qraft/execution/allocation_controller.py -> build/bdist.linux-x86_64/wheel/./qraft/execution
+copying build/lib/qraft/execution/command_capability.py -> build/bdist.linux-x86_64/wheel/./qraft/execution
+copying build/lib/qraft/execution/capability_runtime.py -> build/bdist.linux-x86_64/wheel/./qraft/execution
+copying build/lib/qraft/execution/adapters.py -> build/bdist.linux-x86_64/wheel/./qraft/execution
+copying build/lib/qraft/execution/canonical_controller.py -> build/bdist.linux-x86_64/wheel/./qraft/execution
+copying build/lib/qraft/execution/campaign_progress.py -> build/bdist.linux-x86_64/wheel/./qraft/execution
+copying build/lib/qraft/execution/openmpi_launcher.py -> build/bdist.linux-x86_64/wheel/./qraft/execution
+copying build/lib/qraft/execution/slurm_environment.py -> build/bdist.linux-x86_64/wheel/./qraft/execution
+copying build/lib/qraft/execution/adaptive_gate.py -> build/bdist.linux-x86_64/wheel/./qraft/execution
+copying build/lib/qraft/remote.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/models.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/run_inspection.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/core_views.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/__main__.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/authorization.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/validation_render.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/repl.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/magnetism.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/scientific_kgrid.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/storage.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/campaign.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/environment_inspection.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/filesystem.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/run_preparation.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/band_results.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/scientific_observations.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/cli.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/version.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/runtime_compatibility.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/campaign_spec.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/runtime_evidence.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/scientific_convergence.py -> build/bdist.linux-x86_64/wheel/./qraft
+creating build/bdist.linux-x86_64/wheel/qraft/symmetry
+copying build/lib/qraft/symmetry/seekpath.py -> build/bdist.linux-x86_64/wheel/./qraft/symmetry
+copying build/lib/qraft/symmetry/__init__.py -> build/bdist.linux-x86_64/wheel/./qraft/symmetry
+copying build/lib/qraft/__init__.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/target_classifier.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/project.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/execution_profiles.py -> build/bdist.linux-x86_64/wheel/./qraft
+creating build/bdist.linux-x86_64/wheel/qraft/workflows
+copying build/lib/qraft/workflows/models.py -> build/bdist.linux-x86_64/wheel/./qraft/workflows
+copying build/lib/qraft/workflows/__init__.py -> build/bdist.linux-x86_64/wheel/./qraft/workflows
+copying build/lib/qraft/workflows/parser.py -> build/bdist.linux-x86_64/wheel/./qraft/workflows
+copying build/lib/qraft/workflows/render.py -> build/bdist.linux-x86_64/wheel/./qraft/workflows
+copying build/lib/qraft/workflows/compiler.py -> build/bdist.linux-x86_64/wheel/./qraft/workflows
+copying build/lib/qraft/workflows/diagnostics.py -> build/bdist.linux-x86_64/wheel/./qraft/workflows
+copying build/lib/qraft/workflows/resolver.py -> build/bdist.linux-x86_64/wheel/./qraft/workflows
+copying build/lib/qraft/workflows/lock_loader.py -> build/bdist.linux-x86_64/wheel/./qraft/workflows
+copying build/lib/qraft/contract_adapters.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/workflow_preflight.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/band_paths.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/local_execution.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/application.py -> build/bdist.linux-x86_64/wheel/./qraft
+creating build/bdist.linux-x86_64/wheel/qraft/contracts
+copying build/lib/qraft/contracts/catalog.py -> build/bdist.linux-x86_64/wheel/./qraft/contracts
+copying build/lib/qraft/contracts/plugins.py -> build/bdist.linux-x86_64/wheel/./qraft/contracts
+copying build/lib/qraft/contracts/execution.py -> build/bdist.linux-x86_64/wheel/./qraft/contracts
+copying build/lib/qraft/contracts/run.py -> build/bdist.linux-x86_64/wheel/./qraft/contracts
+copying build/lib/qraft/contracts/versioning.py -> build/bdist.linux-x86_64/wheel/./qraft/contracts
+copying build/lib/qraft/contracts/serialization.py -> build/bdist.linux-x86_64/wheel/./qraft/contracts
+copying build/lib/qraft/contracts/events.py -> build/bdist.linux-x86_64/wheel/./qraft/contracts
+copying build/lib/qraft/contracts/__init__.py -> build/bdist.linux-x86_64/wheel/./qraft/contracts
+copying build/lib/qraft/contracts/validation.py -> build/bdist.linux-x86_64/wheel/./qraft/contracts
+copying build/lib/qraft/contracts/scientific.py -> build/bdist.linux-x86_64/wheel/./qraft/contracts
+copying build/lib/qraft/contracts/workflow.py -> build/bdist.linux-x86_64/wheel/./qraft/contracts
+copying build/lib/qraft/contracts/status.py -> build/bdist.linux-x86_64/wheel/./qraft/contracts
+copying build/lib/qraft/contracts/artifacts.py -> build/bdist.linux-x86_64/wheel/./qraft/contracts
+copying build/lib/qraft/workflow_authoring.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/project_packages.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/slurm_renderer.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/errors.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/remote_environment.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/workflow_composition.py -> build/bdist.linux-x86_64/wheel/./qraft
+creating build/bdist.linux-x86_64/wheel/qraft/validation
+copying build/lib/qraft/validation/embedded_code.py -> build/bdist.linux-x86_64/wheel/./qraft/validation
+copying build/lib/qraft/validation/scheduler_resolution.py -> build/bdist.linux-x86_64/wheel/./qraft/validation
+copying build/lib/qraft/validation/__init__.py -> build/bdist.linux-x86_64/wheel/./qraft/validation
+copying build/lib/qraft/validation/slurm_evidence.py -> build/bdist.linux-x86_64/wheel/./qraft/validation
+copying build/lib/qraft/cli_reference.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/hpc.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/gates.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/slurm_resources.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/readiness.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/dos_pdos_results.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/controller_package.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/scientific_approvals.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/siesta_campaigns.py -> build/bdist.linux-x86_64/wheel/./qraft
+copying build/lib/qraft/m4_remote_package.py -> build/bdist.linux-x86_64/wheel/./qraft
+running install_egg_info
+Copying src/qraft.egg-info to build/bdist.linux-x86_64/wheel/./qraft-0.2.0-py3.12.egg-info
+running install_scripts
+creating build/bdist.linux-x86_64/wheel/qraft-0.2.0.dist-info/WHEEL
+creating '/mnt/c/Users/Jairo/Downloads/QRAFT/.audit-runtime/release-dist/.tmp-5aduhhsb/qraft-0.2.0-py3-none-any.whl' and adding 'build/bdist.linux-x86_64/wheel' to it
+adding 'qraft/__init__.py'
+adding 'qraft/__main__.py'
+adding 'qraft/application.py'
+adding 'qraft/authorization.py'
+adding 'qraft/band_paths.py'
+adding 'qraft/band_results.py'
+adding 'qraft/campaign.py'
+adding 'qraft/campaign_spec.py'
+adding 'qraft/cli.py'
+adding 'qraft/cli_reference.py'
+adding 'qraft/contract_adapters.py'
+adding 'qraft/controller_package.py'
+adding 'qraft/core_views.py'
+adding 'qraft/dos_pdos_results.py'
+adding 'qraft/environment_check.py'
+adding 'qraft/environment_inspection.py'
+adding 'qraft/errors.py'
+adding 'qraft/examples.py'
+adding 'qraft/execution_profile.py'
+adding 'qraft/execution_profiles.py'
+adding 'qraft/filesystem.py'
+adding 'qraft/gates.py'
+adding 'qraft/hpc.py'
+adding 'qraft/local_execution.py'
+adding 'qraft/m4_remote_package.py'
+adding 'qraft/magnetism.py'
+adding 'qraft/models.py'
+adding 'qraft/optical_results.py'
+adding 'qraft/project.py'
+adding 'qraft/project_packages.py'
+adding 'qraft/project_scaffold.py'
+adding 'qraft/readiness.py'
+adding 'qraft/real_smoke.py'
+adding 'qraft/remote.py'
+adding 'qraft/remote_environment.py'
+adding 'qraft/repl.py'
+adding 'qraft/run_inspection.py'
+adding 'qraft/run_preparation.py'
+adding 'qraft/runtime_compatibility.py'
+adding 'qraft/runtime_evidence.py'
+adding 'qraft/scientific_approvals.py'
+adding 'qraft/scientific_convergence.py'
+adding 'qraft/scientific_kgrid.py'
+adding 'qraft/scientific_observations.py'
+adding 'qraft/siesta_campaigns.py'
+adding 'qraft/siesta_validation.py'
+adding 'qraft/slurm_renderer.py'
+adding 'qraft/slurm_resources.py'
+adding 'qraft/storage.py'
+adding 'qraft/target_classifier.py'
+adding 'qraft/validation_render.py'
+adding 'qraft/version.py'
+adding 'qraft/workflow_authoring.py'
+adding 'qraft/workflow_composition.py'
+adding 'qraft/workflow_preflight.py'
+adding 'qraft/workspace.py'
+adding 'qraft/contracts/__init__.py'
+adding 'qraft/contracts/artifacts.py'
+adding 'qraft/contracts/catalog.py'
+adding 'qraft/contracts/events.py'
+adding 'qraft/contracts/execution.py'
+adding 'qraft/contracts/plugins.py'
+adding 'qraft/contracts/run.py'
+adding 'qraft/contracts/scientific.py'
+adding 'qraft/contracts/serialization.py'
+adding 'qraft/contracts/status.py'
+adding 'qraft/contracts/validation.py'
+adding 'qraft/contracts/versioning.py'
+adding 'qraft/contracts/workflow.py'
+adding 'qraft/core/__init__.py'
+adding 'qraft/core/runtime.py'
+adding 'qraft/engines/__init__.py'
+adding 'qraft/engines/base.py'
+adding 'qraft/engines/registry.py'
+adding 'qraft/engines/siesta/__init__.py'
+adding 'qraft/engines/siesta/adapter.py'
+adding 'qraft/engines/siesta/artifacts.py'
+adding 'qraft/engines/siesta/band_paths.py'
+adding 'qraft/engines/siesta/campaign_adapter.py'
+adding 'qraft/engines/siesta/command.py'
+adding 'qraft/engines/siesta/effective_fdf.py'
+adding 'qraft/engines/siesta/electronic_properties.py'
+adding 'qraft/engines/siesta/fdf_parser.py'
+adding 'qraft/engines/siesta/fdf_registry.py'
+adding 'qraft/engines/siesta/fdf_renderer.py'
+adding 'qraft/engines/siesta/fdf_variants.py'
+adding 'qraft/engines/siesta/ground_state.py'
+adding 'qraft/engines/siesta/input_closure.py'
+adding 'qraft/engines/siesta/input_validator.py'
+adding 'qraft/engines/siesta/magnetism.py'
+adding 'qraft/engines/siesta/models.py'
+adding 'qraft/engines/siesta/output_parser.py'
+adding 'qraft/engines/siesta/pseudopotentials.py'
+adding 'qraft/engines/siesta/relaxation.py'
+adding 'qraft/engines/siesta/validation_catalog.py'
+adding 'qraft/engines/siesta/validation_profile.py'
+adding 'qraft/engines/siesta/data/__init__.py'
+adding 'qraft/engines/siesta/data/supported_fdf_registry_5.4.2.json'
+adding 'qraft/engines/siesta/data/validation_rules_5.4.2.json'
+adding 'qraft/execution/__init__.py'
+adding 'qraft/execution/adapters.py'
+adding 'qraft/execution/adaptive_gate.py'
+adding 'qraft/execution/allocation_controller.py'
+adding 'qraft/execution/allocation_controller_compat.py'
+adding 'qraft/execution/campaign_progress.py'
+adding 'qraft/execution/canonical_controller.py'
+adding 'qraft/execution/capability_plugins.py'
+adding 'qraft/execution/capability_runtime.py'
+adding 'qraft/execution/command_capability.py'
+adding 'qraft/execution/direct_launcher.py'
+adding 'qraft/execution/hydra_launcher.py'
+adding 'qraft/execution/legacy_translation.py'
+adding 'qraft/execution/openmpi_launcher.py'
+adding 'qraft/execution/placement_validation.py'
+adding 'qraft/execution/resource_coordinator.py'
+adding 'qraft/execution/runtime_composition.py'
+adding 'qraft/execution/slurm_environment.py'
+adding 'qraft/execution/srun_launcher.py'
+adding 'qraft/output/__init__.py'
+adding 'qraft/output/contributor.py'
+adding 'qraft/output/csv_exporter.py'
+adding 'qraft/output/model.py'
+adding 'qraft/output/text_writer.py'
+adding 'qraft/protocols/__init__.py'
+adding 'qraft/protocols/chained_convergence.py'
+adding 'qraft/protocols/convergence.py'
+adding 'qraft/protocols/electronic_properties.py'
+adding 'qraft/protocols/ground_state.py'
+adding 'qraft/protocols/magnetic_selection.py'
+adding 'qraft/protocols/relaxation.py'
+adding 'qraft/protocols/single_fdf.py'
+adding 'qraft/symmetry/__init__.py'
+adding 'qraft/symmetry/seekpath.py'
+adding 'qraft/validation/__init__.py'
+adding 'qraft/validation/embedded_code.py'
+adding 'qraft/validation/scheduler_resolution.py'
+adding 'qraft/validation/slurm_evidence.py'
+adding 'qraft/workflows/__init__.py'
+adding 'qraft/workflows/compiler.py'
+adding 'qraft/workflows/diagnostics.py'
+adding 'qraft/workflows/lock_loader.py'
+adding 'qraft/workflows/models.py'
+adding 'qraft/workflows/parser.py'
+adding 'qraft/workflows/render.py'
+adding 'qraft/workflows/resolver.py'
+adding 'qraft-0.2.0.dist-info/licenses/LICENSE'
+adding 'qraft-0.2.0.dist-info/METADATA'
+adding 'qraft-0.2.0.dist-info/WHEEL'
+adding 'qraft-0.2.0.dist-info/entry_points.txt'
+adding 'qraft-0.2.0.dist-info/top_level.txt'
+adding 'qraft-0.2.0.dist-info/RECORD'
+removing build/bdist.linux-x86_64/wheel
+Successfully built qraft-0.2.0.tar.gz and qraft-0.2.0-py3-none-any.whl

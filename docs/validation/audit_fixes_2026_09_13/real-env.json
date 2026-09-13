@@ -1,0 +1,85 @@
+{
+  "compatibility": {
+    "data": {
+      "contradictions": {},
+      "matched_facts": {},
+      "missing_facts": {},
+      "status": "UNKNOWN"
+    },
+    "detail": "runtime compatibility evidence is incomplete",
+    "executable": null,
+    "name": "runtime:compatibility",
+    "status": "UNKNOWN",
+    "version": null
+  },
+  "config_paths": [
+    "/tmp/qraft-final-e2e-20260913/user project/.qraft/profiles",
+    "/home/jmc/.config/qraft/profiles"
+  ],
+  "engine": {
+    "detail": null,
+    "executable": "/home/jmc/.local/siesta-5.4.2-serial/bin/siesta",
+    "name": "engine:siesta",
+    "status": "AVAILABLE",
+    "version": "5.4.2"
+  },
+  "filesystem": {
+    "detail": "readable and writable: /tmp/qraft-final-e2e-20260913/user project",
+    "executable": null,
+    "name": "filesystem:workspace",
+    "status": "AVAILABLE",
+    "version": null
+  },
+  "launchers": [
+    {
+      "detail": "built into QRAFT",
+      "executable": null,
+      "name": "launcher:selected:direct",
+      "status": "NOT_REQUIRED",
+      "version": null
+    },
+    {
+      "detail": "not found: mpiexec.hydra",
+      "executable": null,
+      "name": "launcher:hydra",
+      "status": "NOT_FOUND",
+      "version": null
+    },
+    {
+      "detail": null,
+      "executable": "/usr/bin/mpirun",
+      "name": "launcher:openmpi",
+      "status": "AVAILABLE",
+      "version": "mpirun (Open MPI) 4.1.6"
+    },
+    {
+      "detail": null,
+      "executable": "/usr/bin/srun",
+      "name": "launcher:srun",
+      "status": "AVAILABLE",
+      "version": "slurm-wlm 23.11.4"
+    }
+  ],
+  "profile": {
+    "detail": "/tmp/qraft-final-e2e-20260913/user project/local.json",
+    "executable": null,
+    "name": "profile",
+    "status": "AVAILABLE",
+    "version": null
+  },
+  "qraft": {
+    "installation": "/tmp/qraft-final-e2e-20260913/venv/lib/python3.12/site-packages/qraft",
+    "platform": "Linux 6.18.33.2-microsoft-standard-WSL2",
+    "python": "3.12.3",
+    "version": "0.2.0"
+  },
+  "result": "READY",
+  "scheduler": {
+    "detail": "local process environment",
+    "executable": null,
+    "name": "scheduler:local",
+    "status": "NOT_REQUIRED",
+    "version": null
+  },
+  "workspace": "/tmp/qraft-final-e2e-20260913/user project"
+}

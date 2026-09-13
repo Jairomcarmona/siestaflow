@@ -84,3 +84,14 @@ Referencias: [checkout](https://github.com/actions/checkout),
 
 El reporte de cierre registrará los resultados finales, commits y hashes del
 wheel efectivamente probado.
+
+## Confirmación final de evidencia
+
+El revisor independiente verificó posteriormente el gate de 943 casos
+(931 aprobados, 12 omitidos, cero fallos/errores), la ejecución efectiva de la
+prueba de instalación limpia y la distribución construida desde el commit
+limpio `bde4058e60fd039481523ab2ad860ae0fe59ebbf`.
+Contrastó el hash del wheel con el E2E real y sus respuestas de ejecución,
+estado, inventario y reanudación. Emitió **APPROVED_FOR_MERGE para aceptación
+local**, sin hallazgos bloqueantes pendientes en el alcance revisado.
+Los límites científicos, de contexto externo y de CI/HPC remotos permanecen.

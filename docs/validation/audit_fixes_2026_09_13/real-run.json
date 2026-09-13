@@ -1,0 +1,286 @@
+{
+  "attempt": {
+    "artifacts": {},
+    "attempt_id": "attempt-0001",
+    "execution_spec_sha256": "fdf51c15c395a2f86fce2d050c5a65fd25464c1fde0f27c2b3c7fe9a9f5cae68",
+    "exit_code": 0,
+    "finished_at": "2026-09-13T22:13:28.121114+00:00",
+    "node_id": "run_siesta",
+    "result": {
+      "execution_state": "COMPLETED",
+      "scientific_decision": "NOT_EVALUATED",
+      "technical_validation": {
+        "classification": "COMPLETED",
+        "parser_summary": {
+          "atoms": null,
+          "benign_warnings": [
+            "# WARNING: This information might be incomplete!",
+            "************************ Begin: TS CHECKS AND WARNINGS ************************",
+            "************************ End: TS CHECKS AND WARNINGS **************************",
+            "WARNING: BASIS_ENTHALPY and BASIS_HARRIS_ENTHALPY files are deprecated. They will be removed in future releases."
+          ],
+          "classification": "COMPLETED",
+          "dm_restart_attempted": true,
+          "dm_restart_succeeded": false,
+          "elapsed_seconds": null,
+          "energies": [
+            -455.292389,
+            -457.147476,
+            -457.147476
+          ],
+          "errors": [],
+          "line_count": 651,
+          "max_force": null,
+          "mentioned_artifacts": [
+            ".RHO"
+          ],
+          "normal_termination": true,
+          "provisional_status": "PROVISIONAL_UNTIL_REAL_OUTPUT_IMPORTED",
+          "scf_converged": true,
+          "scf_iterations": 11,
+          "scf_started": true,
+          "species": null,
+          "spin_evidence": null,
+          "started": true,
+          "synthetic": false,
+          "version": "5.4.2",
+          "warnings": [
+            "# WARNING: This information might be incomplete!",
+            "************************ Begin: TS CHECKS AND WARNINGS ************************",
+            "************************ End: TS CHECKS AND WARNINGS **************************",
+            "WARNING: BASIS_ENTHALPY and BASIS_HARRIS_ENTHALPY files are deprecated. They will be removed in future releases."
+          ]
+        },
+        "reasons": [
+          "normal technical completion evidence",
+          "PROVISIONAL_UNTIL_REAL_OUTPUT_IMPORTED"
+        ],
+        "status": "PASS"
+      }
+    },
+    "schema_version": "1.0",
+    "scientific_identity_sha256": "14d6632293c72a5bd3425e89b0dbc22d6246adc78c04953ce7ac4e807d51421a",
+    "started_at": "2026-09-13T22:13:27.633766+00:00",
+    "stderr": "stderr.txt",
+    "stdout": "stdout.txt"
+  },
+  "plan": {
+    "configuration_sources": {
+      "cpus_per_rank": "profile",
+      "environment": "profile",
+      "executable": "profile",
+      "executable_arguments": "defaults",
+      "launcher": "profile",
+      "launcher_arguments": "defaults",
+      "launcher_command": "defaults",
+      "memory_mb": "defaults",
+      "mpi_ranks": "profile",
+      "nodes": "profile",
+      "partition": "profile",
+      "walltime_seconds": "defaults"
+    },
+    "dag": [
+      {
+        "depends_on": [],
+        "kind": "validate_input",
+        "node_id": "validate_input"
+      },
+      {
+        "depends_on": [
+          "validate_input"
+        ],
+        "kind": "run_siesta",
+        "node_id": "run_siesta"
+      },
+      {
+        "depends_on": [
+          "run_siesta"
+        ],
+        "kind": "technical_validate",
+        "node_id": "technical_validate"
+      }
+    ],
+    "engine": "siesta",
+    "execution_authorized": false,
+    "execution_spec": {
+      "allocated_cpus": 1,
+      "cpus_per_rank": 1,
+      "environment": {
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "executable": "/home/jmc/.local/siesta-5.4.2-serial/bin/siesta",
+      "executable_arguments": [],
+      "fingerprint": "fdf51c15c395a2f86fce2d050c5a65fd25464c1fde0f27c2b3c7fe9a9f5cae68",
+      "launcher": "direct",
+      "launcher_arguments": [],
+      "launcher_command": [],
+      "memory_mb": null,
+      "mpi_ranks": 1,
+      "nodes": 1,
+      "partition": "local",
+      "ranks_per_node": 1,
+      "schema_version": "1.0",
+      "walltime_seconds": 3600
+    },
+    "fdf": "/tmp/qraft-final-e2e-20260913/user project/input.fdf",
+    "schema_version": "1.0",
+    "scientific_identity": {
+      "components": {
+        "basis": "14d0f4927fa4a6abf6b97ca896fd469c78a6ad87a7b0f3c92ff197b5775183fa",
+        "charge_spin": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "dft_u_projectors": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "k_grid": "8f48ccad51fe8074ba7e20e6424dafe5832f2e939c3962219152de47da606a0a",
+        "mesh_cutoff": "7c76187afe393c9d1a6359a4839d2b467e64b619b328ebe6949d1094eb00d6fa",
+        "xc": "15d23e3b173923e2ea7104e405a8d5aeae94d3c128bfcdcb9c32022580398e19"
+      },
+      "effective_fdf_sha256": "947a424a5e28ccb5c7386cc02b441ea050bef502f5985adf9eba412ed37dfcea",
+      "engine": "siesta",
+      "fingerprint": "14d6632293c72a5bd3425e89b0dbc22d6246adc78c04953ce7ac4e807d51421a",
+      "geometry_sha256": "7dcde2b04233370ec579b1eb4950e6cb5e8a25f0bd75c099d9964c2b145cb47f",
+      "included_scientific_files": {
+        "input.fdf": "77e10058e8e9362fcee4185e61c56620697a26494941eb42e49b54e9e5d93159"
+      },
+      "pseudopotentials": {
+        "Mg": "a96f201ad6d4df0690aa07de3c9e38292fc95ac477fbd5f43842cbd5f5de6b35",
+        "O": "959444abc4841a6c5748eb3f1d2db5bd257f10fb143b74febdc5201343a1797b"
+      },
+      "schema_version": "1.0",
+      "species_mapping_sha256": "fa5470d5d8428afcfae6f2a5fd47a6cb4955f97ea73aa81c24dbda1ddea2ba37"
+    },
+    "status": "EXECUTABLE_PLAN"
+  },
+  "preflight": {
+    "checks": [
+      {
+        "detail": "/tmp/qraft-final-e2e-20260913/user project/input.fdf",
+        "name": "Input",
+        "status": "PASS"
+      },
+      {
+        "detail": null,
+        "name": "Engine",
+        "status": "PASS"
+      },
+      {
+        "detail": "built into QRAFT",
+        "name": "Launcher",
+        "status": "PASS"
+      },
+      {
+        "detail": "runtime compatibility evidence is incomplete",
+        "name": "Runtime compatibility",
+        "status": "UNKNOWN"
+      },
+      {
+        "detail": "local process environment",
+        "name": "Scheduler",
+        "status": "PASS"
+      },
+      {
+        "detail": "/tmp/qraft-final-e2e-20260913/user project/local.json",
+        "name": "Execution profile",
+        "status": "PASS"
+      },
+      {
+        "detail": "1 ranks",
+        "name": "Resources",
+        "status": "PASS"
+      },
+      {
+        "detail": "readable and writable: /tmp/qraft-final-e2e-20260913/user project",
+        "name": "Workspace",
+        "status": "PASS"
+      }
+    ],
+    "environment": {
+      "compatibility": {
+        "data": {
+          "contradictions": {},
+          "matched_facts": {},
+          "missing_facts": {},
+          "status": "UNKNOWN"
+        },
+        "detail": "runtime compatibility evidence is incomplete",
+        "executable": null,
+        "name": "runtime:compatibility",
+        "status": "UNKNOWN",
+        "version": null
+      },
+      "config_paths": [
+        "/tmp/qraft-final-e2e-20260913/user project/.qraft/profiles",
+        "/home/jmc/.config/qraft/profiles"
+      ],
+      "engine": {
+        "detail": null,
+        "executable": "/home/jmc/.local/siesta-5.4.2-serial/bin/siesta",
+        "name": "engine:siesta",
+        "status": "AVAILABLE",
+        "version": "5.4.2"
+      },
+      "filesystem": {
+        "detail": "readable and writable: /tmp/qraft-final-e2e-20260913/user project",
+        "executable": null,
+        "name": "filesystem:workspace",
+        "status": "AVAILABLE",
+        "version": null
+      },
+      "launchers": [
+        {
+          "detail": "built into QRAFT",
+          "executable": null,
+          "name": "launcher:selected:direct",
+          "status": "NOT_REQUIRED",
+          "version": null
+        },
+        {
+          "detail": "not found: mpiexec.hydra",
+          "executable": null,
+          "name": "launcher:hydra",
+          "status": "NOT_FOUND",
+          "version": null
+        },
+        {
+          "detail": null,
+          "executable": "/usr/bin/mpirun",
+          "name": "launcher:openmpi",
+          "status": "AVAILABLE",
+          "version": "mpirun (Open MPI) 4.1.6"
+        },
+        {
+          "detail": null,
+          "executable": "/usr/bin/srun",
+          "name": "launcher:srun",
+          "status": "AVAILABLE",
+          "version": "slurm-wlm 23.11.4"
+        }
+      ],
+      "profile": {
+        "detail": "/tmp/qraft-final-e2e-20260913/user project/local.json",
+        "executable": null,
+        "name": "profile",
+        "status": "AVAILABLE",
+        "version": null
+      },
+      "qraft": {
+        "installation": "/tmp/qraft-final-e2e-20260913/venv/lib/python3.12/site-packages/qraft",
+        "platform": "Linux 6.18.33.2-microsoft-standard-WSL2",
+        "python": "3.12.3",
+        "version": "0.2.0"
+      },
+      "result": "READY",
+      "scheduler": {
+        "detail": "local process environment",
+        "executable": null,
+        "name": "scheduler:local",
+        "status": "NOT_REQUIRED",
+        "version": null
+      },
+      "workspace": "/tmp/qraft-final-e2e-20260913/user project"
+    },
+    "execution_fingerprint": "fdf51c15c395a2f86fce2d050c5a65fd25464c1fde0f27c2b3c7fe9a9f5cae68",
+    "status": "PASS"
+  },
+  "qraft_output": "/tmp/qraft-final-e2e-20260913/user project/runs/qraft.out",
+  "status": "ATTEMPT_FINISHED"
+}
