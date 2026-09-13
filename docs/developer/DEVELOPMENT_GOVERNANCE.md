@@ -143,10 +143,12 @@ rutas locales. Si falta contexto externo, el resultado se separa en `PASS`,
 `FAIL`, `SKIPPED` y `BLOCKED_BY_EXTERNAL_CONTEXT` sin convertir bloqueos en
 éxitos.
 
-El repositorio no tiene CI versionada en el corte 0.2 auditado. Hasta crear CI
-Linux en Fase 8, los gates locales y su salida deben adjuntarse a la revisión.
-CI futura no debe contener secretos ni afirmar aceptación HPC sin importar
-evidencia firmada del job correspondiente.
+El corte 0.2 originalmente auditado no tenía CI versionada. Las correcciones de
+auditoría incorporan `.github/workflows/ci.yml` para regresión Linux e instalación
+limpia en Python 3.11–3.13. Los gates locales y su salida deben adjuntarse a la
+revisión; definir el workflow no demuestra que se haya ejecutado en GitHub.
+CI no debe contener secretos ni afirmar aceptación HPC sin importar evidencia
+firmada del job correspondiente.
 
 ## 8. ADR
 

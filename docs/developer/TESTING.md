@@ -51,6 +51,30 @@ Historical acceptance files may contain the test count observed at their own
 cut. Do not update those records merely because the suite grows and do not use
 their count as current evidence.
 
+## Distribution and installed CLI gate
+
+The Linux workflow in `.github/workflows/ci.yml` runs the regression on Python
+3.11, 3.12 and 3.13, explicitly enabling the clean-install test. To run the same
+gate locally after installing the development and build dependencies:
+
+```bash
+QRAFT_BUILD_PYTHON="$(command -v python)" python -m pytest -q
+python -m build
+python -m pip check
+```
+
+The clean-install test builds a wheelhouse containing QRAFT and its declared
+runtime dependencies, then installs into a fresh venv with `--no-index`.
+Preparing the wheelhouse can require access to the configured package index.
+The installed CLI runs outside the checkout without `PYTHONPATH` or user site
+packages. Acceptance checks the reported state, inventory paths and unchanged
+attempt manifests on recovery, not just process exit codes. Omitting
+`QRAFT_BUILD_PYTHON` still skips this distribution-only test in the default
+developer suite; it must be enabled for release checks.
+
+CI uses synthetic engines. Passing it does not certify SIESTA, MPI or Yoltla
+acceptance. GitHub execution is separate from local workflow verification.
+
 ## Optional real local Slurm layer
 
 The opt-in WSL2 sandbox under `integration/local_slurm/` exercises a real
