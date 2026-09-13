@@ -22,6 +22,21 @@
 
 ## Specialized and legacy diagnostics
 
+- Canonical single-FDF runs: `qraft status --runs-root PATH` reads the recorded
+  runtimes and task states. If the directory contains several runtimes, the
+  view summarizes all of them instead of selecting one by its hash name.
+  `UNREADABLE` means recorded state or its journal could not be read or verified;
+  inspection does not repair or rewrite that evidence.
+- `qraft results --runs-root PATH` includes existing attempt manifests and
+  engine output files. `PRESENT` records file presence, not scientific approval
+  or a new validation of its contents. Unsafe or unresolvable file links are
+  omitted from this inventory.
+- Remote results rejected as `REMOTE_RESULTS_INVALID`: inspect the findings.
+  Every required payload must have a valid checksum; blank/incomplete checksum
+  lists, duplicate targets, unsafe paths and malformed manifest fields are
+  rejected before the bundle is copied. Obtain the complete original bundle
+  rather than disabling verification.
+
 - `SIESTA_IDENTITY_UNCONFIRMED`: pass the actual engine executable, not a
   wrapper that merely accepts `--version`.
 - `PSEUDOPOTENTIAL_DECLARATION_MISSING` or hash mismatch: repair the external

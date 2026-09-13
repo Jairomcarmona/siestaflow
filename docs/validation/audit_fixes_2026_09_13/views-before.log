@@ -1,0 +1,120 @@
+FFFFFF                                                                   [100%]
+=================================== FAILURES ===================================
+_________ test_completed_single_fdf_status_and_inventory_are_read_only _________
+
+completed_run = PosixPath('/tmp/qraft-views-before/test_completed_single_fdf_stat0/runs')
+capsys = <_pytest.capture.CaptureFixture object at 0x73b4ecc99ee0>
+
+    def test_completed_single_fdf_status_and_inventory_are_read_only(completed_run: Path, capsys) -> None:
+        before = _snapshot(completed_run)
+        status = _json_view("status", completed_run, capsys)
+>       assert status["state"] == "COMPLETED"
+E       AssertionError: assert 'NOT_STARTED' == 'COMPLETED'
+E
+E         - COMPLETED
+E         + NOT_STARTED
+
+tests/test_cli_single_fdf_views.py:69: AssertionError
+________________ test_multiple_runtimes_do_not_hide_failed_run _________________
+
+completed_run = PosixPath('/tmp/qraft-views-before/test_multiple_runtimes_do_not_0/runs')
+capsys = <_pytest.capture.CaptureFixture object at 0x73b4ecc82fc0>
+
+    def test_multiple_runtimes_do_not_hide_failed_run(completed_run: Path, capsys) -> None:
+        first = next(completed_run.glob("runtime/*/state/workflow_runtime.json"))
+        wrapper = json.loads(first.read_text())
+        payload = wrapper["payload"]
+        payload["status"] = "FAILED"
+        payload["tasks"]["run_siesta"]["status"] = "FAILED"
+        _save_state(completed_run / "runtime" / "000-failed" / "state" / first.name, payload)
+        status = _json_view("status", completed_run, capsys)
+>       assert status["state"] == "FAILED"
+E       AssertionError: assert 'NOT_STARTED' == 'FAILED'
+E
+E         - FAILED
+E         + NOT_STARTED
+
+tests/test_cli_single_fdf_views.py:97: AssertionError
+_____________ test_corrupt_runtime_is_not_reported_not_started[[]] _____________
+
+completed_run = PosixPath('/tmp/qraft-views-before/test_corrupt_runtime_is_not_re0/runs')
+capsys = <_pytest.capture.CaptureFixture object at 0x73b4ec1598e0>
+corrupt = '[]'
+
+    @pytest.mark.parametrize("corrupt", ["[]", "{}", '{"payload": {}}'])
+    def test_corrupt_runtime_is_not_reported_not_started(completed_run: Path, capsys, corrupt: str) -> None:
+        state = next(completed_run.glob("runtime/*/state/workflow_runtime.json"))
+        state.write_text(corrupt, encoding="utf-8")
+        before = _snapshot(completed_run)
+        status = _json_view("status", completed_run, capsys)
+>       assert status["state"] == "UNREADABLE"
+E       AssertionError: assert 'NOT_STARTED' == 'UNREADABLE'
+E
+E         - UNREADABLE
+E         + NOT_STARTED
+
+tests/test_cli_single_fdf_views.py:109: AssertionError
+_____________ test_corrupt_runtime_is_not_reported_not_started[{}] _____________
+
+completed_run = PosixPath('/tmp/qraft-views-before/test_corrupt_runtime_is_not_re1/runs')
+capsys = <_pytest.capture.CaptureFixture object at 0x73b4eb71c140>
+corrupt = '{}'
+
+    @pytest.mark.parametrize("corrupt", ["[]", "{}", '{"payload": {}}'])
+    def test_corrupt_runtime_is_not_reported_not_started(completed_run: Path, capsys, corrupt: str) -> None:
+        state = next(completed_run.glob("runtime/*/state/workflow_runtime.json"))
+        state.write_text(corrupt, encoding="utf-8")
+        before = _snapshot(completed_run)
+        status = _json_view("status", completed_run, capsys)
+>       assert status["state"] == "UNREADABLE"
+E       AssertionError: assert 'NOT_STARTED' == 'UNREADABLE'
+E
+E         - UNREADABLE
+E         + NOT_STARTED
+
+tests/test_cli_single_fdf_views.py:109: AssertionError
+______ test_corrupt_runtime_is_not_reported_not_started[{"payload": {}}] _______
+
+completed_run = PosixPath('/tmp/qraft-views-before/test_corrupt_runtime_is_not_re2/runs')
+capsys = <_pytest.capture.CaptureFixture object at 0x73b4ec2a42c0>
+corrupt = '{"payload": {}}'
+
+    @pytest.mark.parametrize("corrupt", ["[]", "{}", '{"payload": {}}'])
+    def test_corrupt_runtime_is_not_reported_not_started(completed_run: Path, capsys, corrupt: str) -> None:
+        state = next(completed_run.glob("runtime/*/state/workflow_runtime.json"))
+        state.write_text(corrupt, encoding="utf-8")
+        before = _snapshot(completed_run)
+        status = _json_view("status", completed_run, capsys)
+>       assert status["state"] == "UNREADABLE"
+E       AssertionError: assert 'NOT_STARTED' == 'UNREADABLE'
+E
+E         - UNREADABLE
+E         + NOT_STARTED
+
+tests/test_cli_single_fdf_views.py:109: AssertionError
+_____________________ test_root_runtime_remains_supported ______________________
+
+completed_run = PosixPath('/tmp/qraft-views-before/test_root_runtime_remains_supp0/runs')
+capsys = <_pytest.capture.CaptureFixture object at 0x73b4ecc8d970>
+
+    def test_root_runtime_remains_supported(completed_run: Path, capsys) -> None:
+        state = next(completed_run.glob("runtime/*/state/workflow_runtime.json"))
+        destination = completed_run / "state" / state.name
+        destination.parent.mkdir()
+        state.rename(destination)
+        status = _json_view("status", completed_run, capsys)
+>       assert status["state"] == "COMPLETED"
+E       AssertionError: assert 'NOT_STARTED' == 'COMPLETED'
+E
+E         - COMPLETED
+E         + NOT_STARTED
+
+tests/test_cli_single_fdf_views.py:120: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_cli_single_fdf_views.py::test_completed_single_fdf_status_and_inventory_are_read_only
+FAILED tests/test_cli_single_fdf_views.py::test_multiple_runtimes_do_not_hide_failed_run
+FAILED tests/test_cli_single_fdf_views.py::test_corrupt_runtime_is_not_reported_not_started[[]]
+FAILED tests/test_cli_single_fdf_views.py::test_corrupt_runtime_is_not_reported_not_started[{}]
+FAILED tests/test_cli_single_fdf_views.py::test_corrupt_runtime_is_not_reported_not_started[{"payload": {}}]
+FAILED tests/test_cli_single_fdf_views.py::test_root_runtime_remains_supported
+6 failed in 6.70s

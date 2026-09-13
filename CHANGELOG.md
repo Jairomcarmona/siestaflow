@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — audit corrections
+
+- Track active processes by task and attempt in all launchers so concurrent
+  tasks with the same attempt number remain independently cancellable.
+- Require valid checksums for every required remote result payload, reject
+  unsafe bundle paths and malformed manifests, and preserve valid imports.
+- Show canonical single-FDF runtime state and recorded attempt files in
+  `status` and `results`, including multiple runtimes and unreadable evidence.
+- Install runtime dependencies in the clean-wheel acceptance test and verify
+  installed status, results and immutable recovery semantically.
+- Add Linux CI for Python 3.11–3.13 with the distribution gate enabled.
+
 ## Unreleased — productization v1
 
 - Formalized wheel/sdist packaging and declared the previously implicit PyYAML
