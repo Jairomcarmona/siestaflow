@@ -52,7 +52,8 @@ class HydraLauncher:
                 "Hydra requires exactly one explicit -bootstrap <value> argument pair"
             )
         self._popen_factory = popen_factory
-        self._active: dict[str, _ActiveProcess] = {}
+        # Attempt numbers are task-local, so tracking must include the task.
+        self._active: dict[tuple[str, str], _ActiveProcess] = {}
         self._lock = threading.Lock()
 
     def build_command(self, spec: StepLaunchSpec) -> tuple[str, ...]:
@@ -110,7 +111,7 @@ class HydraLauncher:
             raise
         active = _ActiveProcess(process, stdin_handle, stdout_handle, stderr_handle)
         with self._lock:
-            self._active[spec.attempt_id] = active
+            self._active[(spec.task_id, spec.attempt_id)] = active
         try:
             exit_code = int(process.wait())
         finally:
@@ -118,7 +119,7 @@ class HydraLauncher:
             stdout_handle.close()
             stderr_handle.close()
             with self._lock:
-                active = self._active.pop(spec.attempt_id, active)
+                active = self._active.pop((spec.task_id, spec.attempt_id), active)
         return StepOutcome(
             spec.task_id,
             spec.attempt_id,
@@ -132,7 +133,7 @@ class HydraLauncher:
         with self._lock:
             items = tuple(self._active.items())
         affected: list[str] = []
-        for attempt_id, active in items:
+        for (_, attempt_id), active in items:
             if active.process.poll() is not None:
                 continue
             active.terminated = True
@@ -146,4 +147,4 @@ class HydraLauncher:
     @property
     def active_attempts(self) -> tuple[str, ...]:
         with self._lock:
-            return tuple(sorted(self._active))
+            return tuple(sorted(attempt_id for _, attempt_id in self._active))
