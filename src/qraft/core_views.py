@@ -7,6 +7,7 @@ do not execute work, validate new scientific claims, or persist observations.
 from __future__ import annotations
 
 import json
+import shlex
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -114,6 +115,8 @@ def _runs_status(runs_root: Path, *, target: Mapping[str, Any] | None) -> dict[s
     recorded = application.status()
     campaign = recorded.get("campaign")
     if not isinstance(campaign, Mapping):
+        if recorded.get("runtimes"):
+            return _runtime_status(recorded, target=target)
         return {
             **(target or {"target": str(runs_root.resolve()), "target_kind": "RUNS_ROOT"}),
             "root": recorded["root"], "runs_root": recorded["root"], "state": "NOT_STARTED", "progress": None,
@@ -138,6 +141,46 @@ def _runs_status(runs_root: Path, *, target: Mapping[str, Any] | None) -> dict[s
     }
 
 
+def _runtime_status(recorded: Mapping[str, Any], *, target: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Project recorded execution state; do not revalidate scientific results."""
+    states: list[str] = []
+    completed = total = 0
+    for runtime in recorded["runtimes"]:
+        tasks = runtime.get("tasks")
+        if runtime.get("status") == "UNREADABLE" or not isinstance(tasks, Mapping) or not tasks:
+            states.append("UNREADABLE")
+            continue
+        if any(not isinstance(task, Mapping) for task in tasks.values()):
+            states.append("UNREADABLE")
+            continue
+        task_states = [task.get("status") for task in tasks.values()]
+        total += len(tasks)
+        completed += task_states.count("COMPLETED")
+        state = str(runtime.get("status", "UNKNOWN"))
+        # The overall snapshot may still describe a prior invocation while
+        # task mutations in the append-only journal record a new attempt.
+        if "RUNNING" in task_states:
+            state = "RUNNING"
+        elif state == "COMPLETED" and any(value != "COMPLETED" for value in task_states):
+            state = "UNKNOWN"
+        states.append(state)
+    if all(state == "COMPLETED" for state in states):
+        state = "COMPLETED"
+    else:
+        state = next((value for value in (
+            "UNREADABLE", "RUNNING", "FAILED", "INTERRUPTED", "BLOCKED", "PENDING",
+        ) if value in states), "UNKNOWN")
+    root = recorded["root"]
+    return {
+        **(target or {"target": root, "target_kind": "RUNS_ROOT"}),
+        "root": root, "runs_root": root, "state": state,
+        "progress": None if "UNREADABLE" in states else {"completed": completed, "total": total},
+        "last_step": state, "next_action": f"qraft results --runs-root {shlex.quote(str(root))}",
+        "campaign": None, "runtime": recorded["runtime"], "runtimes": recorded["runtimes"],
+        "recorded": {"runtimes": recorded["runtimes"]},
+    }
+
+
 def _runs_results(runs_root: Path, *, target: Mapping[str, Any] | None) -> dict[str, Any]:
     root = runs_root.resolve()
     names = ("campaign-result.json", "events.jsonl")
@@ -146,6 +189,26 @@ def _runs_results(runs_root: Path, *, target: Mapping[str, Any] | None) -> dict[
          "status": "PRESENT" if (root / name).is_file() else "NOT_EVALUATED"}
         for name in names
     ]
+    # Enumerate actual runtime evidence, including all immutable attempts.
+    # Presence is an inventory fact, not a new integrity/scientific verdict.
+    runtime_roots = [root, *sorted((root / "runtime").glob("*"))]
+    for runtime_root in runtime_roots:
+        try:
+            if not runtime_root.resolve(strict=True).is_relative_to(root):
+                continue
+            paths = [
+                *sorted((runtime_root / "state").glob("workflow_runtime*")),
+                *sorted((runtime_root / "work").glob("*/attempt-*/*")),
+            ]
+        except (OSError, RuntimeError):
+            continue
+        for path in paths:
+            try:
+                if not path.resolve(strict=True).is_relative_to(root) or not path.is_file():
+                    continue
+            except (OSError, RuntimeError):
+                continue
+            artifacts.append({"name": path.name, "path": str(path), "status": "PRESENT"})
     return {
         **(target or {"target": str(root), "target_kind": "RUNS_ROOT"}),
         "runs_root": str(root), "inventory_status": "RECORDED" if any(
