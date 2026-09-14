@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import io
 import os
 import subprocess
@@ -224,9 +225,9 @@ def test_wheel_clean_room_installed_cli_run_and_recovery(tmp_path: Path) -> None
     wheelhouse = tmp_path / "wheelhouse"
     wheelhouse.mkdir()
     build = subprocess.run(
-        [build_python, "-m", "pip", "wheel", ".", "--no-deps",
+        [build_python, "-m", "pip", "wheel", ".",
          "--no-build-isolation", "--wheel-dir", str(wheelhouse)],
-        cwd=repo, capture_output=True, text=True, check=False,
+        cwd=repo, capture_output=True, text=True, check=False, timeout=180,
     )
     assert build.returncode == 0, build.stdout + build.stderr
     wheels = tuple(wheelhouse.glob("qraft-*.whl"))
@@ -244,11 +245,16 @@ def test_wheel_clean_room_installed_cli_run_and_recovery(tmp_path: Path) -> None
     venv.EnvBuilder(with_pip=True).create(environment)
     python = _venv_python(environment)
     install = subprocess.run(
-        [str(python), "-m", "pip", "install", "--no-deps", "--no-cache-dir",
+        [str(python), "-m", "pip", "install", "--no-index", "--find-links", str(wheelhouse),
          "--force-reinstall", str(wheels[0])],
-        capture_output=True, text=True, check=False,
+        capture_output=True, text=True, check=False, timeout=120,
     )
     assert install.returncode == 0, install.stdout + install.stderr
+    dependency_check = subprocess.run(
+        [str(python), "-m", "pip", "check"],
+        capture_output=True, text=True, check=False, timeout=30,
+    )
+    assert dependency_check.returncode == 0, dependency_check.stdout + dependency_check.stderr
     user = tmp_path / "user project"
     fdf = inputs(user)
     fake = user / "fake siesta.py"
@@ -262,18 +268,22 @@ def test_wheel_clean_room_installed_cli_run_and_recovery(tmp_path: Path) -> None
     command = _venv_qraft(environment)
     clean_env = os.environ.copy()
     clean_env.pop("PYTHONPATH", None)
+    clean_env["PYTHONNOUSERSITE"] = "1"
 
     def invoke(*arguments: str, input_text: str | None = None) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [str(command), *arguments], cwd=user, env=clean_env,
-            input=input_text, capture_output=True, text=True, check=False,
+            input=input_text, capture_output=True, text=True, check=False, timeout=60,
         )
 
     imported = subprocess.run(
-        [str(python), "-c", "import qraft; print(qraft.__version__)"],
-        cwd=user, env=clean_env, capture_output=True, text=True, check=False,
+        [str(python), "-c", "import qraft; print(qraft.__version__); print(qraft.__file__)"],
+        cwd=user, env=clean_env, capture_output=True, text=True, check=False, timeout=30,
     )
-    assert imported.returncode == 0 and imported.stdout.strip() == "0.2.0"
+    assert imported.returncode == 0, imported.stdout + imported.stderr
+    version, module_path = imported.stdout.strip().splitlines()
+    assert version == "0.2.0"
+    assert Path(module_path).resolve().is_relative_to(environment.resolve())
     assert str(repo) not in imported.stdout + imported.stderr
     assert invoke("--version").returncode == 0
     assert invoke("--help").returncode == 0
@@ -289,8 +299,26 @@ def test_wheel_clean_room_installed_cli_run_and_recovery(tmp_path: Path) -> None
     )
     assert first.returncode == 0, first.stdout + first.stderr
     assert json.loads(first.stdout)["attempt"]["result"]["technical_validation"]["status"] == "PASS"
-    assert invoke("status", "--runs-root", str(runs), "--json").returncode == 0
+    status = invoke("status", "--runs-root", str(runs), "--json")
+    assert status.returncode == 0, status.stdout + status.stderr
+    assert json.loads(status.stdout)["state"] == "COMPLETED"
+    results = invoke("results", "--runs-root", str(runs), "--json")
+    assert results.returncode == 0, results.stdout + results.stderr
+    inventory = json.loads(results.stdout)["artifacts"]
+    for name in ("attempt.json", "stdout.txt"):
+        assert any(
+            Path(item["path"]).name == name and Path(item["path"]).is_file()
+            for item in inventory
+        ), inventory
+    before_resume = {
+        path: hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in runs.rglob("attempt.json")
+    }
+    assert len(before_resume) == 1
     resumed = invoke("resume", "--runs-root", str(runs), "--json")
     assert resumed.returncode == 0, resumed.stdout + resumed.stderr
     assert json.loads(resumed.stdout)["status"] == "REUSED_VALIDATED_ATTEMPT"
-    assert len(tuple(runs.glob("*/*/attempt.json"))) == 1
+    assert before_resume == {
+        path: hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in runs.rglob("attempt.json")
+    }

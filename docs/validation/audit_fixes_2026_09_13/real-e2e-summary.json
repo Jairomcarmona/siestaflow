@@ -1,0 +1,189 @@
+{
+  "status": "PASS",
+  "wheel_sha256": "28d4d50011710dbc313a5221bd5a41ffe158f43c5056c669734539e0031e4996",
+  "engine": "/home/jmc/.local/siesta-5.4.2-serial/bin/siesta",
+  "engine_sha256": "e6e33807a931a6b63e89c39a796865fb963ba485fe4c311fcdc7f5d2abd1cc53",
+  "input_sha256": {
+    "input.fdf": "77e10058e8e9362fcee4185e61c56620697a26494941eb42e49b54e9e5d93159",
+    "Mg.psf": "a96f201ad6d4df0690aa07de3c9e38292fc95ac477fbd5f43842cbd5f5de6b35",
+    "O.psf": "959444abc4841a6c5748eb3f1d2db5bd257f10fb143b74febdc5201343a1797b"
+  },
+  "scientific_validity_asserted": false,
+  "steps": [
+    {
+      "step": "install",
+      "argv": [
+        "/tmp/qraft-final-e2e-20260913/venv/bin/python",
+        "-m",
+        "pip",
+        "install",
+        "/mnt/c/Users/Jairo/Downloads/QRAFT/.audit-runtime/release-dist/qraft-0.2.0-py3-none-any.whl"
+      ],
+      "exit_code": 0,
+      "seconds": 1.024,
+      "timed_out": false
+    },
+    {
+      "step": "dependencies",
+      "argv": [
+        "/tmp/qraft-final-e2e-20260913/venv/bin/python",
+        "-m",
+        "pip",
+        "check"
+      ],
+      "exit_code": 0,
+      "seconds": 0.27,
+      "timed_out": false
+    },
+    {
+      "step": "import",
+      "argv": [
+        "/tmp/qraft-final-e2e-20260913/venv/bin/python",
+        "-c",
+        "import qraft; print(qraft.__file__)"
+      ],
+      "exit_code": 0,
+      "seconds": 0.051,
+      "timed_out": false
+    },
+    {
+      "step": "version",
+      "argv": [
+        "/tmp/qraft-final-e2e-20260913/venv/bin/qraft",
+        "--version"
+      ],
+      "exit_code": 0,
+      "seconds": 0.284,
+      "timed_out": false
+    },
+    {
+      "step": "help",
+      "argv": [
+        "/tmp/qraft-final-e2e-20260913/venv/bin/qraft",
+        "--help"
+      ],
+      "exit_code": 0,
+      "seconds": 0.274,
+      "timed_out": false
+    },
+    {
+      "step": "init",
+      "argv": [
+        "/tmp/qraft-final-e2e-20260913/venv/bin/qraft",
+        "init",
+        "starter.yaml"
+      ],
+      "exit_code": 0,
+      "seconds": 0.277,
+      "timed_out": false
+    },
+    {
+      "step": "env",
+      "argv": [
+        "/tmp/qraft-final-e2e-20260913/venv/bin/qraft",
+        "setup",
+        "env",
+        "--profile",
+        "/tmp/qraft-final-e2e-20260913/user project/local.json",
+        "--json"
+      ],
+      "exit_code": 0,
+      "seconds": 0.416,
+      "timed_out": false
+    },
+    {
+      "step": "check",
+      "argv": [
+        "/tmp/qraft-final-e2e-20260913/venv/bin/qraft",
+        "check",
+        "/tmp/qraft-final-e2e-20260913/user project/input.fdf",
+        "--profile",
+        "/tmp/qraft-final-e2e-20260913/user project/local.json",
+        "--json"
+      ],
+      "exit_code": 0,
+      "seconds": 0.373,
+      "timed_out": false
+    },
+    {
+      "step": "plan",
+      "argv": [
+        "/tmp/qraft-final-e2e-20260913/venv/bin/qraft",
+        "inspect",
+        "plan",
+        "/tmp/qraft-final-e2e-20260913/user project/input.fdf",
+        "--profile",
+        "/tmp/qraft-final-e2e-20260913/user project/local.json",
+        "--json"
+      ],
+      "exit_code": 0,
+      "seconds": 0.285,
+      "timed_out": false
+    },
+    {
+      "step": "run",
+      "argv": [
+        "/tmp/qraft-final-e2e-20260913/venv/bin/qraft",
+        "run",
+        "/tmp/qraft-final-e2e-20260913/user project/input.fdf",
+        "--profile",
+        "/tmp/qraft-final-e2e-20260913/user project/local.json",
+        "--runs-root",
+        "/tmp/qraft-final-e2e-20260913/user project/runs",
+        "--json"
+      ],
+      "exit_code": 0,
+      "seconds": 0.918,
+      "timed_out": false
+    },
+    {
+      "step": "status",
+      "argv": [
+        "/tmp/qraft-final-e2e-20260913/venv/bin/qraft",
+        "status",
+        "--runs-root",
+        "/tmp/qraft-final-e2e-20260913/user project/runs",
+        "--json"
+      ],
+      "exit_code": 0,
+      "seconds": 0.292,
+      "timed_out": false
+    },
+    {
+      "step": "results",
+      "argv": [
+        "/tmp/qraft-final-e2e-20260913/venv/bin/qraft",
+        "results",
+        "--runs-root",
+        "/tmp/qraft-final-e2e-20260913/user project/runs",
+        "--json"
+      ],
+      "exit_code": 0,
+      "seconds": 0.292,
+      "timed_out": false
+    },
+    {
+      "step": "resume",
+      "argv": [
+        "/tmp/qraft-final-e2e-20260913/venv/bin/qraft",
+        "resume",
+        "--runs-root",
+        "/tmp/qraft-final-e2e-20260913/user project/runs",
+        "--json"
+      ],
+      "exit_code": 0,
+      "seconds": 0.407,
+      "timed_out": false
+    }
+  ],
+  "installed_module": "/tmp/qraft-final-e2e-20260913/venv/lib/python3.12/site-packages/qraft/__init__.py",
+  "checks": {
+    "technical_pass": true,
+    "status_completed": true,
+    "inventory_has_attempt_and_stdout": true,
+    "reused_attempt": true,
+    "single_immutable_attempt": true
+  },
+  "observed_status": "COMPLETED",
+  "attempt_count": 1
+}

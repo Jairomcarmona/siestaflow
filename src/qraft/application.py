@@ -587,20 +587,39 @@ class QraftApplication:
                 except (OSError, json.JSONDecodeError, TypeError):
                     states.append({"path": str(path), "technical_status": "UNREADABLE"})
         campaign_result = root / "campaign-result.json"
-        runtime_state = root / "state" / "workflow_runtime.json"
-        runtime: dict[str, Any] | None = None
-        if runtime_state.is_file():
+        runtime_states = [root / "state" / "workflow_runtime.json"]
+        runtimes: list[dict[str, Any]] = []
+        for runtime_root in sorted((root / "runtime").glob("*")):
+            runtime_state = runtime_root / "state" / "workflow_runtime.json"
             try:
+                runtime_root.resolve(strict=True).relative_to(root)
+            except (OSError, RuntimeError, ValueError):
+                runtimes.append({"path": str(runtime_state), "status": "UNREADABLE"})
+                continue
+            runtime_states.append(runtime_state)
+        for runtime_state in runtime_states:
+            if not runtime_state.is_file() and not runtime_state.is_symlink():
+                continue
+            try:
+                runtime_state.resolve(strict=True).relative_to(root)
+                journal = runtime_state.with_name("workflow_runtime.journal.jsonl")
+                # A journal can be absent; a broken link to one is damaged
+                # evidence and must not silently disappear from the status.
+                journal.resolve(strict=journal.is_symlink()).relative_to(root)
                 runtime = {
-                    "path": str(runtime_state),
                     **load_runtime_state_payload(runtime_state),
+                    "path": str(runtime_state),
                 }
-            except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            except (OSError, RuntimeError, AttributeError, TypeError, ValueError):
                 runtime = {"path": str(runtime_state), "status": "UNREADABLE"}
+            runtimes.append(runtime)
         return {
             "root": str(root), "states": states,
             "campaign": json.loads(campaign_result.read_text(encoding="utf-8")) if campaign_result.is_file() else None,
-            "runtime": runtime,
+            # A hash-named directory has no chronological ordering. Expose all
+            # runtimes instead of silently choosing one when several exist.
+            "runtime": runtimes[0] if len(runtimes) == 1 else None,
+            "runtimes": runtimes,
         }
 
     def attempts(self) -> tuple[dict[str, Any], ...]:

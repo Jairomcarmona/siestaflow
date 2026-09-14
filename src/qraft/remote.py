@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 from dataclasses import asdict, dataclass
 from enum import Enum
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 from .engines.siesta.output_parser import SiestaOutputParser
@@ -140,15 +141,24 @@ class RemoteResultImporter:
         expected_campaign_id: str | None = None,
         dry_run: bool = False,
     ) -> ImportReport:
+        path_findings = _validate_bundle_paths(bundle)
+        if path_findings:
+            return ImportReport(ImportStatus.REMOTE_RESULTS_INVALID, None, True, None, None, (), tuple(path_findings), None, dry_run)
         missing = tuple(name for name in self.REQUIRED if not (bundle / name).is_file())
         if missing:
             return ImportReport(ImportStatus.REMOTE_RESULTS_INCOMPLETE, expected_campaign_id, True, None, DecisionStatus.REVIEW.value, missing, ("required files are missing",), None, dry_run)
         try:
             manifest = json.loads((bundle / "result_manifest.json").read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
+        except (OSError, ValueError) as exc:
             return ImportReport(ImportStatus.REMOTE_RESULTS_INVALID, None, True, None, None, (), (f"invalid manifest: {exc}",), None, dry_run)
+        if not isinstance(manifest, dict):
+            return ImportReport(ImportStatus.REMOTE_RESULTS_INVALID, None, True, None, None, (), ("invalid manifest: expected an object",), None, dry_run)
         campaign_id = manifest.get("campaign_id")
-        synthetic = bool(manifest.get("synthetic", False))
+        if not isinstance(campaign_id, str) or not campaign_id.strip():
+            return ImportReport(ImportStatus.REMOTE_RESULTS_INVALID, None, True, None, None, (), ("invalid manifest: campaign_id must be a nonempty string",), None, dry_run)
+        if any(name in manifest and not isinstance(manifest[name], bool) for name in ("synthetic", "real_evidence")):
+            return ImportReport(ImportStatus.REMOTE_RESULTS_INVALID, campaign_id, True, None, None, (), ("invalid manifest: evidence flags must be booleans",), None, dry_run)
+        synthetic = manifest.get("synthetic", False)
         if expected_campaign_id and campaign_id != expected_campaign_id:
             return ImportReport(ImportStatus.REMOTE_RESULTS_INVALID, campaign_id, synthetic, None, None, (), ("campaign identity mismatch",), None, dry_run)
         checksum_findings = _verify_checksums(bundle)
@@ -191,22 +201,81 @@ def create_synthetic_result_bundle(path: Path, campaign_id: str, output: str) ->
     (path / "checksums.sha256").write_text("".join(f"{_sha(content)}  {name}\n" for name, content in sorted(files.items())), encoding="utf-8", newline="\n")
 
 
+def _validate_bundle_paths(bundle: Path) -> list[str]:
+    """Check everything copytree will follow before reading bundle contents."""
+    findings = []
+    try:
+        root = bundle.resolve()
+        if not root.is_dir():
+            return findings  # Preserve the existing missing-bundle report.
+        pending = [(bundle, frozenset({root}))]
+        while pending:
+            directory, ancestors = pending.pop()
+            for path in directory.iterdir():
+                resolved = path.resolve(strict=True)
+                name = path.relative_to(bundle).as_posix()
+                if not resolved.is_relative_to(root):
+                    findings.append(f"bundle path escapes root: {name}")
+                elif path.is_dir():
+                    if resolved in ancestors:
+                        findings.append(f"cyclic bundle path: {name}")
+                    else:
+                        pending.append((path, ancestors | {resolved}))
+                elif not path.is_file():
+                    findings.append(f"bundle path is not a regular file: {name}")
+    except (OSError, ValueError, RuntimeError) as exc:
+        findings.append(f"invalid bundle path: {exc}")
+    return findings
+
+
+def _checksum_path(bundle: Path, name: str) -> Path:
+    relative = PurePosixPath(name)
+    if (not relative.parts or relative.is_absolute() or ".." in relative.parts
+            or PureWindowsPath(name).drive or "\\" in name or "\x00" in name):
+        raise ValueError("expected a relative path within the bundle")
+    path = bundle.joinpath(*relative.parts)
+    if not path.resolve().is_relative_to(bundle.resolve()):
+        raise ValueError("path escapes bundle root")
+    return path
+
+
 def _verify_checksums(bundle: Path) -> list[str]:
     findings = []
-    for line in (bundle / "checksums.sha256").read_text(encoding="utf-8").splitlines():
+    try:
+        lines = (bundle / "checksums.sha256").read_text(encoding="utf-8").splitlines()
+    except (OSError, ValueError) as exc:
+        return [f"invalid checksums: {exc}"]
+    covered: set[str] = set()
+    seen: set[Path] = set()
+    for line in lines:
         if not line.strip():
             continue
         try:
             expected, name = line.split(None, 1)
-            name = name.strip().lstrip("*")
+            name = name.strip().removeprefix("*")
         except ValueError:
             findings.append("invalid checksum line")
             continue
-        path = bundle.joinpath(*PurePosixPath(name).parts)
-        if not path.is_file():
-            findings.append(f"checksum target missing: {name}")
-        elif hashlib.sha256(path.read_bytes()).hexdigest() != expected:
-            findings.append(f"checksum mismatch: {name}")
+        if not re.fullmatch(r"[0-9a-fA-F]{64}", expected):
+            findings.append(f"invalid checksum digest: {name}")
+            continue
+        try:
+            path = _checksum_path(bundle, name)
+            if path in seen:
+                findings.append(f"duplicate checksum target: {name}")
+                continue
+            seen.add(path)
+            if not path.is_file():
+                findings.append(f"checksum target missing: {name}")
+            elif hashlib.sha256(path.read_bytes()).hexdigest() != expected.lower():
+                findings.append(f"checksum mismatch: {name}")
+            else:
+                covered.add(PurePosixPath(name).as_posix())
+        except (OSError, ValueError, RuntimeError) as exc:
+            findings.append(f"invalid checksum path: {name}: {exc}")
+    for name in RemoteResultImporter.REQUIRED:
+        if name != "checksums.sha256" and name not in covered:
+            findings.append(f"required checksum missing or invalid: {name}")
     return findings
 
 

@@ -1,0 +1,236 @@
+FFF.FFF                                                                  [100%]
+=================================== FAILURES ===================================
+________ test_broken_evidence_links_do_not_break_views[cyclic-attempt] _________
+
+completed_run = PosixPath('/tmp/qraft-views-review-before/test_broken_evidence_links_do_0/runs')
+capsys = <_pytest.capture.CaptureFixture object at 0x711d62f57d40>
+location = 'attempt', kind = 'cyclic'
+
+    @pytest.mark.parametrize("location", ["attempt", "runtime", "journal"])
+    @pytest.mark.parametrize("kind", ["cyclic", "dangling"])
+    def test_broken_evidence_links_do_not_break_views(
+        completed_run: Path, capsys, location: str, kind: str,
+    ) -> None:
+        manifest = next(completed_run.rglob("attempt.json"))
+        state = next(completed_run.glob("runtime/*/state/workflow_runtime.json"))
+        link = {
+            "attempt": manifest.parent / "broken.txt",
+            "runtime": completed_run / "runtime" / "broken-runtime",
+            "journal": state.with_name("workflow_runtime.journal.jsonl"),
+        }[location]
+        if link.exists():
+            link.unlink()
+        destination = link if kind == "cyclic" else link.with_name("missing-evidence")
+        try:
+            link.symlink_to(destination, target_is_directory=location == "runtime")
+        except OSError as exc:
+            pytest.skip(f"symlinks unavailable: {exc}")
+>       results = _json_view("results", completed_run, capsys)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_cli_single_fdf_views.py:179:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+command = 'results'
+runs = PosixPath('/tmp/qraft-views-review-before/test_broken_evidence_links_do_0/runs')
+capsys = <_pytest.capture.CaptureFixture object at 0x711d62f57d40>
+
+    def _json_view(command: str, runs: Path, capsys) -> dict:
+        capsys.readouterr()
+>       assert main([command, "--runs-root", str(runs), "--json"]) == 0
+E       AssertionError: assert 2 == 0
+E        +  where 2 = main(['results', '--runs-root', '/tmp/qraft-views-review-before/test_broken_evidence_links_do_0/runs', '--json'])
+
+tests/test_cli_single_fdf_views.py:63: AssertionError
+----------------------------- Captured stdout call -----------------------------
+{"error": {"code": "INVALID_INPUT", "fix": "correct the input and try again", "message": "Symlink loop from '/tmp/qraft-views-review-before/test_broken_evidence_links_do_0/runs/runtime/85e782e1ea52826b/work/run_siesta/attempt-0001/broken.txt'", "next_command": "qraft results --runs-root /tmp/qraft-views-review-before/test_broken_evidence_links_do_0/runs --json", "why": "the command input does not satisfy the current QRAFT contract"}, "status": "BLOCKED"}
+________ test_broken_evidence_links_do_not_break_views[cyclic-runtime] _________
+
+completed_run = PosixPath('/tmp/qraft-views-review-before/test_broken_evidence_links_do_1/runs')
+capsys = <_pytest.capture.CaptureFixture object at 0x711d62d88230>
+location = 'runtime', kind = 'cyclic'
+
+    @pytest.mark.parametrize("location", ["attempt", "runtime", "journal"])
+    @pytest.mark.parametrize("kind", ["cyclic", "dangling"])
+    def test_broken_evidence_links_do_not_break_views(
+        completed_run: Path, capsys, location: str, kind: str,
+    ) -> None:
+        manifest = next(completed_run.rglob("attempt.json"))
+        state = next(completed_run.glob("runtime/*/state/workflow_runtime.json"))
+        link = {
+            "attempt": manifest.parent / "broken.txt",
+            "runtime": completed_run / "runtime" / "broken-runtime",
+            "journal": state.with_name("workflow_runtime.journal.jsonl"),
+        }[location]
+        if link.exists():
+            link.unlink()
+        destination = link if kind == "cyclic" else link.with_name("missing-evidence")
+        try:
+            link.symlink_to(destination, target_is_directory=location == "runtime")
+        except OSError as exc:
+            pytest.skip(f"symlinks unavailable: {exc}")
+>       results = _json_view("results", completed_run, capsys)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_cli_single_fdf_views.py:179:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+command = 'results'
+runs = PosixPath('/tmp/qraft-views-review-before/test_broken_evidence_links_do_1/runs')
+capsys = <_pytest.capture.CaptureFixture object at 0x711d62d88230>
+
+    def _json_view(command: str, runs: Path, capsys) -> dict:
+        capsys.readouterr()
+>       assert main([command, "--runs-root", str(runs), "--json"]) == 0
+E       AssertionError: assert 2 == 0
+E        +  where 2 = main(['results', '--runs-root', '/tmp/qraft-views-review-before/test_broken_evidence_links_do_1/runs', '--json'])
+
+tests/test_cli_single_fdf_views.py:63: AssertionError
+----------------------------- Captured stdout call -----------------------------
+{"error": {"code": "INVALID_INPUT", "fix": "correct the input and try again", "message": "Symlink loop from '/tmp/qraft-views-review-before/test_broken_evidence_links_do_1/runs/runtime/broken-runtime'", "next_command": "qraft results --runs-root /tmp/qraft-views-review-before/test_broken_evidence_links_do_1/runs --json", "why": "the command input does not satisfy the current QRAFT contract"}, "status": "BLOCKED"}
+________ test_broken_evidence_links_do_not_break_views[cyclic-journal] _________
+
+completed_run = PosixPath('/tmp/qraft-views-review-before/test_broken_evidence_links_do_2/runs')
+capsys = <_pytest.capture.CaptureFixture object at 0x711d62ed38f0>
+location = 'journal', kind = 'cyclic'
+
+    @pytest.mark.parametrize("location", ["attempt", "runtime", "journal"])
+    @pytest.mark.parametrize("kind", ["cyclic", "dangling"])
+    def test_broken_evidence_links_do_not_break_views(
+        completed_run: Path, capsys, location: str, kind: str,
+    ) -> None:
+        manifest = next(completed_run.rglob("attempt.json"))
+        state = next(completed_run.glob("runtime/*/state/workflow_runtime.json"))
+        link = {
+            "attempt": manifest.parent / "broken.txt",
+            "runtime": completed_run / "runtime" / "broken-runtime",
+            "journal": state.with_name("workflow_runtime.journal.jsonl"),
+        }[location]
+        if link.exists():
+            link.unlink()
+        destination = link if kind == "cyclic" else link.with_name("missing-evidence")
+        try:
+            link.symlink_to(destination, target_is_directory=location == "runtime")
+        except OSError as exc:
+            pytest.skip(f"symlinks unavailable: {exc}")
+>       results = _json_view("results", completed_run, capsys)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_cli_single_fdf_views.py:179:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+command = 'results'
+runs = PosixPath('/tmp/qraft-views-review-before/test_broken_evidence_links_do_2/runs')
+capsys = <_pytest.capture.CaptureFixture object at 0x711d62ed38f0>
+
+    def _json_view(command: str, runs: Path, capsys) -> dict:
+        capsys.readouterr()
+>       assert main([command, "--runs-root", str(runs), "--json"]) == 0
+E       AssertionError: assert 2 == 0
+E        +  where 2 = main(['results', '--runs-root', '/tmp/qraft-views-review-before/test_broken_evidence_links_do_2/runs', '--json'])
+
+tests/test_cli_single_fdf_views.py:63: AssertionError
+----------------------------- Captured stdout call -----------------------------
+{"error": {"code": "INVALID_INPUT", "fix": "correct the input and try again", "message": "Symlink loop from '/tmp/qraft-views-review-before/test_broken_evidence_links_do_2/runs/runtime/11d60c19c7867bd7/state/workflow_runtime.journal.jsonl'", "next_command": "qraft results --runs-root /tmp/qraft-views-review-before/test_broken_evidence_links_do_2/runs --json", "why": "the command input does not satisfy the current QRAFT contract"}, "status": "BLOCKED"}
+_______ test_broken_evidence_links_do_not_break_views[dangling-runtime] ________
+
+completed_run = PosixPath('/tmp/qraft-views-review-before/test_broken_evidence_links_do_4/runs')
+capsys = <_pytest.capture.CaptureFixture object at 0x711d62dfe690>
+location = 'runtime', kind = 'dangling'
+
+    @pytest.mark.parametrize("location", ["attempt", "runtime", "journal"])
+    @pytest.mark.parametrize("kind", ["cyclic", "dangling"])
+    def test_broken_evidence_links_do_not_break_views(
+        completed_run: Path, capsys, location: str, kind: str,
+    ) -> None:
+        manifest = next(completed_run.rglob("attempt.json"))
+        state = next(completed_run.glob("runtime/*/state/workflow_runtime.json"))
+        link = {
+            "attempt": manifest.parent / "broken.txt",
+            "runtime": completed_run / "runtime" / "broken-runtime",
+            "journal": state.with_name("workflow_runtime.journal.jsonl"),
+        }[location]
+        if link.exists():
+            link.unlink()
+        destination = link if kind == "cyclic" else link.with_name("missing-evidence")
+        try:
+            link.symlink_to(destination, target_is_directory=location == "runtime")
+        except OSError as exc:
+            pytest.skip(f"symlinks unavailable: {exc}")
+        results = _json_view("results", completed_run, capsys)
+        present = {item["path"] for item in results["artifacts"] if item["status"] == "PRESENT"}
+        assert str(manifest) in present
+        assert str(manifest.parent / "stdout.txt") in present
+        assert str(link) not in present
+        status = _json_view("status", completed_run, capsys)
+>       assert status["state"] == ("COMPLETED" if location == "attempt" else "UNREADABLE")
+E       AssertionError: assert 'COMPLETED' == 'UNREADABLE'
+E
+E         - UNREADABLE
+E         + COMPLETED
+
+tests/test_cli_single_fdf_views.py:185: AssertionError
+_______ test_broken_evidence_links_do_not_break_views[dangling-journal] ________
+
+completed_run = PosixPath('/tmp/qraft-views-review-before/test_broken_evidence_links_do_5/runs')
+capsys = <_pytest.capture.CaptureFixture object at 0x711d624a1b50>
+location = 'journal', kind = 'dangling'
+
+    @pytest.mark.parametrize("location", ["attempt", "runtime", "journal"])
+    @pytest.mark.parametrize("kind", ["cyclic", "dangling"])
+    def test_broken_evidence_links_do_not_break_views(
+        completed_run: Path, capsys, location: str, kind: str,
+    ) -> None:
+        manifest = next(completed_run.rglob("attempt.json"))
+        state = next(completed_run.glob("runtime/*/state/workflow_runtime.json"))
+        link = {
+            "attempt": manifest.parent / "broken.txt",
+            "runtime": completed_run / "runtime" / "broken-runtime",
+            "journal": state.with_name("workflow_runtime.journal.jsonl"),
+        }[location]
+        if link.exists():
+            link.unlink()
+        destination = link if kind == "cyclic" else link.with_name("missing-evidence")
+        try:
+            link.symlink_to(destination, target_is_directory=location == "runtime")
+        except OSError as exc:
+            pytest.skip(f"symlinks unavailable: {exc}")
+        results = _json_view("results", completed_run, capsys)
+        present = {item["path"] for item in results["artifacts"] if item["status"] == "PRESENT"}
+        assert str(manifest) in present
+        assert str(manifest.parent / "stdout.txt") in present
+        assert str(link) not in present
+        status = _json_view("status", completed_run, capsys)
+>       assert status["state"] == ("COMPLETED" if location == "attempt" else "UNREADABLE")
+E       AssertionError: assert 'COMPLETED' == 'UNREADABLE'
+E
+E         - UNREADABLE
+E         + COMPLETED
+
+tests/test_cli_single_fdf_views.py:185: AssertionError
+_______________ test_runtime_next_action_quotes_root_with_spaces _______________
+
+completed_run = PosixPath('/tmp/qraft-views-review-before/test_runtime_next_action_quote0/runs')
+capsys = <_pytest.capture.CaptureFixture object at 0x711d62446240>
+
+    def test_runtime_next_action_quotes_root_with_spaces(completed_run: Path, capsys) -> None:
+        spaced_root = completed_run.with_name("runs with spaces")
+        completed_run.rename(spaced_root)
+        status = _json_view("status", spaced_root, capsys)
+        command = shlex.split(status["next_action"])
+>       assert command == ["qraft", "results", "--runs-root", str(spaced_root)]
+E       AssertionError: assert ['qraft', 're...th', 'spaces'] == ['qraft', 're... with spaces']
+E
+E         At index 3 diff: '/tmp/qraft-views-review-before/test_runtime_next_action_quote0/runs' != '/tmp/qraft-views-review-before/test_runtime_next_action_quote0/runs with spaces'
+E         Left contains 2 more items, first extra item: 'with'
+E         Use -v to get more diff
+
+tests/test_cli_single_fdf_views.py:193: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_cli_single_fdf_views.py::test_broken_evidence_links_do_not_break_views[cyclic-attempt]
+FAILED tests/test_cli_single_fdf_views.py::test_broken_evidence_links_do_not_break_views[cyclic-runtime]
+FAILED tests/test_cli_single_fdf_views.py::test_broken_evidence_links_do_not_break_views[cyclic-journal]
+FAILED tests/test_cli_single_fdf_views.py::test_broken_evidence_links_do_not_break_views[dangling-runtime]
+FAILED tests/test_cli_single_fdf_views.py::test_broken_evidence_links_do_not_break_views[dangling-journal]
+FAILED tests/test_cli_single_fdf_views.py::test_runtime_next_action_quotes_root_with_spaces
+6 failed, 1 passed, 10 deselected in 4.06s

@@ -11,6 +11,9 @@
 - [ ] installed `import qraft`, `qraft --version`, and `qraft --help`
 - [ ] installed `env`, `config`, profile and validate smoke
 - [ ] installed single_fdf plan/run/recovery smoke
+- [ ] `QRAFT_BUILD_PYTHON` explicitly set for the complete pytest release gate
+- [ ] installed `status` reports completion and `results` lists actual attempt/output files
+- [ ] recovery preserves attempt manifests without launching a duplicate calculation
 - [ ] installed REPL starts and exits cleanly
 - [ ] profile lookup works from project and user configuration roots
 - [ ] standalone package fallback regression smoke
