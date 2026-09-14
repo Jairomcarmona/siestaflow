@@ -1,0 +1,29 @@
+{
+  "source_commit": "8def70ea80ffbed203e451a81f0cdd0c86dbd37e",
+  "real_runtime": {
+    "validated": ["normal_completion", "scf_converged", "energy", "stdout_stderr_preserved", "technical_pass"],
+    "evidence": "docs/validation/wsl_n4_campaign_spec_v1/evidence/technical_validation.json"
+  },
+  "fixture_only": [
+    "scf_not_converged",
+    "input_error",
+    "missing_pseudopotential",
+    "truncated_output",
+    "unknown_warning",
+    "environment_error",
+    "timeout",
+    "spin_polarized_completion"
+  ],
+  "static_or_missing_fixture": [
+    "oom",
+    "node_failure",
+    "cancelled",
+    "numerical_failure",
+    "stress_as_campaign_metric",
+    "final_geometry_as_campaign_metric",
+    "magnetization_as_campaign_metric",
+    "dos_pdos_bands_as_campaign_dag_outputs"
+  ],
+  "fixture_test_file": "tests/m2/test_outputs_campaigns.py",
+  "parser_source": "src/qraft/engines/siesta/output_parser.py"
+}

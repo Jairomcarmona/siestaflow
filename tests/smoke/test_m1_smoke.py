@@ -1,4 +1,4 @@
-from siestaflow.models import DecisionStatus, TaskState
+from qraft.models import DecisionStatus, TaskState
 
 from tests.integration.test_simulated_campaign import authorization, kernel
 

@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "baseline_commit": "d7827ed700a884eeaf797882bc225b2e301a557e",
+  "focused_baseline": "50 passed in 4.80s",
+  "m2_focused": "3 passed in 1.99s",
+  "campaign_regression": "16 passed in 2.19s",
+  "final_full_pytest": "563 passed",
+  "gates": {
+    "M2-01": "PASS",
+    "M2-02": "PASS",
+    "M2-03": "PASS",
+    "M2-04": "PASS",
+    "M2-05": "PASS",
+    "M2-06": "PASS",
+    "M2-07": "PASS",
+    "M2-08": "PASS"
+  }
+}

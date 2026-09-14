@@ -1,0 +1,11 @@
+# Focused validation
+$env:PYTHONDONTWRITEBYTECODE = '1'
+python -m pytest -q --basetemp="C:\Users\Jairo\Downloads\SIESTAFLOW_CONTEXT\qraft-m9-recovery-focused-basetemp" -p no:cacheprovider tests/characterization/test_m9_mass_screening_harness.py tests/execution/test_capability_runtime.py tests/execution/test_m3_generic_composition_failure_model.py
+
+# Corrected scale ladder (external untracked workspace)
+$env:PYTHONDONTWRITEBYTECODE = '1'
+$env:PYTHONPATH = 'src'
+python -m tests.characterization.m9_mass_screening_harness --workspace "C:\Users\Jairo\Downloads\SIESTAFLOW_CONTEXT\qraft-m9-characterization-workspace-4" --evidence-dir "docs\validation\m9_mass_screening_scale_acceptance"
+
+# Fresh recovery-only reproduction (external untracked workspace)
+python -m tests.characterization.m9_mass_screening_harness --workspace "C:\Users\Jairo\Downloads\SIESTAFLOW_CONTEXT\qraft-m9-recovery-workspace-5" --recovery-only

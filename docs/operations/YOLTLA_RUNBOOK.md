@@ -3,7 +3,7 @@
 ## Current validated operating contract (2026-07-29)
 
 SIESTA is loaded with `module load siesta/5.4.2`. Yoltla explicitly recommends
-`mpiexec.hydra -bootstrap ssh`; SIESTAFLOW schema 2.0 implements that launcher
+`mpiexec.hydra -bootstrap ssh`; QRAFT schema 2.0 implements that launcher
 with explicit host placement and a unique `FI_PSM3_UUID` per step.
 
 The user remains responsible for transfer and submission:

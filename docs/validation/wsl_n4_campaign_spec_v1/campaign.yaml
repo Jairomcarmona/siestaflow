@@ -1,0 +1,19 @@
+schema_version: "1.0"
+campaign_id: mgo-wsl-mesh-smoke
+engine: siesta
+protocol: convergence
+system:
+  fdf: MgO.fdf
+parameters:
+  mesh_cutoff:
+    mode: scan
+    values: [80, 100]
+    unit: Ry
+  basis_size:
+    mode: fixed
+    value: SZ
+criterion:
+  metric: energy_per_atom
+  delta: 0.1
+  unit: eV
+  consecutive: 1

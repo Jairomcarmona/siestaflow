@@ -8,8 +8,8 @@ import json
 from dataclasses import asdict
 from pathlib import Path
 
-from siestaflow.real_smoke import RealSiestaSmokePackager, RealSmokeSpec
-from siestaflow.slurm_renderer import SlurmProfile
+from qraft.real_smoke import RealSiestaSmokePackager, RealSmokeSpec
+from qraft.slurm_renderer import SlurmProfile
 
 
 PROJECT = Path(__file__).resolve().parent

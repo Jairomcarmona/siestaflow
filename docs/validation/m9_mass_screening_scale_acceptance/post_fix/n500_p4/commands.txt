@@ -1,0 +1,8 @@
+Environment: PYTHONDONTWRITEBYTECODE=1; PYTHONPATH=src
+One direct validation-driver invocation:
+python -c "import tests.characterization.m9_root_cause_harness as h; h.MATRIX=((500,4),); h.characterize_case(<new external workspace>, candidates=500, parallelism=4)"
+
+External workspace:
+C:\Users\Jairo\Downloads\SIESTAFLOW_CONTEXT\m9-n500-p4-final-scale
+
+The driver completed one clean N=500/P=4 run. Recovery and full regression were not run.

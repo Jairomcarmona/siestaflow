@@ -11,11 +11,11 @@ from pathlib import Path
 
 import pytest
 
-from siestaflow.engines.siesta.pseudopotentials import PseudopotentialManifest
-from siestaflow.project_packages import load_structured
-from siestaflow.remote_environment import EnvironmentProbePackager, PROBE_ID
-from siestaflow.validation.embedded_code import extract_python_heredocs, validate_files
-from siestaflow.validation.slurm_evidence import TERMINAL_STATES, parse_sacct_main_row
+from qraft.engines.siesta.pseudopotentials import PseudopotentialManifest
+from qraft.project_packages import load_structured
+from qraft.remote_environment import EnvironmentProbePackager, PROBE_ID
+from qraft.validation.embedded_code import extract_python_heredocs, validate_files
+from qraft.validation.slurm_evidence import TERMINAL_STATES, parse_sacct_main_row
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -45,6 +45,7 @@ def _rebuild_checksums(package: Path) -> None:
 def _stub(path: Path, body: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("#!/usr/bin/env bash\nset -euo pipefail\n" + body + "\n", encoding="utf-8", newline="\n")
+    path.chmod(0o755)
 
 
 def _bash(package: Path, command: str, *, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:

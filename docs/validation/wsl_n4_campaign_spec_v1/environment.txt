@@ -1,0 +1,12 @@
+QRAFT       0.2.0
+Commit      3264c7beca29860e2fb4fb4f0f79a243ac5eac38
+Branch      feat/qraft-campaign-spec-v1
+SIESTA      5.4.2
+OpenMPI     4.1.6
+Launcher    /usr/bin/mpirun
+MPI ranks   4
+Scheduler   SLURM local
+SLURM job   264
+Nodes       1
+Platform    WSL2
+Hostname    LAPTOP-NFD67ATK

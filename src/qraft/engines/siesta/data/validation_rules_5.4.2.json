@@ -1,0 +1,89 @@
+{
+  "schema_version": "1.0",
+  "engine": "siesta",
+  "engine_version": "5.4.2",
+  "source_url": "https://docs.siesta-project.org/projects/siesta/en/5.4/reference/siesta.html",
+  "source_accessed": "2026-07-30",
+  "rules": [
+    {
+      "rule_id": "siestaflow.siesta.keyword-schema",
+      "version": "1.0",
+      "summary": "Validate registered keyword kind, scalar type, explicit units, and supported enumerations.",
+      "evidence_class": "ENGINE_MANUAL",
+      "scopes": ["SYNTAX", "NUMERICAL"],
+      "supported_subjects": ["siesta.fdf"],
+      "deterministic": true,
+      "reference": "SIESTA 5.4.2 reference manual, FDF label entries"
+    },
+    {
+      "rule_id": "siestaflow.siesta.lattice-consistency",
+      "version": "1.0",
+      "summary": "Validate that LatticeVectors is a finite, nonsingular 3 by 3 matrix.",
+      "evidence_class": "MATHEMATICAL_CONSISTENCY",
+      "scopes": ["STRUCTURE", "NUMERICAL"],
+      "supported_subjects": ["siesta.fdf"],
+      "deterministic": true,
+      "reference": "SIESTA 5.4.2 LatticeVectors"
+    },
+    {
+      "rule_id": "siestaflow.siesta.kgrid-consistency",
+      "version": "1.0",
+      "summary": "Validate the Monkhorst-Pack integer matrix, displacement vector, and nonzero determinant.",
+      "evidence_class": "ENGINE_MANUAL",
+      "scopes": ["NUMERICAL"],
+      "supported_subjects": ["siesta.fdf"],
+      "deterministic": true,
+      "reference": "SIESTA 5.4.2 kgrid.MonkhorstPack"
+    },
+    {
+      "rule_id": "siestaflow.siesta.electrostatic-context",
+      "version": "1.0",
+      "summary": "Flag non-neutral periodic contexts and the discouraged charged-slab dipole-correction combination.",
+      "evidence_class": "ENGINE_MANUAL",
+      "scopes": ["PHYSICAL"],
+      "supported_subjects": ["siesta.fdf"],
+      "deterministic": true,
+      "reference": "SIESTA 5.4.2 NetCharge and Slab.DipoleCorrection"
+    },
+    {
+      "rule_id": "siestaflow.siesta.d3-periodicity",
+      "version": "1.0",
+      "summary": "Request review when D3 periodicity inference is ambiguous.",
+      "evidence_class": "ENGINE_MANUAL",
+      "scopes": ["PHYSICAL"],
+      "supported_subjects": ["siesta.fdf"],
+      "deterministic": true,
+      "reference": "SIESTA 5.4.2 DFTD3.Periodic"
+    },
+    {
+      "rule_id": "siestaflow.siesta.dftu-context",
+      "version": "1.0",
+      "summary": "Validate documented DFT+U controls and expose linear-response potential-shift mode.",
+      "evidence_class": "ENGINE_MANUAL",
+      "scopes": ["NUMERICAL", "PHYSICAL"],
+      "supported_subjects": ["siesta.fdf"],
+      "deterministic": true,
+      "reference": "SIESTA 5.4.2 DFTU section"
+    },
+    {
+      "rule_id": "siestaflow.siesta.requested-output",
+      "version": "1.0",
+      "summary": "Verify explicitly requested postprocessing prerequisites such as SaveBaderCharge.",
+      "evidence_class": "PROJECT_POLICY",
+      "scopes": ["POLICY", "NUMERICAL"],
+      "supported_subjects": ["siesta.fdf"],
+      "deterministic": true,
+      "reference": "SIESTA 5.4.2 SaveBaderCharge"
+    },
+    {
+      "rule_id": "siestaflow.siesta.cost-review",
+      "version": "1.0",
+      "summary": "Apply only researcher-declared review limits to k-point and atom-k-point workload proxies.",
+      "evidence_class": "PROJECT_POLICY",
+      "scopes": ["NUMERICAL", "POLICY"],
+      "supported_subjects": ["siesta.fdf"],
+      "deterministic": true,
+      "reference": "External project validation profile"
+    }
+  ]
+}

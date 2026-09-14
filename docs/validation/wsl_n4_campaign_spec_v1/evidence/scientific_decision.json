@@ -1,0 +1,28 @@
+{
+  "campaign_id": "mgo-wsl-mesh-smoke",
+  "metric": "energy_per_atom",
+  "criterion": {
+    "delta": 0.1,
+    "unit": "eV",
+    "consecutive": 1
+  },
+  "points": [
+    {
+      "value_ry": 80,
+      "energy_ev": -457.1475,
+      "energy_per_atom_ev": -228.57375,
+      "delta_ev": null,
+      "technical_status": "PASS"
+    },
+    {
+      "value_ry": 100,
+      "energy_ev": -457.1475,
+      "energy_per_atom_ev": -228.57375,
+      "delta_ev": 0.0,
+      "technical_status": "PASS"
+    }
+  ],
+  "decision": "CONVERGED",
+  "selected_point_ry": 100,
+  "source": "persisted campaign-result.json and convergence.csv"
+}

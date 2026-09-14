@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from siestaflow.engines.siesta.output_parser import SiestaOutputParser
-from siestaflow.local_execution import (
+from qraft.engines.siesta.output_parser import SiestaOutputParser
+from qraft.local_execution import (
     InputBinding,
     LocalExecutionError,
     LocalExecutionProfile,
@@ -46,7 +46,7 @@ def test_external_profiles_are_generic_and_loadable():
     assert (serial.launcher, serial.tasks) == ("direct", 1)
     assert (mpi2.launcher, mpi2.tasks) == ("mpirun", 2)
     assert (mpi4.launcher, mpi4.tasks) == ("mpirun", 4)
-    core = (REPO / "src/siestaflow/local_execution.py").read_text()
+    core = (REPO / "src/qraft/local_execution.py").read_text()
     assert "/home/jmc" not in core and "SURF_Gr5x5" not in core and "C.psml" not in core
 
 
@@ -60,9 +60,9 @@ def test_real_inputs_and_hashes_remain_external_to_core():
 
 def test_serial_binary_marked_as_mpi_is_rejected(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     binary = executable(tmp_path / "engine", "Parallelisations: none")
-    monkeypatch.setattr("siestaflow.local_execution.shutil.which", lambda _: "/usr/bin/launcher")
+    monkeypatch.setattr("qraft.local_execution.shutil.which", lambda _: "/usr/bin/launcher")
     monkeypatch.setattr(
-        "siestaflow.local_execution.subprocess.run",
+        "qraft.local_execution.subprocess.run",
         lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 0, "Parallelisations: none\n", ""),
     )
     with pytest.raises(LocalExecutionError, match="EXECUTABLE_NOT_MPI"):
@@ -76,7 +76,7 @@ def test_missing_mpi_binary_is_rejected(tmp_path: Path):
 
 def test_missing_launcher_is_rejected(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     binary = executable(tmp_path / "engine")
-    monkeypatch.setattr("siestaflow.local_execution.shutil.which", lambda _: None)
+    monkeypatch.setattr("qraft.local_execution.shutil.which", lambda _: None)
     with pytest.raises(LocalExecutionError, match="LAUNCHER_MISSING"):
         validate_profile(LocalExecutionProfile("missing", "launcher", str(binary), 2))
 
@@ -113,7 +113,7 @@ def test_input_resource_destination_collision_is_blocked_before_execution(
     launched = False
 
     monkeypatch.setattr(
-        "siestaflow.local_execution.validate_profile",
+        "qraft.local_execution.validate_profile",
         lambda _: (tmp_path / "engine", None, "Version: test", None),
     )
 
@@ -122,7 +122,7 @@ def test_input_resource_destination_collision_is_blocked_before_execution(
         launched = True
         raise AssertionError("SIESTA_EXECUTED_AFTER_BINDING_COLLISION")
 
-    monkeypatch.setattr("siestaflow.local_execution.subprocess.run", unexpected_run)
+    monkeypatch.setattr("qraft.local_execution.subprocess.run", unexpected_run)
     time_command = tmp_path / "time"; time_command.write_text("")
     spec = LocalRunSpec(
         "input-resource-collision", destination,
@@ -147,7 +147,7 @@ def test_two_resources_with_same_destination_are_blocked_before_execution(
     launched = False
 
     monkeypatch.setattr(
-        "siestaflow.local_execution.validate_profile",
+        "qraft.local_execution.validate_profile",
         lambda _: (tmp_path / "engine", None, "Version: test", None),
     )
 
@@ -156,7 +156,7 @@ def test_two_resources_with_same_destination_are_blocked_before_execution(
         launched = True
         raise AssertionError("SIESTA_EXECUTED_AFTER_BINDING_COLLISION")
 
-    monkeypatch.setattr("siestaflow.local_execution.subprocess.run", unexpected_run)
+    monkeypatch.setattr("qraft.local_execution.subprocess.run", unexpected_run)
     time_command = tmp_path / "time"; time_command.write_text("")
     spec = LocalRunSpec(
         "resource-resource-collision", destination,

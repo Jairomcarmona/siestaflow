@@ -1,0 +1,86 @@
+{
+  "can_run": true,
+  "dimensions": {
+    "execution_environment": {
+      "authorities": [
+        "QraftApplication.environment",
+        "EnvironmentInspector.inspect",
+        "evaluate_runtime_compatibility"
+      ],
+      "findings": [],
+      "name": "EXECUTION ENVIRONMENT",
+      "reason": "live execution resolution and required probes pass",
+      "status": "PASS"
+    },
+    "input_model": {
+      "authorities": [
+        "FDFParser",
+        "SiestaInputValidator",
+        "SiestaContextualValidator",
+        "build_scientific_identity"
+      ],
+      "findings": [
+        {
+          "authority": "siestaflow.siesta.legacy-input",
+          "code": "REVIEW:UNKNOWN_LABEL",
+          "evidence": [],
+          "message": "unknown label preserved: DM.Tolerance"
+        }
+      ],
+      "name": "INPUT / MODEL",
+      "reason": "authority findings require attention",
+      "status": "REVIEW"
+    },
+    "numerical_evidence": {
+      "authorities": [
+        "target contract"
+      ],
+      "findings": [],
+      "name": "NUMERICAL EVIDENCE",
+      "reason": "single FDF does not reference a numerical-convergence authority",
+      "status": "NOT_APPLICABLE"
+    },
+    "scientific_consistency": {
+      "authorities": [
+        "SiestaContextualValidator",
+        "validate_magnetic_input"
+      ],
+      "findings": [
+        {
+          "authority": "siestaflow.siesta.legacy-input",
+          "code": "REVIEW:UNDECLARED_GOVERNED_VALUE",
+          "evidence": [],
+          "message": "NetCharge is not explicitly declared; no default assumed"
+        },
+        {
+          "authority": "siestaflow.siesta.legacy-input",
+          "code": "REVIEW:UNDECLARED_GOVERNED_VALUE",
+          "evidence": [],
+          "message": "Spin is not explicitly declared; no default assumed"
+        },
+        {
+          "authority": "siestaflow.siesta.legacy-input",
+          "code": "REVIEW:UNDECLARED_GOVERNED_VALUE",
+          "evidence": [],
+          "message": "MD.TypeOfRun is not explicitly declared; no default assumed"
+        },
+        {
+          "authority": "siestaflow.siesta.legacy-input",
+          "code": "REVIEW:UNDECLARED_GOVERNED_VALUE",
+          "evidence": [],
+          "message": "MD.Steps or MD.NumCGSteps is not explicitly declared; no default assumed"
+        }
+      ],
+      "name": "SCIENTIFIC CONSISTENCY",
+      "reason": "authority findings require attention",
+      "status": "REVIEW"
+    }
+  },
+  "model_consistent": null,
+  "next_command": "qraft run '/tmp/qraft-final-e2e-20260913/user project/input.fdf'",
+  "numerically_adequate": null,
+  "scientifically_ready": null,
+  "status": "READY",
+  "target": "/tmp/qraft-final-e2e-20260913/user project/input.fdf",
+  "target_kind": "FDF"
+}

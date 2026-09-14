@@ -1,0 +1,42 @@
+{
+  "baseline_sha": "d17666e028c1bbb2b27d715290312154db6f8440",
+  "environment": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.13.14",
+    "memory_backend": "windows.PeakWorkingSetSize"
+  },
+  "allocation": {
+    "total_cpus": 4,
+    "total_nodes": 1,
+    "max_parallel_steps": 4,
+    "execution_spec_mpi_ranks": 1,
+    "observed_peak_parallel_steps": 1
+  },
+  "summary_contract": {
+    "fields": ["candidate_id", "status", "scientific_metric", "rejection_reason", "rank"],
+    "order": "candidate_id ascending",
+    "ranking": "scientific_metric ascending; candidate_id tie-break; invalid statuses rank null",
+    "derived_only": true
+  },
+  "workloads": [
+    {"candidate_count":10,"task_count":10,"attempts_started":10,"completed_count":10,"rejected_count":0,"failed_count":0,"blocked_count":0,"interrupted_count":0,"incomplete_count":0,"reused_count":0,"wall_seconds":0.7548362,"process_cpu_seconds":0.375,"throughput_candidates_per_second":13.2479072943,"peak_rss_bytes":52412416,"peak_cpus":1,"peak_nodes":1,"peak_parallel_steps":1,"state_write_count":23,"state_bytes_written_cumulative":54672,"state_bytes_per_candidate":5467.2,"state_bytes_per_candidate_squared":546.72,"event_append_count":42,"event_bytes_written":6676,"filesystem_file_count":72,"filesystem_total_bytes":30796,"evidence_bytes":6676,"evidence_bytes_per_candidate":667.6,"summary_generation_seconds":0.0145462,"summary_bytes":1120,"summary_sha256":"0ae52d0734f8c0c96b91b5a9137124c42e5c3dc81390a1e02c6cbd75a64330b9","artifact_collision_count":0,"cross_candidate_leakage_count":0,"unexpected_propagation_count":0,"ranking_mismatch_count":0},
+    {"candidate_count":25,"task_count":25,"attempts_started":25,"completed_count":25,"rejected_count":0,"failed_count":0,"blocked_count":0,"interrupted_count":0,"incomplete_count":0,"reused_count":0,"wall_seconds":1.8582483,"process_cpu_seconds":0.921875,"throughput_candidates_per_second":13.4535304028,"peak_rss_bytes":52412416,"peak_cpus":1,"peak_nodes":1,"peak_parallel_steps":1,"state_write_count":53,"state_bytes_written_cumulative":273837,"state_bytes_per_candidate":10953.48,"state_bytes_per_candidate_squared":438.1392,"event_append_count":102,"event_bytes_written":15811,"filesystem_file_count":177,"filesystem_total_bytes":75136,"evidence_bytes":15811,"evidence_bytes_per_candidate":632.44,"summary_generation_seconds":0.0213164,"summary_bytes":2815,"summary_sha256":"73ce82c5a4207d8accd472999474af482f97d9da3a7c165c527f0863155eb1bc","artifact_collision_count":0,"cross_candidate_leakage_count":0,"unexpected_propagation_count":0,"ranking_mismatch_count":0},
+    {"candidate_count":100,"task_count":100,"attempts_started":100,"completed_count":100,"rejected_count":0,"failed_count":0,"blocked_count":0,"interrupted_count":0,"incomplete_count":0,"reused_count":0,"wall_seconds":9.3524172,"process_cpu_seconds":5.15625,"throughput_candidates_per_second":10.6924229171,"peak_rss_bytes":52989952,"peak_cpus":1,"peak_nodes":1,"peak_parallel_steps":1,"state_write_count":203,"state_bytes_written_cumulative":3880969,"state_bytes_per_candidate":38809.69,"state_bytes_per_candidate_squared":388.0969,"event_append_count":402,"event_bytes_written":61486,"filesystem_file_count":702,"filesystem_total_bytes":296902,"evidence_bytes":61486,"evidence_bytes_per_candidate":614.86,"summary_generation_seconds":0.0193562,"summary_bytes":11282,"summary_sha256":"55bd0659b8500d03ab1951976b295a396b5401ed2e768f5e31879d6bf1c27684","artifact_collision_count":0,"cross_candidate_leakage_count":0,"unexpected_propagation_count":0,"ranking_mismatch_count":0},
+    {"candidate_count":500,"task_count":500,"attempts_started":500,"completed_count":500,"rejected_count":0,"failed_count":0,"blocked_count":0,"interrupted_count":0,"incomplete_count":0,"reused_count":0,"wall_seconds":95.3599928,"process_cpu_seconds":66.65625,"throughput_candidates_per_second":5.2432889865,"peak_rss_bytes":60149760,"peak_cpus":1,"peak_nodes":1,"peak_parallel_steps":1,"state_write_count":1003,"state_bytes_written_cumulative":93798973,"state_bytes_per_candidate":187597.946,"state_bytes_per_candidate_squared":375.195892,"event_append_count":2002,"event_bytes_written":305086,"filesystem_file_count":3502,"filesystem_total_bytes":1479539,"evidence_bytes":305086,"evidence_bytes_per_candidate":610.172,"summary_generation_seconds":0.025879,"summary_bytes":56841,"summary_sha256":"1ebd5d127d23bb8afd26562f99f5804e07b7a861e5b297f95fb9adf8fdda833e","artifact_collision_count":0,"cross_candidate_leakage_count":0,"unexpected_propagation_count":0,"ranking_mismatch_count":0}
+  ],
+  "MEASURED": {
+    "wall_ratio_100_to_500": 10.1962937239,
+    "cpu_ratio_100_to_500": 12.9272727273,
+    "state_bytes_ratio_100_to_500": 24.1689570311,
+    "state_write_ratio_100_to_500": 4.9408866995,
+    "recovery_first_invocation": "950 completed; 25 selected EVAL failed; only their SCORE descendants blocked",
+    "recovery_second_invocation": "completed work reused and eligible failures retried; Windows added two environmental SCORE retries in one attempt",
+    "clean_equivalent": "not certified: two WinError 5 atomic-state replacements produced INCOMPLETE tasks"
+  },
+  "INFERRED": {
+    "likely_bottleneck": "full canonical state serialization and replacement after state transitions",
+    "owner_layer": "qraft.execution.capability_runtime.CompiledWorkflowRuntime",
+    "optimization_applied": false,
+    "m9_status": "NOT_CLOSED"
+  }
+}

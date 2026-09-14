@@ -1,0 +1,2 @@
+# Hash-bound scientific XML must retain repository bytes on every platform.
+*.psml -text

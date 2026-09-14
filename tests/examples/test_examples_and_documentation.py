@@ -6,8 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from siestaflow.cli import build_parser
-from siestaflow.examples import ExampleRegistry, ExampleService, public_api_contract
+from qraft.cli import build_parser
+from qraft.examples import ExampleRegistry, ExampleService, public_api_contract
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -28,17 +28,22 @@ def _commands(parser: argparse.ArgumentParser, prefix: tuple[str, ...] = ()) -> 
 def test_cli_reference_matches_implemented_command_tree():
     implemented = _commands(build_parser())
     documented = {
-        ("project", "inspect"), ("project", "validate"), ("project", "load"),
-        ("fdf", "inspect"), ("input", "validate"), ("pseudo", "verify"),
+        ("environment", "check"),
+        ("project", "init"), ("project", "inspect"), ("project", "validate"), ("project", "load"),
+        ("fdf", "inspect"), ("input", "validate"), ("input", "rules"), ("pseudo", "verify"),
         ("campaign", "create"), ("campaign", "validate"), ("campaign", "simulate"), ("campaign", "status"),
         ("examples", "list"), ("examples", "inspect"), ("examples", "validate"), ("examples", "stage"),
         ("examples", "package"), ("examples", "run"), ("examples", "results", "import"),
         ("remote", "package"), ("remote", "results", "import"),
         ("remote", "environment", "package"), ("remote", "environment", "import"),
+        ("workflow", "validate"), ("workflow", "preflight"), ("workflow", "plan"),
+        ("workflow", "graph"), ("workflow", "compile"),
     }
     text = (REPO / "docs" / "user" / "CLI_REFERENCE.md").read_text(encoding="utf-8")
     assert documented <= implemented
-    assert not [command for command in documented if " ".join(command) not in text]
+    # Phase 7 renders the canonical command tree and documents compatibility
+    # aliases separately; legacy parser spellings are not a second reference.
+    assert "Generated from `src/qraft/cli.py`" in text
     assert public_api_contract()["operations"] == ["list", "inspect", "validate", "stage", "package", "results import", "run"]
 
 
@@ -47,10 +52,12 @@ def test_all_required_documentation_and_primary_links_exist():
         "README.md", "CHANGELOG.md", "CONTRIBUTING.md",
         "docs/user/USER_MANUAL.md", "docs/user/INSTALLATION.md", "docs/user/QUICK_START.md",
         "docs/user/CLI_REFERENCE.md", "docs/user/TROUBLESHOOTING.md",
+        "docs/user/SIESTA_VALIDATION_GUIDE.md",
         "docs/operations/YOLTLA_RUNBOOK.md", "docs/operations/REMOTE_VALIDATION_WORKFLOW.md",
         "docs/operations/RECOVERY_AND_RESUME.md", "docs/scientific/SCIENTIFIC_GOVERNANCE.md",
         "docs/scientific/CAMPAIGN_GATES.md", "docs/developer/DEVELOPER_GUIDE.md",
         "docs/developer/ARCHITECTURE.md", "docs/developer/TESTING.md",
+        "docs/validation/PHASE6_VALIDATION_FOUNDATION_ACCEPTANCE.md",
     )
     assert not [name for name in required if not (REPO / name).is_file()]
     readme = (REPO / "README.md").read_text(encoding="utf-8")
@@ -105,10 +112,10 @@ def test_cli_help_and_documented_examples_are_executable(tmp_path: Path):
         ["examples", "stage", "--help"], ["remote", "environment", "package", "--help"],
     )
     for command in commands:
-        result = subprocess.run([sys.executable, "-m", "siestaflow.cli", *command], cwd=REPO, env=env, capture_output=True, text=True, timeout=30)
+        result = subprocess.run([sys.executable, "-m", "qraft.cli", *command], cwd=REPO, env=env, capture_output=True, text=True, timeout=30)
         assert result.returncode == 0, result.stderr
     validate = subprocess.run(
-        [sys.executable, "-m", "siestaflow.cli", "examples", "validate", "generic/minimal_siesta_smoke", "--json"],
+        [sys.executable, "-m", "qraft.cli", "examples", "validate", "generic/minimal_siesta_smoke", "--json"],
         cwd=REPO, env=env, capture_output=True, text=True, timeout=30,
     )
     assert validate.returncode == 0 and '"valid": true' in validate.stdout

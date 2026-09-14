@@ -1,0 +1,1232 @@
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+from hashlib import sha256
+from pathlib import Path
+from zipfile import ZipFile
+
+REPO = Path(__file__).resolve().parents[2]
+sys.path[:0] = [str(REPO), str(REPO / "src")]
+
+from tools.build_yoltla_m10_acceptance import CAMPAIGN_ID, _copy_linux_text, _preflight_script
+from tools.build_yoltla_m10_login_summary import _hydra_launcher_mechanisms, build as build_login_summary
+from tools.resolve_yoltla_m10_runtime import resolve as resolve_runtime
+from qraft.execution.allocation_controller import load_controller_config
+from qraft.execution.hydra_launcher import HydraLauncher
+from qraft.execution.legacy_translation import translate_controller_config
+from qraft.execution.srun_launcher import StepLaunchSpec
+
+
+def _selection(
+    tmp_path: Path, *, qos: str | None = None,
+    account: str | None = "observed-account",
+    partition: str = "observed-partition",
+    nodes: int = 2,
+    cpus_per_node: int = 32,
+    cpus_per_task: int = 1,
+) -> Path:
+    processes_per_node = cpus_per_node // cpus_per_task
+    ntasks = nodes * processes_per_node
+    placement = {
+        "policy": "MAXIMUM_LEGAL_PLACEMENT_FIXED_PARTITION",
+        "nodes": nodes,
+        "ntasks": ntasks,
+        "cpus_per_task": cpus_per_task,
+        "processes_per_node": processes_per_node,
+        "total_cpus": nodes * cpus_per_node,
+        "walltime": "00:20:00",
+    }
+    path = tmp_path / "scheduler_selection.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({
+        "account": account, "partition": partition, "qos": qos,
+        "memory": "256000M", **placement,
+        "capacity_evidence": {
+            "partition": partition, "visible_nodes": nodes,
+            "cpus_per_node": cpus_per_node, "memory_mb": 256000,
+            "min_nodes": nodes, "max_nodes": nodes,
+            "max_time": "01:00:00", "availability": "up", "state": "UP",
+            "source_files": ["scontrol_partitions.txt", "sinfo.txt"],
+            "sources": {
+                "visible_partition": {"source_file": "sinfo.txt", "source_line": 1},
+                "partition_policy": {"source_file": "scontrol_partitions.txt", "source_line": 1},
+            },
+        },
+        "derived_placement": placement,
+        "source_files": ["sacctmgr_assoc.txt", "sinfo.txt", "scontrol_partitions.txt"],
+        "evidence_status_by_field": {"account": "OMITTED_WITH_SCHEDULER_DEFAULT_EVIDENCE" if account is None else "OBSERVED", "partition": "VERIFIED_BY_CROSS_SOURCE", "qos": "MISSING" if qos is None else "OBSERVED", "memory": "OBSERVED", "resource_shape": "DERIVED_FROM_RESOURCE_REQUEST_AND_CURRENT_CLUSTER_CAPABILITIES"},
+        "resource_shape_status": "DERIVED_FROM_RESOURCE_REQUEST_AND_CURRENT_CLUSTER_CAPABILITIES",
+    }, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
+def _live_slurm_selection(
+    tmp_path: Path, *, partition: str = "partition_alpha", nodes: int = 2,
+    tasks_per_node: int = 20, ntasks: int = 40, cpus_per_task: int = 1,
+    safe_cpus_per_node: int = 20, total_allocated_cpus: int = 40,
+    memory_mb: int = 64000,
+) -> Path:
+    placement = {
+        "partition": partition,
+        "nodes": nodes,
+        "tasks_per_node": tasks_per_node,
+        "ntasks": ntasks,
+        "cpus_per_task": cpus_per_task,
+        "safe_cpus_per_node": safe_cpus_per_node,
+        "total_allocated_cpus": total_allocated_cpus,
+        "walltime": "00:20:00",
+        "policy": "MAXIMUM_LEGAL_PLACEMENT_EXPLICIT_NODES",
+    }
+    capabilities = [
+        {
+            "node": f"{partition}-node{number}",
+            "partition": partition,
+            "cpus_per_node": safe_cpus_per_node,
+            "memory_mb": memory_mb,
+            "state": "up",
+            "source_file": "sinfo-N.txt",
+            "source_line": number,
+        }
+        for number in range(1, nodes + 1)
+    ]
+    path = tmp_path / "live-slurm-selection.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({
+        "schema_version": "1.0",
+        "authority": "LIVE_SLURM_SELECTION_EVIDENCE",
+        "runtime_authority_for_future_runs": False,
+        "observed_at": "2026-08-29T00:00:00Z",
+        "sources": {
+            "schema_version": "1.0",
+            "authority": "LIVE_SLURM_DISCOVERY",
+            "observed_at": "2026-08-29T00:00:00Z",
+            "commands": [
+                {"argv": ["sinfo", "-N"], "returncode": 0, "stdout_sha256": "a" * 64},
+                {"argv": ["scontrol", "show", "partition"], "returncode": 0, "stdout_sha256": "b" * 64},
+            ],
+            "visible_partitions": [{"name": partition}],
+            "partition_policies": [{"name": partition}],
+            "associations": [{"account": "account_alpha", "partition": partition, "qos": "qos_alpha"}],
+            "node_capabilities": capabilities,
+        },
+        "association": {"account": "account_alpha", "partition": partition, "qos": "qos_alpha"},
+        "resource_request": {"nodes": nodes, "cpus_per_task": cpus_per_task, "walltime": "00:20:00", "account": "account_alpha", "qos": "qos_alpha"},
+        "human_selection": {"partition": partition, "nodes": nodes, "explicit": True},
+        "resolved_selection": {"account": "account_alpha", "qos": "qos_alpha"},
+        "derived_placement": placement,
+    }, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
+def _runtime_selection(tmp_path: Path, *, python_version: str = "3.11.9", siesta: bool = True, hydra: bool = True, module: bool = False, hydra_bootstrap: object = "slurm", selected_python: str = "observed-python", observed_python_path: str = "/opt/observed/python3") -> Path:
+    mechanism = "MODULE" if module else "PATH"
+    setup = ["module load observed-python"] if module else []
+    payload = {
+        "schema_version": "1.0", "status": "RESOLVED_FROM_CURRENT_CLUSTER_EVIDENCE",
+        "python": {"requirement": ">=3.11", "selected_mechanism": mechanism, "selected_executable": selected_python, "observed_path": observed_python_path, "observed_version": python_version, "evidence_source": ["current-evidence"], "environment_setup": setup},
+        "siesta": {"selected_mechanism": mechanism, "selected_executable": "observed-siesta" if siesta else "", "observed_version": "5.4", "evidence_source": ["current-evidence"], "environment_setup": ["module load observed-siesta"] if module else []},
+        "launchers": {"srun": {"required": True, "selected_executable": "observed-srun", "arguments": [], "evidence_source": ["current-evidence"], "environment_setup": []}},
+    }
+    if hydra:
+        payload["launchers"]["hydra"] = {"required": True, "selected_executable": "observed-hydra", "arguments": [], "bootstrap": hydra_bootstrap, "evidence_source": ["current-evidence"], "environment_setup": []}
+    path = tmp_path / "runtime_selection.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
+def _login_summary(tmp_path: Path, *, partitions: list[dict[str, object]] | None = None) -> Path:
+    partition_rows = partitions or [{"name": "observed-partition", "default": True, "nodes": 2, "cpus_per_node": 32, "memory": 192000}]
+    associations = []
+    policies = []
+    visible = []
+    for number, row in enumerate(partition_rows, 1):
+        name = str(row["name"])
+        associations.append({"account": "observed-account", "partition": name, "qos": None, "scope": "EXPLICIT_PARTITION_ASSOCIATION", "source_file": "sacctmgr_assoc.txt", "source_line": number, "evidence_status": "OBSERVED", "observed_at": "2026-08-25T00:00:00Z"})
+        visible.append({"name": name, "availability": "up", "time_limit": "01:00:00", "nodes": row["nodes"], "cpus_per_node": row["cpus_per_node"], "memory": row["memory"], "default": row["default"], "source_file": "sinfo.txt", "source_line": number})
+        policies.append({"name": name, "allow_accounts": {"kind": "EXPLICIT_LIST", "values": ["observed-account"]}, "allow_qos": {"kind": "ALL", "values": []}, "default": row["default"], "state": "UP", "min_nodes": row.get("min_nodes", row["nodes"]), "max_nodes": row.get("max_nodes", row["nodes"]), "max_time": "01:00:00", "source_file": "scontrol_partitions.txt", "source_line": number})
+    path = tmp_path / "summary.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"eligible_associations": associations, "visible_partitions": visible, "partition_policies": policies}, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
+def _raw_login_evidence(tmp_path: Path) -> Path:
+    raw = tmp_path / "raw"
+    raw.mkdir(parents=True)
+    files = {
+        "observed_at.txt": "2026-08-27T00:00:00Z\n",
+        "hostname.txt": "observed-login\n",
+        "user.txt": "vini\n",
+        "system.txt": "Linux observed\n",
+        "shell.txt": "/bin/bash\n",
+        "path.txt": "/usr/bin\n",
+        "working_path.txt": "/observed/path\n",
+        "environment_redacted.txt": "PATH=/usr/bin\n",
+        "sacctmgr_assoc.txt": "vini||normal\n",
+        "squeue.txt": "1|name|q4d-20p|vini|normal\n",
+        "sinfo.txt": "q4d-20p|up|01:00:00|2|20|64000\ntt2d-64p|up|01:00:00|2|32|128000\nqz2d-64p|up|01:00:00|2|64|128000\nqz2d-128p|up|01:00:00|2|64|128000\ntt1d-128p|up|01:00:00|4|32|128000\n",
+        "scontrol_partitions.txt": "\n".join((
+            "PartitionName=q4d-20p State=UP MinNodes=1 MaxNodes=2 MaxTime=01:00:00 AllowAccounts=ALL AllowQos=ALL",
+            "PartitionName=tt2d-64p State=UP MinNodes=2 MaxNodes=2 MaxTime=01:00:00 AllowAccounts=ALL AllowQos=ALL",
+            "PartitionName=qz2d-64p State=UP MinNodes=1 MaxNodes=1 MaxTime=01:00:00 AllowAccounts=ALL AllowQos=ALL",
+            "PartitionName=qz2d-128p State=UP MinNodes=2 MaxNodes=2 MaxTime=01:00:00 AllowAccounts=vini AllowQos=normal",
+            "PartitionName=tt1d-128p State=UP MinNodes=4 MaxNodes=4 MaxTime=01:00:00 AllowAccounts=ALL AllowQos=ALL",
+        )) + "\n",
+        "module_python_candidates.txt": "python/3.11.9\n",
+        "module_siesta_candidates.txt": "siesta/5.4.2\n",
+        "module_available.txt": "true\n",
+        "conda_available.txt": "false\n",
+        "spack_available.txt": "false\n",
+        "command_python.txt": "/usr/bin/python\n",
+        "python_version.txt": "Python 2.7.5\n",
+        "command_python3.txt": "/usr/bin/python3\n",
+        "python3_version.txt": "Python 3.6.8\n",
+        "command_srun.txt": "/usr/bin/srun\n",
+    }
+    for name, value in files.items():
+        (raw / name).write_text(value, encoding="utf-8")
+    return raw
+
+
+def _runtime_probe_evidence(tmp_path: Path, *, python_version: str = "3.11.9", siesta: bool = True, hydra: bool = False, bootstrap: str | None = None) -> Path:
+    probe = tmp_path / "runtime-probe"
+    probe.mkdir(parents=True)
+    files = {
+        "selected_python_module.txt": "python/3.11.9\n",
+        "selected_siesta_module.txt": "siesta/5.4.2\n",
+        "module_setup_commands.txt": "module purge\nmodule load python/3.11.9\nmodule load siesta/5.4.2\n",
+        "module_mechanism.exit_code": "0\n",
+        "module_purge.exit_code": "0\n",
+        "module_load_python.exit_code": "0\n",
+        "module_load_siesta.exit_code": "0\n",
+        "command_python3.txt": "/opt/python/bin/python3\n",
+        "python3_version.txt": f"Python {python_version}\n",
+        "command_srun.txt": "/usr/bin/srun\n",
+    }
+    if siesta:
+        files.update({"command_siesta.txt": "/opt/siesta/bin/siesta\n", "siesta_version.txt": "SIESTA 5.4.2\n"})
+    if hydra:
+        files.update({"command_mpiexec_hydra.txt": "/opt/mpi/bin/mpiexec.hydra\n", "mpiexec_hydra_help.txt": "Hydra specific options:\n\n  Launch options:\n    -launcher\n        launcher to use\n        (ssh slurm rsh ll sge pbs pbsdsh pdsh srun lsf blaunch qrsh fork)\n    -n number\n    -ppn number\n"})
+    if bootstrap:
+        files["environment_redacted.txt"] = f"I_MPI_HYDRA_BOOTSTRAP={bootstrap}\n"
+    for name, value in files.items():
+        (probe / name).write_text(value, encoding="utf-8")
+    return probe
+
+
+def _hydra_policy_evidence(tmp_path: Path, bootstrap: str) -> Path:
+    path = tmp_path / "hydra-policy.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({
+        "schema_version": "1.0", "bootstrap": bootstrap,
+        "source_type": "ADMINISTRATIVE_POLICY", "source_reference": "reviewed-policy-record",
+        "decision_text": f"Use the reviewed Hydra bootstrap policy: {bootstrap}.",
+    }, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
+def _runtime_compatibility_summary(
+    tmp_path: Path, *, engine_facts: dict[str, str] | None,
+    environment_facts: dict[str, str] | None = None,
+    hydra_candidates: list[tuple[str, dict[str, str] | None]],
+) -> Path:
+    siesta = {
+        "selected_mechanism": "MODULE", "selected_executable": "/runtime/engine/bin/siesta",
+        "observed_version": "1.0", "environment_setup": ["module load engine"],
+        "evidence_source": ["engine-evidence"],
+    }
+    if engine_facts is not None:
+        siesta["compatibility_facts"] = engine_facts
+    if environment_facts is not None:
+        siesta["environment_compatibility_facts"] = environment_facts
+    hydra = []
+    for executable, facts in hydra_candidates:
+        candidate = {
+            "selected_mechanism": "OTHER_EVIDENCE_BOUND", "selected_executable": executable,
+            "arguments": [], "bootstrap": "ssh", "environment_setup": [],
+            "evidence_source": [f"launcher-evidence:{executable}"],
+        }
+        if facts is not None:
+            candidate["compatibility_facts"] = facts
+        hydra.append(candidate)
+    path = tmp_path / "runtime-compatibility-summary.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({
+        "python_candidates": [{
+            "selected_mechanism": "PATH", "selected_executable": "/runtime/python/bin/python3",
+            "observed_version": "3.11.0", "environment_setup": [],
+            "evidence_source": ["python-evidence"],
+        }],
+        "siesta_candidates": [siesta],
+        "launcher_candidates": {
+            "srun": [{
+                "selected_mechanism": "PATH", "selected_executable": "/usr/bin/srun",
+                "arguments": [], "environment_setup": [], "evidence_source": ["srun-evidence"],
+            }],
+            "mpiexec.hydra": hydra,
+        },
+    }, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
+def _bash_path(path: Path) -> str:
+    drive = path.drive.rstrip(":").lower()
+    return f"/mnt/{drive}/{path.as_posix().split(':', 1)[1].lstrip('/')}" if drive else path.as_posix()
+
+
+def _resolve(discovery: Path, summary: Path, output: Path, *selection: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(discovery / "resolve_m10_scheduler.py"), "--login-evidence", str(summary), "--output", str(output), *selection],
+        cwd=output.parent,
+        env={key: value for key, value in os.environ.items() if key != "PYTHONPATH"},
+        capture_output=True,
+        text=True,
+    )
+
+
+def _build(tmp_path: Path, selection: Path | None = None, runtime: Path | None = None) -> tuple[Path, dict[str, object]]:
+    output = tmp_path / "m10"
+    env = os.environ.copy(); env["PYTHONPATH"] = str(REPO / "src")
+    command = [sys.executable, "tools/build_yoltla_m10_acceptance.py", "--output", str(output)]
+    if selection is not None:
+        command.extend(("--scheduler-selection", str(selection)))
+        command.extend(("--runtime-selection", str(runtime or _runtime_selection(tmp_path))))
+    result = subprocess.run(command, cwd=REPO, env=env, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    return output, json.loads(result.stdout)
+
+
+def _build_result(tmp_path: Path, selection: Path, runtime: Path) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy(); env["PYTHONPATH"] = str(REPO / "src")
+    return subprocess.run(
+        [
+            sys.executable, "tools/build_yoltla_m10_acceptance.py",
+            "--output", str(tmp_path / "m10"),
+            "--scheduler-selection", str(selection),
+            "--runtime-selection", str(runtime),
+        ],
+        cwd=REPO, env=env, capture_output=True, text=True,
+    )
+
+
+def _build_live(
+    tmp_path: Path, selection: Path, runtime: Path | None = None,
+) -> tuple[Path, dict[str, object]]:
+    output = tmp_path / "m10"
+    env = os.environ.copy(); env["PYTHONPATH"] = str(REPO / "src")
+    result = subprocess.run(
+        [
+            sys.executable, "tools/build_yoltla_m10_acceptance.py",
+            "--output", str(output),
+            "--live-slurm-selection", str(selection),
+            "--runtime-selection", str(runtime or _runtime_selection(tmp_path, hydra_bootstrap="ssh")),
+        ],
+        cwd=REPO, env=env, capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    return output, json.loads(result.stdout)
+
+
+def _build_live_result(
+    tmp_path: Path, selection: Path, runtime: Path,
+) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy(); env["PYTHONPATH"] = str(REPO / "src")
+    return subprocess.run(
+        [
+            sys.executable, "tools/build_yoltla_m10_acceptance.py",
+            "--output", str(tmp_path / "m10"),
+            "--live-slurm-selection", str(selection),
+            "--runtime-selection", str(runtime),
+        ],
+        cwd=REPO, env=env, capture_output=True, text=True,
+    )
+
+
+def test_m10_hydra_bootstrap_is_explicit_and_only_in_launcher_contract(
+    tmp_path: Path,
+) -> None:
+    output, _ = _build(
+        tmp_path,
+        _selection(tmp_path),
+        _runtime_selection(tmp_path, hydra_bootstrap="ssh"),
+    )
+    hydra_source = output / "sources" / "hydra"
+    hydra_campaign = json.loads((hydra_source / "campaign.json").read_text())
+    srun_campaign = json.loads(
+        (output / "sources" / "srun" / "campaign.json").read_text()
+    )
+    assert hydra_campaign["runtime"]["launcher"]["bootstrap"] == "ssh"
+    assert "I_MPI_HYDRA_BOOTSTRAP" not in hydra_campaign["runtime"]["environment"]
+    assert "I_MPI_HYDRA_BOOTSTRAP" not in (output / "packages" / "hydra" / CAMPAIGN_ID / "submit.slurm").read_text()
+    assert "bootstrap" not in srun_campaign["runtime"]["launcher"]
+    assert "FI_PSM3_UUID" not in json.dumps(hydra_campaign)
+    execution = translate_controller_config(
+        load_controller_config(hydra_source / "campaign.json"), root=hydra_source
+    ).execution_specs["M10_SIESTA_SMOKE"]
+    assert execution.launcher_arguments == ("-bootstrap", "ssh")
+    builder_source = (REPO / "tools" / "build_yoltla_m10_acceptance.py").read_text()
+    assert 'get("bootstrap", "evidence-bound")' not in builder_source
+    assert '"bootstrap": "evidence-bound"' not in builder_source
+
+
+def test_m10_controller_package_uses_the_observed_python_path(tmp_path: Path) -> None:
+    def build_with_python(root: Path, observed_python_path: str):
+        output, _ = _build(
+            root,
+            _selection(root),
+            _runtime_selection(
+                root,
+                hydra_bootstrap="ssh",
+                selected_python="python3",
+                observed_python_path=observed_python_path,
+            ),
+        )
+        source = output / "sources" / "hydra"
+        campaign = json.loads((source / "campaign.json").read_text(encoding="utf-8"))
+        plan = translate_controller_config(
+            load_controller_config(source / "campaign.json"), root=source
+        )
+        execution = plan.execution_specs["M10_SIESTA_SMOKE"]
+        submit = (
+            output / "packages" / "hydra" / CAMPAIGN_ID / "submit.slurm"
+        ).read_text(encoding="utf-8")
+        return campaign, plan.scientific_identities["M10_SIESTA_SMOKE"], execution, submit
+
+    first_path = "/evidence/python/3.12/bin/python3"
+    second_path = "/evidence/alternate-python/bin/python3"
+    first_campaign, first_identity, first_execution, first_submit = build_with_python(
+        tmp_path / "first", first_path
+    )
+    second_campaign, second_identity, second_execution, second_submit = build_with_python(
+        tmp_path / "second", second_path
+    )
+
+    for campaign, execution, submit, expected_path in (
+        (first_campaign, first_execution, first_submit, first_path),
+        (second_campaign, second_execution, second_submit, second_path),
+    ):
+        assert campaign["runtime"]["environment"]["QRAFT_PYTHON"] == expected_path
+        assert execution.environment["QRAFT_PYTHON"] == expected_path
+        assert "python3() {" not in json.dumps(campaign)
+        assert f"export QRAFT_PYTHON={expected_path}" in submit
+        assert '"$QRAFT_PYTHON" verify_package.py' in submit
+        assert 'exec "$QRAFT_PYTHON" scripts/run_worker.py campaign.yaml "$ROOT"' in submit
+        assert "python3() {" not in submit
+        assert "python3 verify_package.py" not in submit
+        assert "exec python3 scripts/run_worker.py" not in submit
+
+    assert first_identity.fingerprint == second_identity.fingerprint
+    assert first_execution.fingerprint != second_execution.fingerprint
+    assert "/LUSTRE" not in (REPO / "tools" / "build_yoltla_m10_acceptance.py").read_text(encoding="utf-8")
+
+
+def test_m10_hydra_builder_rejects_missing_or_empty_bootstrap(tmp_path: Path) -> None:
+    for name, bootstrap in (("missing", None), ("empty", "")):
+        root = tmp_path / name
+        selection = _selection(root)
+        runtime = _runtime_selection(root, hydra_bootstrap=bootstrap)
+        if bootstrap is None:
+            data = json.loads(runtime.read_text())
+            data["launchers"]["hydra"].pop("bootstrap")
+            runtime.write_text(json.dumps(data), encoding="utf-8")
+        result = _build_result(root, selection, runtime)
+        assert result.returncode != 0
+        assert "invalid launchers.hydra.bootstrap" in result.stderr
+
+
+def test_unresolved_bundle_has_discovery_and_no_authoritative_submit(tmp_path: Path) -> None:
+    output, manifest = _build(tmp_path)
+    assert manifest["scheduler_profile_status"] == "UNRESOLVED"
+    assert manifest["scientific_submit_scripts_generated"] is False
+    assert manifest["historical_hint"]["status"] == "HISTORICAL_ONLY_NOT_CURRENT_AUTHORITY"
+    discovery = output / "scheduler_discovery"
+    assert (discovery / "run_login_probe.sh").is_file()
+    assert (discovery / "run_runtime_candidate_probe.sh").is_file()
+    assert (discovery / "build_login_summary.py").is_file()
+    assert (discovery / "resolve_m10_scheduler.py").is_file()
+    assert (discovery / "scheduler_resolution.py").is_file()
+    assert (discovery / "resolve_m10_runtime.py").is_file()
+    assert (discovery / "runtime_compatibility.py").is_file()
+    run_probe = discovery / "run_login_probe.sh"
+    assert run_probe.read_bytes().startswith(b"#!/usr/bin/env bash\n")
+    assert b"\r" not in run_probe.read_bytes()
+    assert all(b"\r" not in path.read_bytes() for path in discovery.glob("*.sh"))
+    assert b"build_login_summary.py" not in run_probe.read_bytes()
+    fixture = output / "scientific_fixture"
+    source = REPO / "remote_validation" / "M3B1_SURF_GR5X5_REAL_SIESTA_SMOKE"
+    assert sha256((fixture / "input" / "smoke.fdf").read_bytes()).hexdigest() == sha256((source / "input" / "smoke.fdf").read_bytes()).hexdigest()
+    assert sha256((fixture / "pseudopotentials" / "C.psml").read_bytes()).hexdigest() == sha256((source / "pseudopotentials" / "C.psml").read_bytes()).hexdigest()
+    assert not list(output.rglob("submit.slurm"))
+
+
+def test_summary_preserves_global_association_and_partition_policy_fields(tmp_path: Path) -> None:
+    summary = build_login_summary(_raw_login_evidence(tmp_path))
+    global_association = summary["eligible_associations"][0]
+    assert global_association == {
+        "account": "vini", "partition": None, "qos": "normal", "scope": "GLOBAL_USER_ASSOCIATION",
+        "source": "sacctmgr", "source_file": "sacctmgr_assoc.txt", "source_line": 1,
+    }
+    queue_association = summary["eligible_associations"][1]
+    assert queue_association["partition"] == "q4d-20p"
+    assert queue_association["scope"] == "CURRENT_USER_QUEUE_EVIDENCE"
+    policy = next(item for item in summary["partition_policies"] if item["name"] == "tt2d-64p")
+    assert {field: policy[field] for field in ("state", "min_nodes", "max_nodes", "max_time")} == {"state": "UP", "min_nodes": 2, "max_nodes": 2, "max_time": "01:00:00"}
+    assert policy["allow_accounts"] == {"kind": "ALL", "values": []}
+    assert policy["allow_qos"] == {"kind": "ALL", "values": []}
+
+
+def test_hydra_launcher_mechanisms_parse_only_the_observed_launcher_section() -> None:
+    expected = ["ssh", "slurm", "rsh", "ll", "sge", "pbs", "pbsdsh", "pdsh", "srun", "lsf", "blaunch", "qrsh", "fork"]
+    assert _hydra_launcher_mechanisms("-launcher launcher to use (ssh slurm rsh ll sge pbs pbsdsh pdsh srun lsf blaunch qrsh fork)\n-n ranks\n") == expected
+    assert _hydra_launcher_mechanisms("-launcher\n  launcher to use\n  (ssh slurm rsh fork)\n-n ranks\n") == ["ssh", "slurm", "rsh", "fork"]
+    assert _hydra_launcher_mechanisms("-n ranks\n") == []
+    assert _hydra_launcher_mechanisms("general note (ssh slurm)\n-n ranks\n") == []
+
+
+def test_real_shaped_hydra_summary_has_observed_mechanisms_without_bootstrap_default(tmp_path: Path) -> None:
+    raw = _raw_login_evidence(tmp_path)
+    probe = _runtime_probe_evidence(tmp_path, hydra=True)
+    (probe / "mpiexec_hydra_help.txt").write_text(
+        "-launcher launcher to use (ssh slurm rsh ll sge pbs pbsdsh pdsh srun lsf blaunch qrsh fork)\n-n ranks\n-ppn ranks\n",
+        encoding="utf-8",
+    )
+    hydra = build_login_summary(raw, probe)["launcher_candidates"]["mpiexec.hydra"][0]
+    assert hydra["observed_launcher_mechanisms"][:2] == ["ssh", "slurm"]
+    assert hydra["bootstrap_selection_required"] is True
+    assert "bootstrap" not in hydra
+
+
+def test_login_summary_cli_rejects_missing_or_incomplete_evidence_without_output(tmp_path: Path) -> None:
+    valid_raw = _raw_login_evidence(tmp_path / "valid")
+    raw_file = tmp_path / "raw-file"
+    raw_file.write_text("not a directory\n", encoding="utf-8")
+    incomplete = tmp_path / "incomplete"
+    incomplete.mkdir()
+    cases = ((tmp_path / "absent", None), (raw_file, None), (incomplete, None), (valid_raw, tmp_path / "missing-probe"))
+    for index, (raw, probe) in enumerate(cases):
+        output = tmp_path / f"blocked-{index}.json"
+        command = [sys.executable, "tools/build_yoltla_m10_login_summary.py", "--raw", str(raw), "--output", str(output)]
+        if probe is not None:
+            command.extend(("--runtime-probe", str(probe)))
+        result = subprocess.run(command, cwd=REPO, capture_output=True, text=True)
+        assert result.returncode != 0
+        assert "M10_LOGIN_SUMMARY_UNRESOLVED" in result.stderr
+        assert not output.exists()
+
+
+def test_login_summary_cli_accepts_complete_current_evidence(tmp_path: Path) -> None:
+    raw = _raw_login_evidence(tmp_path)
+    probe = _runtime_probe_evidence(tmp_path)
+    output = tmp_path / "login-summary.json"
+    result = subprocess.run(
+        [sys.executable, "tools/build_yoltla_m10_login_summary.py", "--raw", str(raw), "--runtime-probe", str(probe), "--output", str(output)],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(output.read_text(encoding="utf-8"))["runtime_probe"]["status"] == "VERIFIED"
+
+
+def test_global_association_expands_only_to_current_policy_compatible_partitions(tmp_path: Path) -> None:
+    output, _ = _build(tmp_path)
+    summary_path = tmp_path / "summary.json"
+    summary_path.write_text(json.dumps(build_login_summary(_raw_login_evidence(tmp_path))), encoding="utf-8")
+    automatic = _resolve(output / "scheduler_discovery", summary_path, tmp_path / "automatic.json")
+    assert automatic.returncode != 0
+    assert "SCHEDULER_PROBE_BLOCKED_MULTIPLE_DEFAULT_PARTITIONS" in automatic.stderr
+    selected = tmp_path / "tt2d.json"
+    explicit = _resolve(output / "scheduler_discovery", summary_path, selected, "--account", "vini", "--partition", "tt2d-64p", "--qos", "normal")
+    assert explicit.returncode == 0, explicit.stderr
+    assert json.loads(selected.read_text(encoding="utf-8"))["association_scope"] == "GLOBAL_USER_ASSOCIATION"
+    ambiguous = _resolve(output / "scheduler_discovery", summary_path, tmp_path / "q4d.json", "--account", "vini", "--partition", "q4d-20p", "--qos", "normal")
+    assert ambiguous.returncode != 0 and "NODE_RANGE_AMBIGUOUS" in ambiguous.stderr
+    for partition, expected in (("tt1d-128p", (4, 128, 32)), ("qz2d-64p", (1, 64, 64))):
+        resolved_path = tmp_path / f"{partition}.json"
+        resolved = _resolve(output / "scheduler_discovery", summary_path, resolved_path, "--account", "vini", "--partition", partition, "--qos", "normal")
+        assert resolved.returncode == 0, resolved.stderr
+        payload = json.loads(resolved_path.read_text(encoding="utf-8"))
+        assert (payload["nodes"], payload["ntasks"], payload["processes_per_node"]) == expected
+
+
+def test_module_availability_requires_verified_runtime_probe(tmp_path: Path) -> None:
+    raw = _raw_login_evidence(tmp_path)
+    availability_only = build_login_summary(raw)
+    assert not [item for item in availability_only["python_candidates"] if item["selected_mechanism"] == "MODULE"]
+    assert not availability_only["siesta_candidates"]
+    verified = build_login_summary(raw, _runtime_probe_evidence(tmp_path))
+    python = next(item for item in verified["python_candidates"] if item["selected_mechanism"] == "MODULE")
+    assert python["selected_executable"] == "/opt/python/bin/python3"
+    assert python["environment_setup"] == ["module purge", "module load python/3.11.9", "module load siesta/5.4.2"]
+    assert any(item["selected_mechanism"] == "MODULE" for item in verified["siesta_candidates"])
+    assert verified["launcher_candidates"]["srun"][-1]["selected_mechanism"] == "MODULE"
+
+
+def test_real_shaped_runtime_requires_explicit_module_executable_selection(tmp_path: Path) -> None:
+    summary = build_login_summary(_raw_login_evidence(tmp_path), _runtime_probe_evidence(tmp_path))
+    path = tmp_path / "summary.json"
+    path.write_text(json.dumps(summary), encoding="utf-8")
+    try:
+        resolve_runtime(path)
+    except ValueError as error:
+        assert "Python candidate is ambiguous" in str(error)
+    else:
+        raise AssertionError("runtime resolver selected a Python candidate automatically")
+    resolved = resolve_runtime(
+        path,
+        python="/opt/python/bin/python3",
+        siesta="/opt/siesta/bin/siesta",
+        srun="/usr/bin/srun",
+    )
+    assert resolved["python"]["selected_mechanism"] == "MODULE"
+    assert resolved["python"]["observed_version"] == "3.11.9"
+
+
+def test_runtime_compatibility_preserves_a_coherent_candidate(tmp_path: Path) -> None:
+    summary = _runtime_compatibility_summary(
+        tmp_path,
+        engine_facts={"runtime_origin": "/runtime/a"},
+        environment_facts={"runtime_origin": "/runtime/a"},
+        hydra_candidates=[("/runtime/a/bin/mpiexec.hydra", {"runtime_origin": "/runtime/a"})],
+    )
+    selected = resolve_runtime(summary, require_hydra=True)
+    hydra = selected["launchers"]["hydra"]
+    assert hydra["observed_path"] == "/runtime/a/bin/mpiexec.hydra"
+    assert hydra["compatibility"] == {
+        "status": "COMPATIBLE",
+        "matched_facts": {"runtime_origin": "/runtime/a"},
+        "missing_facts": {},
+        "contradictions": {},
+    }
+
+
+def test_runtime_compatibility_rejects_explicit_component_or_environment_contradiction(
+    tmp_path: Path,
+) -> None:
+    component = _runtime_compatibility_summary(
+        tmp_path / "component",
+        engine_facts={"runtime_origin": "/runtime/a"},
+        hydra_candidates=[("/runtime/b/bin/mpiexec.hydra", {"runtime_origin": "/runtime/b"})],
+    )
+    try:
+        resolve_runtime(component, require_hydra=True)
+    except ValueError as error:
+        assert "all Hydra candidates contradict runtime evidence" in str(error)
+    else:
+        raise AssertionError("runtime resolver authorized an explicitly contradictory launcher")
+
+    environment = _runtime_compatibility_summary(
+        tmp_path / "environment",
+        engine_facts={"runtime_origin": "/runtime/a"},
+        environment_facts={"runtime_origin": "/runtime/b"},
+        hydra_candidates=[("/runtime/a/bin/mpiexec.hydra", {"runtime_origin": "/runtime/a"})],
+    )
+    try:
+        resolve_runtime(environment, require_hydra=True)
+    except ValueError as error:
+        assert "selected runtime environment contradicts runtime evidence" in str(error)
+    else:
+        raise AssertionError("runtime resolver authorized contradictory environment evidence")
+
+
+def test_runtime_compatibility_keeps_incomplete_evidence_unknown(tmp_path: Path) -> None:
+    summary = _runtime_compatibility_summary(
+        tmp_path,
+        engine_facts={"runtime_origin": "/runtime/a"},
+        hydra_candidates=[("/runtime/unknown/bin/mpiexec.hydra", None)],
+    )
+    selected = resolve_runtime(summary, require_hydra=True)
+    compatibility = selected["launchers"]["hydra"]["compatibility"]
+    assert compatibility["status"] == "UNKNOWN"
+    assert compatibility["missing_facts"] == {
+        "runtime_origin": ["environment", "launcher"]
+    }
+    assert compatibility["contradictions"] == {}
+    assert "compatibility_facts" not in selected["launchers"]["hydra"]
+
+
+def test_runtime_compatibility_filters_before_selection_for_an_abstract_property(
+    tmp_path: Path,
+) -> None:
+    summary = _runtime_compatibility_summary(
+        tmp_path,
+        engine_facts={"producer_contract": "contract-a"},
+        environment_facts={"producer_contract": "contract-a"},
+        hydra_candidates=[
+            ("/runtime/first/bin/mpiexec.hydra", {"producer_contract": "contract-b"}),
+            ("/runtime/second/bin/mpiexec.hydra", {"producer_contract": "contract-a"}),
+        ],
+    )
+    selected = resolve_runtime(summary, require_hydra=True)
+    hydra = selected["launchers"]["hydra"]
+    assert hydra["observed_path"] == "/runtime/second/bin/mpiexec.hydra"
+    assert hydra["compatibility"]["status"] == "COMPATIBLE"
+
+
+def test_login_summary_preserves_observed_runtime_origins_for_compatibility(
+    tmp_path: Path,
+) -> None:
+    raw = _raw_login_evidence(tmp_path)
+    probe = _runtime_probe_evidence(tmp_path, hydra=True)
+    (probe / "siesta_dynamic_dependencies.txt").write_text(
+        "libmpifort.so.12 => /runtime/a/lib/libmpifort.so.12 (0x1)\n"
+        "libmpi.so.12 => /runtime/a/lib/libmpi.so.12 (0x2)\n",
+        encoding="utf-8",
+    )
+    (probe / "siesta_dynamic_dependencies.txt.exit_code").write_text("0\n", encoding="utf-8")
+    (probe / "siesta_dynamic_dependencies_realpaths.txt").write_text(
+        "/runtime/a/lib/libmpifort.so.12\n/runtime/a/lib/libmpi.so.12\n",
+        encoding="utf-8",
+    )
+    (probe / "i_mpi_root_realpath.txt").write_text("/runtime/a\n", encoding="utf-8")
+    (probe / "command_mpiexec_hydra.txt").write_text(
+        "/runtime/a/bin/mpiexec.hydra\n", encoding="utf-8"
+    )
+    (probe / "mpiexec_hydra_dynamic_dependencies.txt").write_text(
+        "libmpi.so.12 => /runtime/a/lib/libmpi.so.12 (0x3)\n", encoding="utf-8"
+    )
+    (probe / "mpiexec_hydra_dynamic_dependencies.txt.exit_code").write_text(
+        "0\n", encoding="utf-8"
+    )
+    (probe / "mpiexec_hydra_dynamic_dependencies_realpaths.txt").write_text(
+        "/runtime/a/lib/libmpi.so.12\n", encoding="utf-8"
+    )
+    summary = build_login_summary(raw, probe)
+    siesta = next(
+        candidate for candidate in summary["siesta_candidates"]
+        if candidate["selected_mechanism"] == "MODULE"
+    )
+    hydra = next(
+        candidate for candidate in summary["launcher_candidates"]["mpiexec.hydra"]
+        if candidate["selected_mechanism"] == "MODULE"
+    )
+    assert siesta["compatibility_facts"] == {"mpi_runtime_instance": "/runtime/a"}
+    assert siesta["environment_compatibility_facts"] == {"mpi_runtime_instance": "/runtime/a"}
+    assert hydra["compatibility_facts"] == {"mpi_runtime_instance": "/runtime/a"}
+    assert "${artifact}_realpaths.txt" in (
+        REPO / "tools" / "m10_yoltla_runtime_candidate_probe.sh"
+    ).read_text(encoding="utf-8")
+
+
+def test_m10_builder_rejects_a_runtime_selection_with_explicit_contradiction(
+    tmp_path: Path,
+) -> None:
+    runtime = _runtime_selection(tmp_path, hydra_bootstrap="ssh")
+    payload = json.loads(runtime.read_text(encoding="utf-8"))
+    payload["siesta"]["compatibility_facts"] = {"runtime_origin": "/runtime/a"}
+    payload["launchers"]["hydra"]["compatibility_facts"] = {
+        "runtime_origin": "/runtime/b"
+    }
+    runtime.write_text(json.dumps(payload), encoding="utf-8")
+    result = _build_result(tmp_path, _selection(tmp_path), runtime)
+    assert result.returncode != 0
+    assert "selected Hydra contradicts runtime evidence" in result.stderr
+
+
+def test_summary_rejects_unbound_or_forged_runtime_probe_modules(tmp_path: Path) -> None:
+    raw = _raw_login_evidence(tmp_path)
+    for name, replacement in {
+        "unobserved": ("selected_python_module.txt", "python/not-observed\n"),
+        "setup-mismatch": ("module_setup_commands.txt", "module purge\nmodule load python/3.11.9\nmodule load another-siesta\n"),
+    }.items():
+        probe = _runtime_probe_evidence(tmp_path / name)
+        (probe / replacement[0]).write_text(replacement[1], encoding="utf-8")
+        summary = build_login_summary(raw, probe)
+        assert not [candidate for candidate in summary["python_candidates"] if candidate["selected_mechanism"] == "MODULE"]
+        assert not [candidate for candidate in summary["siesta_candidates"] if candidate["selected_mechanism"] == "MODULE"]
+        assert summary["runtime_probe"]["status"] == "NOT_EXECUTABLE_EVIDENCE"
+
+
+def test_runtime_candidate_probe_rejects_module_not_in_raw_evidence(tmp_path: Path) -> None:
+    raw = _raw_login_evidence(tmp_path)
+    script = REPO / "tools" / "m10_yoltla_runtime_candidate_probe.sh"
+    normalized = tmp_path / "runtime-probe.sh"
+    _copy_linux_text(script, normalized)
+    result = subprocess.run(["bash", _bash_path(normalized), "--raw", _bash_path(raw), "--python-module", "not-observed", "--siesta-module", "siesta/5.4.2"], capture_output=True, text=True)
+    assert result.returncode != 0
+    assert "not exactly observed" in result.stderr
+    source = script.read_text(encoding="utf-8")
+    assert "sbatch" not in source and "smoke.fdf" not in source and "mpiexec.hydra -help" in source
+    assert "(\n  [[ ! -e" in source
+
+
+def test_linux_text_copy_normalizes_a_crlf_fixture(tmp_path: Path) -> None:
+    source = tmp_path / "source.sh"
+    destination = tmp_path / "destination.sh"
+    source.write_bytes(b"#!/usr/bin/env bash\r\nset -euo pipefail\r\n")
+    _copy_linux_text(source, destination)
+    assert destination.read_bytes() == b"#!/usr/bin/env bash\nset -euo pipefail\n"
+
+
+def test_self_contained_m10_resolver_uses_current_shape_and_observed_memory(tmp_path: Path) -> None:
+    output, _ = _build(tmp_path)
+    summary = _login_summary(tmp_path)
+    selection = tmp_path / "current-selection.json"
+    result = _resolve(output / "scheduler_discovery", summary, selection)
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(selection.read_text(encoding="utf-8"))
+    assert {field: payload[field] for field in ("nodes", "ntasks", "cpus_per_task", "processes_per_node", "walltime")} == {"nodes": 2, "ntasks": 64, "cpus_per_task": 1, "processes_per_node": 32, "walltime": "00:20:00"}
+    assert payload["qos"] is None
+    assert payload["memory"] == "192000M"
+    assert payload["memory_source"] == {"source_file": "sinfo.txt", "source_line": 1, "observed_mb": 192000}
+    assert payload["selection_policy"] == "UNIQUE_CURRENT_CLUSTER_EVIDENCE"
+    assert payload["resource_shape_status"] == "DERIVED_FROM_RESOURCE_REQUEST_AND_CURRENT_CLUSTER_CAPABILITIES"
+    assert payload["evidence_status_by_field"]["resource_shape"] == "DERIVED_FROM_RESOURCE_REQUEST_AND_CURRENT_CLUSTER_CAPABILITIES"
+    assert payload["capacity_evidence"]["cpus_per_node"] == 32
+    assert payload["derived_placement"]["policy"] == "MAXIMUM_LEGAL_PLACEMENT_FIXED_PARTITION"
+    resolved, manifest = _build(tmp_path / "resolved", selection)
+    assert manifest["scheduler_profile_status"] == "RESOLVED_FROM_CLUSTER_EVIDENCE"
+    assert (resolved / "preflight" / "submit_m10_preflight.slurm").is_file()
+
+
+def test_m10_resolver_requires_evidence_bound_human_selection_for_multiple_candidates(tmp_path: Path) -> None:
+    output, _ = _build(tmp_path)
+    summary = _login_summary(tmp_path, partitions=[
+        {"name": "first", "default": True, "nodes": 2, "cpus_per_node": 32, "memory": 64000},
+        {"name": "second", "default": True, "nodes": 2, "cpus_per_node": 32, "memory": 128000},
+    ])
+    automatic = _resolve(output / "scheduler_discovery", summary, tmp_path / "automatic.json")
+    assert automatic.returncode != 0
+    assert "SCHEDULER_PROBE_BLOCKED_MULTIPLE_DEFAULT_PARTITIONS" in automatic.stderr
+    selected = tmp_path / "selected.json"
+    manual = _resolve(output / "scheduler_discovery", summary, selected, "--account", "observed-account", "--partition", "second")
+    assert manual.returncode == 0, manual.stderr
+    payload = json.loads(selected.read_text(encoding="utf-8"))
+    assert payload["partition"] == "second"
+    assert payload["selection_policy"] == "EXPLICIT_SELECTION_VALIDATED_BY_CURRENT_CLUSTER_EVIDENCE"
+
+
+def test_m10_resolver_derives_fixed_placements_and_fails_closed(tmp_path: Path) -> None:
+    output, _ = _build(tmp_path)
+    for name, nodes in (("one", 1), ("four", 4)):
+        result_path = tmp_path / f"{name}.json"
+        result = _resolve(
+            output / "scheduler_discovery",
+            _login_summary(tmp_path / name, partitions=[{"name": name, "default": True, "nodes": nodes, "cpus_per_node": 20, "memory": 64000}]),
+            result_path,
+        )
+        assert result.returncode == 0, result.stderr
+        payload = json.loads(result_path.read_text(encoding="utf-8"))
+        assert (payload["nodes"], payload["ntasks"], payload["processes_per_node"]) == (nodes, nodes * 20, 20)
+
+    cpus_path = tmp_path / "cpus-per-task.json"
+    cpus = _resolve(
+        output / "scheduler_discovery",
+        _login_summary(tmp_path / "cpus", partitions=[{"name": "cpus", "default": True, "nodes": 1, "cpus_per_node": 20, "memory": 64000}]),
+        cpus_path, "--cpus-per-task", "2",
+    )
+    assert cpus.returncode == 0, cpus.stderr
+    payload = json.loads(cpus_path.read_text(encoding="utf-8"))
+    assert (payload["ntasks"], payload["cpus_per_task"], payload["processes_per_node"]) == (10, 2, 10)
+
+    overcommit = _resolve(
+        output / "scheduler_discovery",
+        _login_summary(tmp_path / "overcommit", partitions=[{"name": "overcommit", "default": True, "nodes": 1, "cpus_per_node": 20, "memory": 64000}]),
+        tmp_path / "overcommit.json", "--cpus-per-task", "21",
+    )
+    assert overcommit.returncode != 0 and "CPU_OVERCOMMIT" in overcommit.stderr
+    ambiguous = _resolve(
+        output / "scheduler_discovery",
+        _login_summary(tmp_path / "ambiguous", partitions=[{"name": "ambiguous", "default": True, "nodes": 4, "min_nodes": 1, "max_nodes": 4, "cpus_per_node": 20, "memory": 64000}]),
+        tmp_path / "ambiguous.json",
+    )
+    assert ambiguous.returncode != 0 and "NODE_RANGE_AMBIGUOUS" in ambiguous.stderr
+
+
+def test_resolved_bundle_requires_explicit_evidence_bound_selection(tmp_path: Path) -> None:
+    output = tmp_path / "missing"
+    env = os.environ.copy(); env["PYTHONPATH"] = str(REPO / "src")
+    result = subprocess.run([sys.executable, "tools/build_yoltla_m10_acceptance.py", "--output", str(output), "--scheduler-selection", str(tmp_path / "absent.json")], cwd=REPO, env=env, capture_output=True, text=True)
+    assert result.returncode != 0
+    assert "M10_REMOTE_PROFILE_UNRESOLVED" in result.stderr
+
+
+def test_resolved_bundle_uses_selection_provenance_without_qos_fallback(tmp_path: Path) -> None:
+    output, manifest = _build(tmp_path, _selection(tmp_path))
+    selected = manifest["scheduler_selection"]
+    assert selected["account"] == "observed-account"
+    assert selected["partition"] == "observed-partition"
+    assert selected["qos"] is None
+    assert selected["evidence_status_by_field"]["qos"] == "MISSING"
+    assert (output / selected["relative_path"]).is_file() and selected["sha256"]
+    preflight = (output / "preflight" / "submit_m10_preflight.slurm").read_text(encoding="utf-8")
+    assert "#SBATCH --partition=observed-partition" in preflight
+    assert "#SBATCH --account=observed-account" in preflight
+    assert "#SBATCH --qos=" not in preflight
+    assert "#SBATCH --output=preflight/preflight.%j.out" in preflight
+    assert "#SBATCH --error=preflight/preflight.%j.err" in preflight
+    assert (output / "preflight").is_dir()
+    assert "srun --nodes=2 --ntasks=64 --ntasks-per-node=32 --cpus-per-task=1 hostname" in preflight
+    assert "observed-python" in preflight and "observed-siesta" in preflight
+
+
+def test_preflight_hydra_has_explicit_multinode_single_source_contract(tmp_path: Path) -> None:
+    runtime_path = _runtime_selection(tmp_path, hydra_bootstrap="ssh")
+    runtime_data = json.loads(runtime_path.read_text(encoding="utf-8"))
+    runtime_data["launchers"]["hydra"]["environment_setup"] = ["module load observed-hydra"]
+    runtime_path.write_text(json.dumps(runtime_data), encoding="utf-8")
+    output, _ = _build(
+        tmp_path,
+        _selection(tmp_path),
+        runtime_path,
+    )
+    preflight = (output / "preflight" / "submit_m10_preflight.slurm").read_text(encoding="utf-8")
+    assert 'observed-hydra -bootstrap ssh -hosts "$M10_HOST_CSV" -np 64 -ppn 32 hostname' in preflight
+    assert 'evidence/hydra-placement.${SLURM_JOB_ID}.txt' in preflight
+    assert "M10_PREFLIGHT_HYDRA_PLACEMENT_INVALID" in preflight
+    assert "test -x /usr/bin/srun" in preflight
+    assert "command -v \"$M10_SELECTED_HYDRA\"" in preflight
+    assert preflight.index("module load observed-hydra") < preflight.index('command -v "$M10_SELECTED_HYDRA"')
+    assert "python3() {" not in preflight
+    assert "I_MPI_HYDRA_BOOTSTRAP" not in preflight
+    assert "FI_PSM3_UUID" not in preflight
+    assert "evidence-bound" not in preflight
+    assert "smoke.fdf" not in preflight
+
+
+def test_preflight_rejects_duplicate_hydra_bootstrap_argument(tmp_path: Path) -> None:
+    selection = json.loads(_selection(tmp_path).read_text(encoding="utf-8"))
+    runtime = json.loads(_runtime_selection(tmp_path, hydra_bootstrap="ssh").read_text(encoding="utf-8"))
+    runtime["launchers"]["hydra"]["arguments"] = ["-bootstrap", "slurm"]
+    try:
+        _preflight_script(selection, runtime)
+    except ValueError as error:
+        assert "only by launchers.hydra.bootstrap" in str(error)
+    else:
+        raise AssertionError("preflight accepted duplicated Hydra bootstrap authority")
+
+
+def test_resolved_bundle_supports_evidence_bound_default_account(tmp_path: Path) -> None:
+    output, manifest = _build(tmp_path, _selection(tmp_path, account=None))
+    assert manifest["scheduler_selection"]["account"] is None
+    assert "#SBATCH --account=" not in (output / "preflight" / "submit_m10_preflight.slurm").read_text(encoding="utf-8")
+    for payload in manifest["packages"].values():
+        submit = Path(payload["destination"]).joinpath("submit.slurm").read_text(encoding="utf-8")
+        assert "#SBATCH --account=" not in submit
+
+
+def test_resolved_packages_are_canonical_and_backend_equivalent(tmp_path: Path) -> None:
+    output, manifest = _build(tmp_path, _selection(tmp_path, qos="observed-qos"))
+    equivalence = manifest["backend_equivalence"]
+    assert equivalence["workflow_id_equal"] and equivalence["workflow_definition_sha256_equal"]
+    assert equivalence["scientific_identity_equal"] and equivalence["execution_spec_different"]
+    shell_files = [*output.rglob("*.sh"), *output.rglob("*.slurm")]
+    assert shell_files
+    assert all(b"\r" not in path.read_bytes() for path in shell_files)
+    for name, payload in manifest["packages"].items():
+        archive = Path(payload["zip_path"])
+        extraction = tmp_path / f"extract-{name}"; extraction.mkdir()
+        with ZipFile(archive) as handle:
+            shell_members = [member for member in handle.namelist() if member.endswith((".sh", ".slurm"))]
+            assert shell_members
+            assert all(b"\r" not in handle.read(member) for member in shell_members)
+            handle.extractall(extraction)
+        root = extraction / payload["package_id"]
+        verified = subprocess.run([sys.executable, "verify_package.py"], cwd=root, capture_output=True, text=True)
+        assert verified.returncode == 0, verified.stderr
+        worker = (root / "scripts" / "run_worker.py").read_text(encoding="utf-8")
+        assert "CanonicalController" in worker and "AllocationController.from_file" not in worker
+        assert (root / "provenance" / "scheduler_selection.json").is_file()
+
+
+def test_placement_is_single_source_for_campaign_srun_hydra_and_preflight(tmp_path: Path) -> None:
+    first, _ = _build(
+        tmp_path / "one",
+        _selection(tmp_path / "one", partition="fixed-one", nodes=1, cpus_per_node=20),
+        _runtime_selection(tmp_path / "one", hydra_bootstrap="ssh"),
+    )
+    second, _ = _build(
+        tmp_path / "four",
+        _selection(tmp_path / "four", partition="fixed-four", nodes=4, cpus_per_node=20),
+        _runtime_selection(tmp_path / "four", hydra_bootstrap="ssh"),
+    )
+    first_hydra = first / "sources" / "hydra" / "campaign.json"
+    first_srun = first / "sources" / "srun" / "campaign.json"
+    hydra_campaign = json.loads(first_hydra.read_text(encoding="utf-8"))
+    srun_campaign = json.loads(first_srun.read_text(encoding="utf-8"))
+    assert hydra_campaign["resources"]["nodes"] == srun_campaign["resources"]["nodes"] == 1
+    assert hydra_campaign["resources"]["ntasks"] == srun_campaign["resources"]["ntasks"] == 20
+    assert hydra_campaign["tasks"][0]["mpi_processes"] == srun_campaign["tasks"][0]["mpi_processes"] == 20
+    # Placement is carried once by resources/ExecutionSpec; the adapter renders it.
+    assert srun_campaign["runtime"]["launcher"]["arguments"] == []
+    preflight = (first / "preflight" / "submit_m10_preflight.slurm").read_text(encoding="utf-8")
+    assert "#SBATCH --nodes=1" in preflight and "#SBATCH --ntasks=20" in preflight
+    assert "-np 20 -ppn 20 hostname" in preflight
+    assert "srun --nodes=1 --ntasks=20 --ntasks-per-node=20 --cpus-per-task=1 hostname" in preflight
+
+    first_plan = translate_controller_config(load_controller_config(first_hydra), root=first_hydra.parent)
+    second_hydra = second / "sources" / "hydra" / "campaign.json"
+    second_plan = translate_controller_config(load_controller_config(second_hydra), root=second_hydra.parent)
+    task = "M10_SIESTA_SMOKE"
+    assert first_plan.scientific_identities[task].fingerprint == second_plan.scientific_identities[task].fingerprint
+    assert first_plan.execution_specs[task].fingerprint != second_plan.execution_specs[task].fingerprint
+    assert first_plan.execution_specs[task].partition == "fixed-one"
+    assert second_plan.execution_specs[task].partition == "fixed-four"
+
+
+def test_live_slurm_selection_builds_without_legacy_scheduler_selection(
+    tmp_path: Path,
+) -> None:
+    live = _live_slurm_selection(tmp_path)
+    runtime = _runtime_selection(tmp_path, hydra_bootstrap="ssh")
+    output, manifest = _build_live(
+        tmp_path, live, runtime
+    )
+    selected = manifest["live_slurm_selection"]
+    assert "scheduler_selection" not in manifest
+    assert selected["partition"] == "partition_alpha"
+    assert selected["account"] == "account_alpha"
+    assert selected["qos"] == "qos_alpha"
+    assert selected["sha256"] == sha256(live.read_bytes()).hexdigest()
+    assert selected["source_command_evidence"] == json.loads(
+        live.read_text(encoding="utf-8")
+    )["sources"]["commands"]
+    assert (output / "provenance" / "live-slurm-selection.json").read_bytes() == live.read_bytes()
+    assert (output / "provenance" / "runtime_selection.json").is_file()
+    assert manifest["runtime_selection"]["sha256"] == sha256(runtime.read_bytes()).hexdigest()
+    assert not list(output.rglob("scheduler_selection.json"))
+    for package in manifest["packages"].values():
+        root = Path(package["destination"])
+        assert (root / "provenance" / "live-slurm-selection.json").is_file()
+        assert not (root / "provenance" / "scheduler_selection.json").exists()
+
+
+def test_live_derived_placement_drives_all_m10_outputs(tmp_path: Path) -> None:
+    first, first_manifest = _build_live(
+        tmp_path / "a",
+        _live_slurm_selection(
+            tmp_path / "a", partition="partition_alpha", nodes=2,
+            tasks_per_node=20, ntasks=40, safe_cpus_per_node=20,
+            total_allocated_cpus=40, memory_mb=64000,
+        ),
+        _runtime_selection(tmp_path / "a", hydra_bootstrap="ssh"),
+    )
+    second, second_manifest = _build_live(
+        tmp_path / "b",
+        _live_slurm_selection(
+            tmp_path / "b", partition="partition_beta", nodes=4,
+            tasks_per_node=32, ntasks=128, safe_cpus_per_node=32,
+            total_allocated_cpus=128, memory_mb=128000,
+        ),
+        _runtime_selection(tmp_path / "b", hydra_bootstrap="ssh"),
+    )
+    for output, manifest, expected in (
+        (first, first_manifest, ("partition_alpha", 2, 20, 40, 40, "64000M")),
+        (second, second_manifest, ("partition_beta", 4, 32, 128, 128, "128000M")),
+    ):
+        partition, nodes, tasks_per_node, ntasks, total_cpus, memory = expected
+        placement = manifest["derived_placement"]
+        assert placement["partition"] == partition
+        assert (placement["nodes"], placement["tasks_per_node"], placement["ntasks"], placement["total_allocated_cpus"]) == (nodes, tasks_per_node, ntasks, total_cpus)
+        for launcher in ("hydra", "srun"):
+            campaign = json.loads(
+                (output / "sources" / launcher / "campaign.json").read_text(encoding="utf-8")
+            )
+            assert campaign["slurm"]["partition"] == partition
+            assert campaign["resources"] == {
+                "nodes": nodes, "total_cpus": total_cpus, "ntasks": ntasks,
+                "cpus_per_task": 1, "memory": memory, "walltime": "00:20:00",
+                "max_parallel_steps": 1, "shutdown_margin_seconds": 120,
+                "termination_grace_seconds": 30,
+            }
+            assert campaign["runtime"]["launcher"]["processes_per_node"] == tasks_per_node
+            assert campaign["tasks"][0]["mpi_processes"] == ntasks
+        continuation = json.loads(
+            (output / "sources" / "continuation" / "campaign.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        assert continuation["resources"] == {
+            "nodes": nodes, "total_cpus": total_cpus, "ntasks": ntasks,
+            "cpus_per_task": 1, "memory": memory, "walltime": "00:20:00",
+            "max_parallel_steps": 1, "shutdown_margin_seconds": 10,
+            "termination_grace_seconds": 10,
+        }
+        assert continuation["runtime"]["launcher"]["processes_per_node"] == tasks_per_node
+        preflight = (output / "preflight" / "submit_m10_preflight.slurm").read_text(encoding="utf-8")
+        assert f"#SBATCH --partition={partition}" in preflight
+        assert f"#SBATCH --nodes={nodes}" in preflight
+        assert f"#SBATCH --ntasks={ntasks}" in preflight
+        assert f"#SBATCH --ntasks-per-node={tasks_per_node}" in preflight
+        assert "#SBATCH --time=00:20:00" in preflight
+        assert f"-np {ntasks} -ppn {tasks_per_node} hostname" in preflight
+        assert f"srun --nodes={nodes} --ntasks={ntasks} --ntasks-per-node={tasks_per_node} --cpus-per-task=1 hostname" in preflight
+    assert first_manifest["backend_equivalence"]["scientific_identity_equal"]
+    assert first_manifest["backend_equivalence"]["execution_spec_different"]
+    assert first_manifest["backend_equivalence"]["hydra_execution_spec_sha256"] != second_manifest["backend_equivalence"]["hydra_execution_spec_sha256"]
+
+
+def test_live_slurm_selection_rejects_heterogeneous_node_memory(tmp_path: Path) -> None:
+    live = _live_slurm_selection(tmp_path)
+    payload = json.loads(live.read_text(encoding="utf-8"))
+    payload["sources"]["node_capabilities"][1]["memory_mb"] = 128000
+    live.write_text(json.dumps(payload), encoding="utf-8")
+    result = _build_live_result(
+        tmp_path, live, _runtime_selection(tmp_path, hydra_bootstrap="ssh")
+    )
+    assert result.returncode != 0
+    assert "live node capability evidence is heterogeneous" in result.stderr
+
+
+def test_continuation_and_runbook_require_a_terminal_human_barrier(tmp_path: Path) -> None:
+    output, manifest = _build(tmp_path, _selection(tmp_path))
+    campaign = json.loads((output / "sources" / "continuation" / "campaign.json").read_text(encoding="utf-8"))
+    allocations = manifest["continuation_external_allocations"]
+    first, second = campaign["tasks"]
+    assert allocations == {"first_seconds": 60, "second_seconds": 180, "same_package_root_and_config": True}
+    assert first["estimated_runtime_seconds"] == 5 and second["estimated_runtime_seconds"] == 90
+    assert campaign["resources"]["shutdown_margin_seconds"] == 10
+    assert first["command"][0] == "observed-python"
+    assert "module load python/3.12" not in json.dumps(campaign)
+    runbook = (REPO / "docs" / "validation" / "m10_hpc_portability_production_acceptance" / "RUNBOOK.md").read_text(encoding="utf-8")
+    first_job = runbook.index("CONTINUATION JOB #1")
+    assert first_job < runbook.index("HUMAN GATE", first_job) < runbook.index("CONTINUATION JOB #2")
+    assert "sacct" in runbook and "sbatch --test-only" in runbook
+    assert "--python <observed-module-python-path>" in runbook
+    assert "--siesta <observed-module-siesta-path>" in runbook
+    assert "--srun <observed-srun-path>" in runbook
+    assert "--hydra <observed-hydra-path>" in runbook
+
+
+def test_runtime_resolution_accepts_python_311_path_and_rejects_old_python(tmp_path: Path) -> None:
+    summary = {"python_candidates": [{"selected_mechanism": "PATH", "selected_executable": "/bin/python", "observed_version": "3.11.0", "environment_setup": [], "evidence_source": ["raw"]}], "siesta_candidates": [{"selected_mechanism": "PATH", "selected_executable": "/bin/siesta", "observed_version": "5.4", "environment_setup": [], "evidence_source": ["raw"]}], "launcher_candidates": {"srun": [{"selected_mechanism": "PATH", "selected_executable": "/bin/srun", "arguments": [], "environment_setup": [], "evidence_source": ["raw"]}]}}
+    path = tmp_path / "summary.json"; path.write_text(json.dumps(summary), encoding="utf-8")
+    assert resolve_runtime(path)["python"]["observed_version"] == "3.11.0"
+    summary["python_candidates"][0]["observed_version"] = "3.10.14"; path.write_text(json.dumps(summary), encoding="utf-8")
+    try: resolve_runtime(path)
+    except ValueError as error: assert "M10_RUNTIME_PROFILE_UNRESOLVED" in str(error)
+    else: raise AssertionError("too-old Python was accepted")
+
+
+def test_verified_module_probe_runtime_fails_closed_for_old_python_or_missing_siesta(tmp_path: Path) -> None:
+    raw = _raw_login_evidence(tmp_path)
+    for name, probe in {
+        "old": _runtime_probe_evidence(tmp_path / "old", python_version="3.10.14"),
+        "siesta": _runtime_probe_evidence(tmp_path / "siesta", siesta=False),
+    }.items():
+        summary = build_login_summary(raw, probe)
+        path = tmp_path / f"{name}.json"
+        path.write_text(json.dumps(summary), encoding="utf-8")
+        try:
+            resolve_runtime(path)
+        except ValueError as error:
+            assert "M10_RUNTIME_PROFILE_UNRESOLVED" in str(error)
+        else:
+            raise AssertionError(f"{name} module evidence was accepted")
+
+
+def test_verified_module_probe_hydra_needs_observed_bootstrap(tmp_path: Path) -> None:
+    raw = _raw_login_evidence(tmp_path)
+    no_bootstrap = build_login_summary(raw, _runtime_probe_evidence(tmp_path, hydra=True))
+    path = tmp_path / "no-bootstrap.json"
+    path.write_text(json.dumps(no_bootstrap), encoding="utf-8")
+    assert "mpiexec.hydra" in no_bootstrap["launcher_candidates"]
+    selected = {"python": "/opt/python/bin/python3", "siesta": "/opt/siesta/bin/siesta", "srun": "/usr/bin/srun", "hydra": "/opt/mpi/bin/mpiexec.hydra"}
+    try:
+        resolve_runtime(path, require_hydra=True, **selected)
+    except ValueError as error:
+        assert "M10_RUNTIME_PROFILE_UNRESOLVED" in str(error)
+    else:
+        raise AssertionError("Hydra bootstrap was guessed")
+    resolved = build_login_summary(raw, _runtime_probe_evidence(tmp_path / "resolved", hydra=True, bootstrap="observed-bootstrap"))
+    path.write_text(json.dumps(resolved), encoding="utf-8")
+    runtime = resolve_runtime(path, require_hydra=True, **selected)
+    assert runtime["launchers"]["hydra"]["bootstrap"] == "observed-bootstrap"
+    assert runtime["launchers"]["srun"]["selected_mechanism"] == "MODULE"
+
+
+def test_hydra_bootstrap_policy_is_explicit_and_evidence_bound(tmp_path: Path) -> None:
+    raw = _raw_login_evidence(tmp_path)
+    summary = build_login_summary(raw, _runtime_probe_evidence(tmp_path, hydra=True))
+    path = tmp_path / "summary.json"
+    path.write_text(json.dumps(summary), encoding="utf-8")
+    selected = {"python": "/opt/python/bin/python3", "siesta": "/opt/siesta/bin/siesta", "srun": "/usr/bin/srun", "hydra": "/opt/mpi/bin/mpiexec.hydra"}
+    capability = summary["launcher_candidates"]["mpiexec.hydra"][0]
+    assert capability["observed_launcher_mechanisms"][:2] == ["ssh", "slurm"]
+    assert capability["bootstrap_selection_required"] is True
+    assert "bootstrap" not in capability
+    policy = _hydra_policy_evidence(tmp_path, "ssh")
+    try:
+        resolve_runtime(path, require_hydra=True, **selected)
+    except ValueError as error:
+        assert "Hydra requires reviewed bootstrap strategy" in str(error)
+    else:
+        raise AssertionError("Hydra bootstrap default was introduced")
+    resolved = resolve_runtime(path, require_hydra=True, hydra_bootstrap="ssh", hydra_policy_evidence=policy, **selected)
+    hydra = resolved["launchers"]["hydra"]
+    assert hydra["bootstrap"] == "ssh"
+    assert hydra["bootstrap_selection"]["kind"] == "EXPLICIT_ADMINISTRATIVE_POLICY"
+    assert hydra["bootstrap_selection"]["policy_evidence_sha256"] == sha256(policy.read_bytes()).hexdigest()
+    for bootstrap, evidence in (("ssh", None), ("not-in-policy", policy)):
+        try:
+            resolve_runtime(path, require_hydra=True, hydra_bootstrap=bootstrap, hydra_policy_evidence=evidence, **selected)
+        except ValueError as error:
+            assert "M10_RUNTIME_PROFILE_UNRESOLVED" in str(error)
+        else:
+            raise AssertionError("unsupported Hydra bootstrap selection was accepted")
+    try:
+        resolve_runtime(path, hydra_bootstrap="ssh", hydra_policy_evidence=policy, **{key: value for key, value in selected.items() if key != "hydra"})
+    except ValueError as error:
+        assert "requires --require-hydra" in str(error)
+    else:
+        raise AssertionError("Hydra bootstrap was accepted without --require-hydra")
+
+
+def test_hydra_policy_materializes_command_and_execution_fingerprint(tmp_path: Path) -> None:
+    selected = {"python": "/opt/python/bin/python3", "siesta": "/opt/siesta/bin/siesta", "srun": "/usr/bin/srun", "hydra": "/opt/mpi/bin/mpiexec.hydra"}
+
+    def build_policy_bundle(root: Path, bootstrap: str) -> tuple[Path, dict[str, object]]:
+        raw = _raw_login_evidence(root)
+        summary = build_login_summary(raw, _runtime_probe_evidence(root, hydra=True))
+        summary_path = root / "summary.json"
+        summary_path.write_text(json.dumps(summary), encoding="utf-8")
+        runtime_path = root / "runtime.json"
+        runtime_path.write_text(json.dumps(resolve_runtime(summary_path, require_hydra=True, hydra_bootstrap=bootstrap, hydra_policy_evidence=_hydra_policy_evidence(root, bootstrap), **selected)), encoding="utf-8")
+        return _build(root, _selection(root), runtime_path)
+
+    first_output, first_manifest = build_policy_bundle(tmp_path / "first", "ssh")
+    second_output, second_manifest = build_policy_bundle(tmp_path / "second", "slurm")
+    first_root = Path(first_manifest["packages"]["hydra"]["destination"])
+    second_root = Path(second_manifest["packages"]["hydra"]["destination"])
+    first_config = load_controller_config(first_root / "campaign.yaml")
+    first_plan = translate_controller_config(first_config, root=first_root)
+    second_plan = translate_controller_config(load_controller_config(second_root / "campaign.yaml"), root=second_root)
+    task_id = "M10_SIESTA_SMOKE"
+    assert first_plan.execution_specs[task_id].launcher_arguments == ("-bootstrap", "ssh")
+    assert first_plan.execution_specs[task_id].fingerprint != second_plan.execution_specs[task_id].fingerprint
+    assert first_plan.scientific_identities[task_id].fingerprint == second_plan.scientific_identities[task_id].fingerprint
+    command = HydraLauncher(command=first_config.srun_command, arguments=first_config.srun_arguments).build_command(
+        StepLaunchSpec(task_id=task_id, attempt_id="test", workdir=first_root, input_path=first_root / "input" / "smoke.fdf", stdout_path=first_root / "out", stderr_path=first_root / "err", mpi_processes=64, cpus_per_process=1, executable=first_config.siesta_executable, hosts=("node-a", "node-b"), processes_per_node=32, nodes=2)
+    )
+    assert command[command.index("-bootstrap") + 1] == "ssh"
+    assert command.count("-bootstrap") == 1
+    assert sum(argument in {"-n", "-np"} for argument in command) == 1
+    assert command.count("-ppn") == 1
+    assert (first_output / "sources" / "hydra" / "campaign.json").is_file()
+    assert (second_output / "sources" / "hydra" / "campaign.json").is_file()
+
+
+def test_verified_module_probe_without_hydra_is_rejected_when_required(tmp_path: Path) -> None:
+    summary = build_login_summary(_raw_login_evidence(tmp_path), _runtime_probe_evidence(tmp_path))
+    path = tmp_path / "no-hydra.json"
+    path.write_text(json.dumps(summary), encoding="utf-8")
+    try:
+        resolve_runtime(path, python="/opt/python/bin/python3", siesta="/opt/siesta/bin/siesta", srun="/usr/bin/srun", require_hydra=True)
+    except ValueError as error:
+        assert "M10_RUNTIME_PROFILE_UNRESOLVED" in str(error)
+    else:
+        raise AssertionError("missing Hydra was accepted")
+
+
+def test_module_runtime_and_missing_hydra_fail_closed(tmp_path: Path) -> None:
+    runtime = _runtime_selection(tmp_path, module=True)
+    output, manifest = _build(tmp_path / "module", _selection(tmp_path / "module"), runtime)
+    assert manifest["runtime_selection"]["python_requirement"] == ">=3.11"
+    assert "module load observed-python" in (output / "sources" / "srun" / "campaign.json").read_text(encoding="utf-8")
+    missing = _runtime_selection(tmp_path / "missing", hydra=False)
+    result = subprocess.run([sys.executable, "tools/build_yoltla_m10_acceptance.py", "--output", str(tmp_path / "blocked"), "--scheduler-selection", str(_selection(tmp_path / "missing")), "--runtime-selection", str(missing)], cwd=REPO, env={**os.environ, "PYTHONPATH": str(REPO / "src")}, capture_output=True, text=True)
+    assert result.returncode != 0 and "M10_RUNTIME_PROFILE_UNRESOLVED" in result.stderr

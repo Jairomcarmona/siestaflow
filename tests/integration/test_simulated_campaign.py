@@ -5,16 +5,16 @@ from pathlib import Path
 
 import pytest
 
-from siestaflow.authorization import AuthorizationEngine
-from siestaflow.campaign import BasicCampaignPlanner, CampaignRunner
-from siestaflow.errors import AuthorizationError, IntegrityError
-from siestaflow.filesystem import RealFileSystem
-from siestaflow.gates import GateEngine
-from siestaflow.hpc import FakeSlurmClient, LocalFakeLauncher, TimeBudget
-from siestaflow.models import DecisionStatus, ProjectManifest, TaskSpec, TaskState
-from siestaflow.project import ProjectManager
-from siestaflow.storage import EventStore, StateStore
-from siestaflow.workspace import WorkspaceManager
+from qraft.authorization import AuthorizationEngine
+from qraft.campaign import BasicCampaignPlanner, CampaignRunner
+from qraft.errors import AuthorizationError, IntegrityError
+from qraft.filesystem import RealFileSystem
+from qraft.gates import GateEngine
+from qraft.hpc import FakeSlurmClient, LocalFakeLauncher, TimeBudget
+from qraft.models import DecisionStatus, ProjectManifest, TaskSpec, TaskState
+from qraft.project import ProjectManager
+from qraft.storage import EventStore, StateStore
+from qraft.workspace import WorkspaceManager
 
 
 def tasks(*, runtime: float = 10.0) -> list[TaskSpec]:

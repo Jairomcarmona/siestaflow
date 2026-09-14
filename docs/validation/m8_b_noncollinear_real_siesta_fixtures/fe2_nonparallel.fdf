@@ -1,0 +1,43 @@
+SystemName QRAFT M8-B Fe2 nonparallel system-acceptance fixture
+SystemLabel m8b_fe2_nonparallel
+NumberOfAtoms 2
+NumberOfSpecies 1
+LatticeConstant 1 Ang
+%block LatticeVectors
+12.000000000 0.000000000 0.000000000
+0.000000000 12.000000000 0.000000000
+0.000000000 0.000000000 12.000000000
+%endblock LatticeVectors
+%block ChemicalSpeciesLabel
+ 1 26 Fe
+%endblock ChemicalSpeciesLabel
+AtomicCoordinatesFormat Ang
+%block AtomicCoordinatesAndAtomicSpecies
+ 5.000000000 6.000000000 6.000000000 1
+ 7.100000000 6.000000000 6.000000000 1
+%endblock AtomicCoordinatesAndAtomicSpecies
+XC.Functional GGA
+XC.Authors PBE
+PAO.BasisSize SZ
+PAO.EnergyShift 50 meV
+Mesh.Cutoff 150 Ry
+ElectronicTemperature 300 K
+MaxSCFIterations 160
+DM.MixingWeight 0.05
+DM.NumberPulay 8
+DM.Tolerance 0.0001
+DM.UseSaveDM true
+Spin non-colinear
+%block DM.InitSpin
+ 1 + 90.0 0.0
+ 2 + 90.0 90.0
+%endblock DM.InitSpin
+Charge.Mulliken end
+%block kgrid.MonkhorstPack
+ 1 0 0 0.0
+ 0 1 0 0.0
+ 0 0 1 0.0
+%endblock kgrid.MonkhorstPack
+MD.TypeOfRun CG
+MD.VariableCell false
+MD.Steps 0

@@ -1,0 +1,3 @@
+# PSF is a fixed-column scientific input format; trailing spaces are data
+# formatting and must not make the evidence diff fail.
+rendered/**/*.psf whitespace=-trailing-space

@@ -5,10 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from siestaflow.errors import IntegrityError, StateConflictError
-from siestaflow.filesystem import RealFileSystem
-from siestaflow.models import CampaignState, EventRecord, TaskState, utc_now
-from siestaflow.storage import EventStore, StateStore
+from qraft.errors import IntegrityError, StateConflictError
+from qraft.filesystem import RealFileSystem
+from qraft.models import CampaignState, EventRecord, TaskState, utc_now
+from qraft.storage import EventStore, StateStore
 
 
 def test_atomic_state_write_round_trip_and_no_temp_residue(tmp_path: Path):

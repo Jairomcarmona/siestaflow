@@ -1,0 +1,128 @@
+{
+  "campaign": null,
+  "last_step": "COMPLETED",
+  "next_action": "qraft results --runs-root '/tmp/qraft-final-e2e-20260913/user project/runs'",
+  "progress": {
+    "completed": 1,
+    "total": 1
+  },
+  "recorded": {
+    "runtimes": [
+      {
+        "allocation_history": [
+          {
+            "allocation_id": "local",
+            "capacity": {
+              "cpus": 1,
+              "hosts": [],
+              "max_parallel_steps": 1,
+              "nodes": 1
+            },
+            "finished_at": "2026-09-13T22:13:28.129905+00:00",
+            "peak_cpus": 1,
+            "peak_nodes": 1,
+            "peak_parallel_steps": 1,
+            "started_at": "2026-09-13T22:13:27.627920+00:00",
+            "status": "COMPLETED"
+          }
+        ],
+        "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/state/workflow_runtime.json",
+        "revision": 5,
+        "runtime_fingerprint": "16b82a9833a138d7fb3cf76b24518a2443f27d5dbd3f100f4037dffc53c3e9fa",
+        "schema_version": "1.0",
+        "status": "COMPLETED",
+        "tasks": {
+          "run_siesta": {
+            "attempts": 1,
+            "depends_on": [],
+            "last_attempt": "attempt-0001",
+            "manifest_sha256": "1112c8b8db17a6926046dc7124172591f126c1c1e73055733d7f1481edacd041",
+            "reason": "normal technical completion evidence; PROVISIONAL_UNTIL_REAL_OUTPUT_IMPORTED",
+            "status": "COMPLETED"
+          }
+        },
+        "updated_at": "2026-09-13T22:13:28.131214+00:00",
+        "workflow_id": "single-fdf-bbaf484d25c31f59"
+      }
+    ]
+  },
+  "root": "/tmp/qraft-final-e2e-20260913/user project/runs",
+  "runs_root": "/tmp/qraft-final-e2e-20260913/user project/runs",
+  "runtime": {
+    "allocation_history": [
+      {
+        "allocation_id": "local",
+        "capacity": {
+          "cpus": 1,
+          "hosts": [],
+          "max_parallel_steps": 1,
+          "nodes": 1
+        },
+        "finished_at": "2026-09-13T22:13:28.129905+00:00",
+        "peak_cpus": 1,
+        "peak_nodes": 1,
+        "peak_parallel_steps": 1,
+        "started_at": "2026-09-13T22:13:27.627920+00:00",
+        "status": "COMPLETED"
+      }
+    ],
+    "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/state/workflow_runtime.json",
+    "revision": 5,
+    "runtime_fingerprint": "16b82a9833a138d7fb3cf76b24518a2443f27d5dbd3f100f4037dffc53c3e9fa",
+    "schema_version": "1.0",
+    "status": "COMPLETED",
+    "tasks": {
+      "run_siesta": {
+        "attempts": 1,
+        "depends_on": [],
+        "last_attempt": "attempt-0001",
+        "manifest_sha256": "1112c8b8db17a6926046dc7124172591f126c1c1e73055733d7f1481edacd041",
+        "reason": "normal technical completion evidence; PROVISIONAL_UNTIL_REAL_OUTPUT_IMPORTED",
+        "status": "COMPLETED"
+      }
+    },
+    "updated_at": "2026-09-13T22:13:28.131214+00:00",
+    "workflow_id": "single-fdf-bbaf484d25c31f59"
+  },
+  "runtimes": [
+    {
+      "allocation_history": [
+        {
+          "allocation_id": "local",
+          "capacity": {
+            "cpus": 1,
+            "hosts": [],
+            "max_parallel_steps": 1,
+            "nodes": 1
+          },
+          "finished_at": "2026-09-13T22:13:28.129905+00:00",
+          "peak_cpus": 1,
+          "peak_nodes": 1,
+          "peak_parallel_steps": 1,
+          "started_at": "2026-09-13T22:13:27.627920+00:00",
+          "status": "COMPLETED"
+        }
+      ],
+      "path": "/tmp/qraft-final-e2e-20260913/user project/runs/runtime/dca9d38ca51400a1/state/workflow_runtime.json",
+      "revision": 5,
+      "runtime_fingerprint": "16b82a9833a138d7fb3cf76b24518a2443f27d5dbd3f100f4037dffc53c3e9fa",
+      "schema_version": "1.0",
+      "status": "COMPLETED",
+      "tasks": {
+        "run_siesta": {
+          "attempts": 1,
+          "depends_on": [],
+          "last_attempt": "attempt-0001",
+          "manifest_sha256": "1112c8b8db17a6926046dc7124172591f126c1c1e73055733d7f1481edacd041",
+          "reason": "normal technical completion evidence; PROVISIONAL_UNTIL_REAL_OUTPUT_IMPORTED",
+          "status": "COMPLETED"
+        }
+      },
+      "updated_at": "2026-09-13T22:13:28.131214+00:00",
+      "workflow_id": "single-fdf-bbaf484d25c31f59"
+    }
+  ],
+  "state": "COMPLETED",
+  "target": "/tmp/qraft-final-e2e-20260913/user project/runs",
+  "target_kind": "RUNS_ROOT"
+}

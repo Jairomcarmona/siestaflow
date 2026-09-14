@@ -1,0 +1,75 @@
+F
+=================================== FAILURES ===================================
+_____________ test_wheel_clean_room_installed_cli_run_and_recovery _____________
+
+tmp_path = PosixPath('/tmp/qraft-fixes-h6-before/test_wheel_clean_room_installe0')
+
+    def test_wheel_clean_room_installed_cli_run_and_recovery(tmp_path: Path) -> None:
+        repo = Path(__file__).resolve().parents[2]
+        build_python = os.environ.get("QRAFT_BUILD_PYTHON")
+        if not build_python:
+            pytest.skip("release build tooling is not installed; set QRAFT_BUILD_PYTHON")
+        wheelhouse = tmp_path / "wheelhouse"
+        wheelhouse.mkdir()
+        build = subprocess.run(
+            [build_python, "-m", "pip", "wheel", ".", "--no-deps",
+             "--no-build-isolation", "--wheel-dir", str(wheelhouse)],
+            cwd=repo, capture_output=True, text=True, check=False,
+        )
+        assert build.returncode == 0, build.stdout + build.stderr
+        wheels = tuple(wheelhouse.glob("qraft-*.whl"))
+        assert len(wheels) == 1
+        with zipfile.ZipFile(wheels[0]) as archive:
+            names = archive.namelist()
+        assert "qraft/engines/siesta/data/validation_rules_5.4.2.json" in names
+        assert not any(
+            token in name.casefold()
+            for name in names
+            for token in ("tests/", "remote_validation", "scratch", ".zip")
+        )
+
+        environment = tmp_path / "venv"
+        venv.EnvBuilder(with_pip=True).create(environment)
+        python = _venv_python(environment)
+        install = subprocess.run(
+            [str(python), "-m", "pip", "install", "--no-deps", "--no-cache-dir",
+             "--force-reinstall", str(wheels[0])],
+            capture_output=True, text=True, check=False,
+        )
+        assert install.returncode == 0, install.stdout + install.stderr
+        user = tmp_path / "user project"
+        fdf = inputs(user)
+        fake = user / "fake siesta.py"
+        fake.write_text(
+            "import sys\nsys.stdin.read()\nprint('Siesta started')\n"
+            "print('SCF cycle 1')\nprint('SCF converged')\nprint('Job completed')\n",
+            encoding="utf-8",
+        )
+        selected = profile(user, str(python), fake)
+        runs = user / "runs"
+        command = _venv_qraft(environment)
+        clean_env = os.environ.copy()
+        clean_env.pop("PYTHONPATH", None)
+
+        def invoke(*arguments: str, input_text: str | None = None) -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                [str(command), *arguments], cwd=user, env=clean_env,
+                input=input_text, capture_output=True, text=True, check=False,
+            )
+
+        imported = subprocess.run(
+            [str(python), "-c", "import qraft; print(qraft.__version__)"],
+            cwd=user, env=clean_env, capture_output=True, text=True, check=False,
+        )
+        assert imported.returncode == 0 and imported.stdout.strip() == "0.2.0"
+        assert str(repo) not in imported.stdout + imported.stderr
+>       assert invoke("--version").returncode == 0
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/tmp/qraft-fixes-h6-before/test_wheel_clean_room_installe0/venv/bin/qraft', '--version'], retu...kages/qraft/campaign_spec.py", line 13, in <module>\n    import yaml\nModuleNotFoundError: No module named \'yaml\'\n').returncode
+E        +    where CompletedProcess(args=['/tmp/qraft-fixes-h6-before/test_wheel_clean_room_installe0/venv/bin/qraft', '--version'], retu...kages/qraft/campaign_spec.py", line 13, in <module>\n    import yaml\nModuleNotFoundError: No module named \'yaml\'\n') = <function test_wheel_clean_room_installed_cli_run_and_recovery.<locals>.invoke at 0x77d07f7ac7c0>('--version')
+
+tests/productization/test_productization_v1.py:278: AssertionError
+=========================== short test summary info ============================
+FAILED tests/productization/test_productization_v1.py::test_wheel_clean_room_installed_cli_run_and_recovery
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed in 25.16s

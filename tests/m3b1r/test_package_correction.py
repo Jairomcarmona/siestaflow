@@ -12,10 +12,10 @@ from pathlib import Path
 
 import pytest
 
-from siestaflow.real_smoke import RealSiestaSmokePackager, RealSmokeSpec
-from siestaflow.engines.siesta.models import OutputClassification
-from siestaflow.engines.siesta.output_parser import SiestaOutputParser
-from siestaflow.slurm_renderer import SlurmProfile
+from qraft.real_smoke import RealSiestaSmokePackager, RealSmokeSpec
+from qraft.engines.siesta.models import OutputClassification
+from qraft.engines.siesta.output_parser import SiestaOutputParser
+from qraft.slurm_renderer import SlurmProfile
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -240,3 +240,25 @@ Job completed
     assert record.scf_iterations == 10
     assert record.atoms == 50
     assert record.species == 1
+
+
+def test_parser_recognizes_successful_dm_restart_and_benign_deprecation():
+    observed_excerpt = """\
+Version         : 5.4.2
+Reading input FDF
+DM.UseSaveDM T
+Attempting to read DM from file... Succeeded...
+   scf:    1    -8261.879480    -8258.546688
+SCF Convergence by DM+H criterion
+SCF cycle converged after 1 iterations
+WARNING: BASIS_ENTHALPY and BASIS_HARRIS_ENTHALPY files are deprecated.
+>> End of run:  30-JUL-2026   0:36:33
+Job completed
+"""
+    record = SiestaOutputParser().parse(observed_excerpt.splitlines(True))
+
+    assert record.classification is OutputClassification.COMPLETED
+    assert record.dm_restart_attempted is True
+    assert record.dm_restart_succeeded is True
+    assert len(record.warnings) == 1
+    assert record.benign_warnings == record.warnings

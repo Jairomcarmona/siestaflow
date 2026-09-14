@@ -1,0 +1,28 @@
+{
+  "status": "PASS",
+  "points": [
+    {
+      "point": 80,
+      "attempt_id": "20260820T015741.871140Z-7d44cce9",
+      "exit_code": 0,
+      "classification": "COMPLETED",
+      "normal_termination": true,
+      "scf_started": true,
+      "scf_converged": true,
+      "errors": [],
+      "technical_status": "PASS"
+    },
+    {
+      "point": 100,
+      "attempt_id": "20260820T015742.917312Z-885a0f86",
+      "exit_code": 0,
+      "classification": "COMPLETED",
+      "normal_termination": true,
+      "scf_started": true,
+      "scf_converged": true,
+      "errors": [],
+      "technical_status": "PASS"
+    }
+  ],
+  "source": "persisted attempt.json files; SIESTA stdout contained SCF cycle converged and Job completed"
+}

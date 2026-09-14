@@ -1,0 +1,32 @@
+{
+  "validation_id": "WSL_N4_CAMPAIGN_SPEC_V1",
+  "result": "PASS",
+  "qraft_branch": "feat/qraft-campaign-spec-v1",
+  "qraft_commit": "3264c7beca29860e2fb4fb4f0f79a243ac5eac38",
+  "qraft_version": "0.2.0",
+  "siesta_version": "5.4.2",
+  "mpi": {
+    "implementation": "OpenMPI",
+    "version": "4.1.6",
+    "launcher": "/usr/bin/mpirun",
+    "ranks": 4
+  },
+  "scheduler": {
+    "type": "slurm",
+    "scope": "local",
+    "job_id": 264,
+    "nodes": 1,
+    "tasks_per_node": 4
+  },
+  "campaign": "mgo-wsl-mesh-smoke",
+  "points_ry": [80, 100],
+  "metric": "energy_per_atom",
+  "criterion": {
+    "delta_ev": 0.1,
+    "consecutive": 1
+  },
+  "technical_result": "PASS",
+  "scientific_result": "CONVERGED",
+  "recovery": "PASS",
+  "identity_check": "PASS"
+}

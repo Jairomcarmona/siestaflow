@@ -1,0 +1,378 @@
+FFFFFFFFFFFFFF                                                           [100%]
+=================================== FAILURES ===================================
+_________ test_cancel_all_tasks_with_same_attempt_number[direct-False] _________
+
+tmp_path = PosixPath('/tmp/qraft-launcher-baseline/test_cancel_all_tasks_with_sam0')
+launcher_and_processes = (<qraft.execution.direct_launcher.DirectLauncher object at 0x71b88a945700>, {'task-a': <test_launcher_attempt_identity...cess object at 0x71b88a945910>, 'task-b': <test_launcher_attempt_identity.ControlledProcess object at 0x71b88a945820>})
+kill = False
+
+    @pytest.mark.parametrize("kill", [False, True])
+    def test_cancel_all_tasks_with_same_attempt_number(
+        tmp_path: Path, launcher_and_processes, kill: bool
+    ) -> None:
+        launcher, processes = launcher_and_processes
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = []
+            try:
+                for task_id, process in processes.items():
+                    futures.append(executor.submit(launcher.launch, _spec(tmp_path, task_id)))
+                    assert process.waiting.wait(5)
+                # Keep the public return contract: one task-local attempt ID per process.
+>               assert launcher.terminate_all(kill=kill) == ("attempt-0001", "attempt-0001")
+E               AssertionError: assert ('attempt-0001',) == ('attempt-000...attempt-0001')
+E
+E                 Right contains one more item: 'attempt-0001'
+E                 Use -v to get more diff
+
+tests/execution/test_launcher_attempt_identity.py:99: AssertionError
+_________ test_cancel_all_tasks_with_same_attempt_number[direct-True] __________
+
+tmp_path = PosixPath('/tmp/qraft-launcher-baseline/test_cancel_all_tasks_with_sam1')
+launcher_and_processes = (<qraft.execution.direct_launcher.DirectLauncher object at 0x71b88a9450d0>, {'task-a': <test_launcher_attempt_identity...cess object at 0x71b88a944fb0>, 'task-b': <test_launcher_attempt_identity.ControlledProcess object at 0x71b88a944ec0>})
+kill = True
+
+    @pytest.mark.parametrize("kill", [False, True])
+    def test_cancel_all_tasks_with_same_attempt_number(
+        tmp_path: Path, launcher_and_processes, kill: bool
+    ) -> None:
+        launcher, processes = launcher_and_processes
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = []
+            try:
+                for task_id, process in processes.items():
+                    futures.append(executor.submit(launcher.launch, _spec(tmp_path, task_id)))
+                    assert process.waiting.wait(5)
+                # Keep the public return contract: one task-local attempt ID per process.
+>               assert launcher.terminate_all(kill=kill) == ("attempt-0001", "attempt-0001")
+E               AssertionError: assert ('attempt-0001',) == ('attempt-000...attempt-0001')
+E
+E                 Right contains one more item: 'attempt-0001'
+E                 Use -v to get more diff
+
+tests/execution/test_launcher_attempt_identity.py:99: AssertionError
+________ test_cancel_all_tasks_with_same_attempt_number[openmpi-False] _________
+
+tmp_path = PosixPath('/tmp/qraft-launcher-baseline/test_cancel_all_tasks_with_sam2')
+launcher_and_processes = (<qraft.execution.openmpi_launcher.OpenMpiLauncher object at 0x71b88a947c20>, {'task-a': <test_launcher_attempt_identi...cess object at 0x71b88a947c80>, 'task-b': <test_launcher_attempt_identity.ControlledProcess object at 0x71b88a94e5a0>})
+kill = False
+
+    @pytest.mark.parametrize("kill", [False, True])
+    def test_cancel_all_tasks_with_same_attempt_number(
+        tmp_path: Path, launcher_and_processes, kill: bool
+    ) -> None:
+        launcher, processes = launcher_and_processes
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = []
+            try:
+                for task_id, process in processes.items():
+                    futures.append(executor.submit(launcher.launch, _spec(tmp_path, task_id)))
+                    assert process.waiting.wait(5)
+                # Keep the public return contract: one task-local attempt ID per process.
+>               assert launcher.terminate_all(kill=kill) == ("attempt-0001", "attempt-0001")
+E               AssertionError: assert ('attempt-0001',) == ('attempt-000...attempt-0001')
+E
+E                 Right contains one more item: 'attempt-0001'
+E                 Use -v to get more diff
+
+tests/execution/test_launcher_attempt_identity.py:99: AssertionError
+_________ test_cancel_all_tasks_with_same_attempt_number[openmpi-True] _________
+
+tmp_path = PosixPath('/tmp/qraft-launcher-baseline/test_cancel_all_tasks_with_sam3')
+launcher_and_processes = (<qraft.execution.openmpi_launcher.OpenMpiLauncher object at 0x71b88a94fef0>, {'task-a': <test_launcher_attempt_identi...cess object at 0x71b88a94c140>, 'task-b': <test_launcher_attempt_identity.ControlledProcess object at 0x71b88a94c080>})
+kill = True
+
+    @pytest.mark.parametrize("kill", [False, True])
+    def test_cancel_all_tasks_with_same_attempt_number(
+        tmp_path: Path, launcher_and_processes, kill: bool
+    ) -> None:
+        launcher, processes = launcher_and_processes
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = []
+            try:
+                for task_id, process in processes.items():
+                    futures.append(executor.submit(launcher.launch, _spec(tmp_path, task_id)))
+                    assert process.waiting.wait(5)
+                # Keep the public return contract: one task-local attempt ID per process.
+>               assert launcher.terminate_all(kill=kill) == ("attempt-0001", "attempt-0001")
+E               AssertionError: assert ('attempt-0001',) == ('attempt-000...attempt-0001')
+E
+E                 Right contains one more item: 'attempt-0001'
+E                 Use -v to get more diff
+
+tests/execution/test_launcher_attempt_identity.py:99: AssertionError
+__________ test_cancel_all_tasks_with_same_attempt_number[srun-False] __________
+
+tmp_path = PosixPath('/tmp/qraft-launcher-baseline/test_cancel_all_tasks_with_sam4')
+launcher_and_processes = (<qraft.execution.srun_launcher.SrunLauncher object at 0x71b88a94d520>, {'task-a': <test_launcher_attempt_identity.Con...cess object at 0x71b88a94d700>, 'task-b': <test_launcher_attempt_identity.ControlledProcess object at 0x71b88a94d880>})
+kill = False
+
+    @pytest.mark.parametrize("kill", [False, True])
+    def test_cancel_all_tasks_with_same_attempt_number(
+        tmp_path: Path, launcher_and_processes, kill: bool
+    ) -> None:
+        launcher, processes = launcher_and_processes
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = []
+            try:
+                for task_id, process in processes.items():
+                    futures.append(executor.submit(launcher.launch, _spec(tmp_path, task_id)))
+                    assert process.waiting.wait(5)
+                # Keep the public return contract: one task-local attempt ID per process.
+>               assert launcher.terminate_all(kill=kill) == ("attempt-0001", "attempt-0001")
+E               AssertionError: assert ('attempt-0001',) == ('attempt-000...attempt-0001')
+E
+E                 Right contains one more item: 'attempt-0001'
+E                 Use -v to get more diff
+
+tests/execution/test_launcher_attempt_identity.py:99: AssertionError
+__________ test_cancel_all_tasks_with_same_attempt_number[srun-True] ___________
+
+tmp_path = PosixPath('/tmp/qraft-launcher-baseline/test_cancel_all_tasks_with_sam5')
+launcher_and_processes = (<qraft.execution.srun_launcher.SrunLauncher object at 0x71b88a94edb0>, {'task-a': <test_launcher_attempt_identity.Con...cess object at 0x71b88a94ed50>, 'task-b': <test_launcher_attempt_identity.ControlledProcess object at 0x71b88a94f290>})
+kill = True
+
+    @pytest.mark.parametrize("kill", [False, True])
+    def test_cancel_all_tasks_with_same_attempt_number(
+        tmp_path: Path, launcher_and_processes, kill: bool
+    ) -> None:
+        launcher, processes = launcher_and_processes
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = []
+            try:
+                for task_id, process in processes.items():
+                    futures.append(executor.submit(launcher.launch, _spec(tmp_path, task_id)))
+                    assert process.waiting.wait(5)
+                # Keep the public return contract: one task-local attempt ID per process.
+>               assert launcher.terminate_all(kill=kill) == ("attempt-0001", "attempt-0001")
+E               AssertionError: assert ('attempt-0001',) == ('attempt-000...attempt-0001')
+E
+E                 Right contains one more item: 'attempt-0001'
+E                 Use -v to get more diff
+
+tests/execution/test_launcher_attempt_identity.py:99: AssertionError
+_________ test_cancel_all_tasks_with_same_attempt_number[hydra-False] __________
+
+tmp_path = PosixPath('/tmp/qraft-launcher-baseline/test_cancel_all_tasks_with_sam6')
+launcher_and_processes = (<qraft.execution.hydra_launcher.HydraLauncher object at 0x71b88a7eeab0>, {'task-a': <test_launcher_attempt_identity.C...cess object at 0x71b88a7ec0e0>, 'task-b': <test_launcher_attempt_identity.ControlledProcess object at 0x71b88a7ed280>})
+kill = False
+
+    @pytest.mark.parametrize("kill", [False, True])
+    def test_cancel_all_tasks_with_same_attempt_number(
+        tmp_path: Path, launcher_and_processes, kill: bool
+    ) -> None:
+        launcher, processes = launcher_and_processes
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = []
+            try:
+                for task_id, process in processes.items():
+                    futures.append(executor.submit(launcher.launch, _spec(tmp_path, task_id)))
+                    assert process.waiting.wait(5)
+                # Keep the public return contract: one task-local attempt ID per process.
+>               assert launcher.terminate_all(kill=kill) == ("attempt-0001", "attempt-0001")
+E               AssertionError: assert ('attempt-0001',) == ('attempt-000...attempt-0001')
+E
+E                 Right contains one more item: 'attempt-0001'
+E                 Use -v to get more diff
+
+tests/execution/test_launcher_attempt_identity.py:99: AssertionError
+__________ test_cancel_all_tasks_with_same_attempt_number[hydra-True] __________
+
+tmp_path = PosixPath('/tmp/qraft-launcher-baseline/test_cancel_all_tasks_with_sam7')
+launcher_and_processes = (<qraft.execution.hydra_launcher.HydraLauncher object at 0x71b88a7ee3f0>, {'task-a': <test_launcher_attempt_identity.C...cess object at 0x71b88a7eea20>, 'task-b': <test_launcher_attempt_identity.ControlledProcess object at 0x71b88a7ecd70>})
+kill = True
+
+    @pytest.mark.parametrize("kill", [False, True])
+    def test_cancel_all_tasks_with_same_attempt_number(
+        tmp_path: Path, launcher_and_processes, kill: bool
+    ) -> None:
+        launcher, processes = launcher_and_processes
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = []
+            try:
+                for task_id, process in processes.items():
+                    futures.append(executor.submit(launcher.launch, _spec(tmp_path, task_id)))
+                    assert process.waiting.wait(5)
+                # Keep the public return contract: one task-local attempt ID per process.
+>               assert launcher.terminate_all(kill=kill) == ("attempt-0001", "attempt-0001")
+E               AssertionError: assert ('attempt-0001',) == ('attempt-000...attempt-0001')
+E
+E                 Right contains one more item: 'attempt-0001'
+E                 Use -v to get more diff
+
+tests/execution/test_launcher_attempt_identity.py:99: AssertionError
+________ test_completing_one_task_keeps_other_task_cancellable[direct] _________
+
+tmp_path = PosixPath('/tmp/qraft-launcher-baseline/test_completing_one_task_keeps0')
+launcher_and_processes = (<qraft.execution.direct_launcher.DirectLauncher object at 0x71b88a7ef110>, {'task-a': <test_launcher_attempt_identity...cess object at 0x71b88a7eee40>, 'task-b': <test_launcher_attempt_identity.ControlledProcess object at 0x71b88a7ef3e0>})
+
+    def test_completing_one_task_keeps_other_task_cancellable(
+        tmp_path: Path, launcher_and_processes
+    ) -> None:
+        launcher, processes = launcher_and_processes
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = {}
+            try:
+                for task_id, process in processes.items():
+                    futures[task_id] = executor.submit(launcher.launch, _spec(tmp_path, task_id))
+                    assert process.waiting.wait(5)
+                processes["task-a"].complete()
+                completed = futures["task-a"].result(timeout=5)
+                assert completed.exit_code == 0
+                assert not completed.terminated_by_controller
+>               assert launcher.terminate_all() == ("attempt-0001",)
+E               AssertionError: assert () == ('attempt-0001',)
+E
+E                 Right contains one more item: 'attempt-0001'
+E                 Use -v to get more diff
+
+tests/execution/test_launcher_attempt_identity.py:127: AssertionError
+________ test_completing_one_task_keeps_other_task_cancellable[openmpi] ________
+
+tmp_path = PosixPath('/tmp/qraft-launcher-baseline/test_completing_one_task_keeps1')
+launcher_and_processes = (<qraft.execution.openmpi_launcher.OpenMpiLauncher object at 0x71b88a7f29c0>, {'task-a': <test_launcher_attempt_identi...cess object at 0x71b88a7f2480>, 'task-b': <test_launcher_attempt_identity.ControlledProcess object at 0x71b88a7f23f0>})
+
+    def test_completing_one_task_keeps_other_task_cancellable(
+        tmp_path: Path, launcher_and_processes
+    ) -> None:
+        launcher, processes = launcher_and_processes
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = {}
+            try:
+                for task_id, process in processes.items():
+                    futures[task_id] = executor.submit(launcher.launch, _spec(tmp_path, task_id))
+                    assert process.waiting.wait(5)
+                processes["task-a"].complete()
+                completed = futures["task-a"].result(timeout=5)
+                assert completed.exit_code == 0
+                assert not completed.terminated_by_controller
+>               assert launcher.terminate_all() == ("attempt-0001",)
+E               AssertionError: assert () == ('attempt-0001',)
+E
+E                 Right contains one more item: 'attempt-0001'
+E                 Use -v to get more diff
+
+tests/execution/test_launcher_attempt_identity.py:127: AssertionError
+_________ test_completing_one_task_keeps_other_task_cancellable[srun] __________
+
+tmp_path = PosixPath('/tmp/qraft-launcher-baseline/test_completing_one_task_keeps2')
+launcher_and_processes = (<qraft.execution.srun_launcher.SrunLauncher object at 0x71b88a7f2930>, {'task-a': <test_launcher_attempt_identity.Con...cess object at 0x71b88a7f1a30>, 'task-b': <test_launcher_attempt_identity.ControlledProcess object at 0x71b88a7f1970>})
+
+    def test_completing_one_task_keeps_other_task_cancellable(
+        tmp_path: Path, launcher_and_processes
+    ) -> None:
+        launcher, processes = launcher_and_processes
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = {}
+            try:
+                for task_id, process in processes.items():
+                    futures[task_id] = executor.submit(launcher.launch, _spec(tmp_path, task_id))
+                    assert process.waiting.wait(5)
+                processes["task-a"].complete()
+                completed = futures["task-a"].result(timeout=5)
+                assert completed.exit_code == 0
+                assert not completed.terminated_by_controller
+>               assert launcher.terminate_all() == ("attempt-0001",)
+E               AssertionError: assert () == ('attempt-0001',)
+E
+E                 Right contains one more item: 'attempt-0001'
+E                 Use -v to get more diff
+
+tests/execution/test_launcher_attempt_identity.py:127: AssertionError
+_________ test_completing_one_task_keeps_other_task_cancellable[hydra] _________
+
+tmp_path = PosixPath('/tmp/qraft-launcher-baseline/test_completing_one_task_keeps3')
+launcher_and_processes = (<qraft.execution.hydra_launcher.HydraLauncher object at 0x71b88a7ef560>, {'task-a': <test_launcher_attempt_identity.C...cess object at 0x71b88a7ef4d0>, 'task-b': <test_launcher_attempt_identity.ControlledProcess object at 0x71b88a7ec3e0>})
+
+    def test_completing_one_task_keeps_other_task_cancellable(
+        tmp_path: Path, launcher_and_processes
+    ) -> None:
+        launcher, processes = launcher_and_processes
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = {}
+            try:
+                for task_id, process in processes.items():
+                    futures[task_id] = executor.submit(launcher.launch, _spec(tmp_path, task_id))
+                    assert process.waiting.wait(5)
+                processes["task-a"].complete()
+                completed = futures["task-a"].result(timeout=5)
+                assert completed.exit_code == 0
+                assert not completed.terminated_by_controller
+>               assert launcher.terminate_all() == ("attempt-0001",)
+E               AssertionError: assert () == ('attempt-0001',)
+E
+E                 Right contains one more item: 'attempt-0001'
+E                 Use -v to get more diff
+
+tests/execution/test_launcher_attempt_identity.py:127: AssertionError
+____ test_active_attempts_retains_task_local_string_contract[SrunLauncher] _____
+
+tmp_path = PosixPath('/tmp/qraft-launcher-baseline/test_active_attempts_retains_t0')
+launcher_class = <class 'qraft.execution.srun_launcher.SrunLauncher'>
+
+    @pytest.mark.parametrize("launcher_class", [SrunLauncher, HydraLauncher])
+    def test_active_attempts_retains_task_local_string_contract(tmp_path: Path, launcher_class):
+        processes = {name: ControlledProcess() for name in ("task-a", "task-b")}
+
+        def factory(command, *, cwd, **kwargs):
+            return processes[cwd.name]
+
+        if launcher_class is SrunLauncher:
+            launcher = launcher_class(srun_command=("srun",), popen_factory=factory)
+        else:
+            launcher = launcher_class(arguments=("-bootstrap", "ssh"), popen_factory=factory)
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            try:
+                for task_id, process in processes.items():
+                    executor.submit(launcher.launch, _spec(tmp_path, task_id))
+                    assert process.waiting.wait(5)
+>               assert launcher.active_attempts == ("attempt-0001", "attempt-0001")
+E               AssertionError: assert ('attempt-0001',) == ('attempt-000...attempt-0001')
+E
+E                 Right contains one more item: 'attempt-0001'
+E                 Use -v to get more diff
+
+tests/execution/test_launcher_attempt_identity.py:155: AssertionError
+____ test_active_attempts_retains_task_local_string_contract[HydraLauncher] ____
+
+tmp_path = PosixPath('/tmp/qraft-launcher-baseline/test_active_attempts_retains_t1')
+launcher_class = <class 'qraft.execution.hydra_launcher.HydraLauncher'>
+
+    @pytest.mark.parametrize("launcher_class", [SrunLauncher, HydraLauncher])
+    def test_active_attempts_retains_task_local_string_contract(tmp_path: Path, launcher_class):
+        processes = {name: ControlledProcess() for name in ("task-a", "task-b")}
+
+        def factory(command, *, cwd, **kwargs):
+            return processes[cwd.name]
+
+        if launcher_class is SrunLauncher:
+            launcher = launcher_class(srun_command=("srun",), popen_factory=factory)
+        else:
+            launcher = launcher_class(arguments=("-bootstrap", "ssh"), popen_factory=factory)
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            try:
+                for task_id, process in processes.items():
+                    executor.submit(launcher.launch, _spec(tmp_path, task_id))
+                    assert process.waiting.wait(5)
+>               assert launcher.active_attempts == ("attempt-0001", "attempt-0001")
+E               AssertionError: assert ('attempt-0001',) == ('attempt-000...attempt-0001')
+E
+E                 Right contains one more item: 'attempt-0001'
+E                 Use -v to get more diff
+
+tests/execution/test_launcher_attempt_identity.py:155: AssertionError
+=========================== short test summary info ============================
+FAILED tests/execution/test_launcher_attempt_identity.py::test_cancel_all_tasks_with_same_attempt_number[direct-False]
+FAILED tests/execution/test_launcher_attempt_identity.py::test_cancel_all_tasks_with_same_attempt_number[direct-True]
+FAILED tests/execution/test_launcher_attempt_identity.py::test_cancel_all_tasks_with_same_attempt_number[openmpi-False]
+FAILED tests/execution/test_launcher_attempt_identity.py::test_cancel_all_tasks_with_same_attempt_number[openmpi-True]
+FAILED tests/execution/test_launcher_attempt_identity.py::test_cancel_all_tasks_with_same_attempt_number[srun-False]
+FAILED tests/execution/test_launcher_attempt_identity.py::test_cancel_all_tasks_with_same_attempt_number[srun-True]
+FAILED tests/execution/test_launcher_attempt_identity.py::test_cancel_all_tasks_with_same_attempt_number[hydra-False]
+FAILED tests/execution/test_launcher_attempt_identity.py::test_cancel_all_tasks_with_same_attempt_number[hydra-True]
+FAILED tests/execution/test_launcher_attempt_identity.py::test_completing_one_task_keeps_other_task_cancellable[direct]
+FAILED tests/execution/test_launcher_attempt_identity.py::test_completing_one_task_keeps_other_task_cancellable[openmpi]
+FAILED tests/execution/test_launcher_attempt_identity.py::test_completing_one_task_keeps_other_task_cancellable[srun]
+FAILED tests/execution/test_launcher_attempt_identity.py::test_completing_one_task_keeps_other_task_cancellable[hydra]
+FAILED tests/execution/test_launcher_attempt_identity.py::test_active_attempts_retains_task_local_string_contract[SrunLauncher]
+FAILED tests/execution/test_launcher_attempt_identity.py::test_active_attempts_retains_task_local_string_contract[HydraLauncher]
+14 failed in 1.79s

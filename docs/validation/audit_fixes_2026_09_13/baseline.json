@@ -1,0 +1,262 @@
+{
+  "base_commit": "9d82c0fdedf3688e4a4257428423a8417fdb52bd",
+  "original_audit_date": "2026-09-12",
+  "test_summary": {
+    "summary": {
+      "name": "pytest",
+      "errors": "0",
+      "failures": "1",
+      "skipped": "12",
+      "tests": "863",
+      "time": "461.841",
+      "timestamp": "2026-09-12T01:25:57.257660-06:00",
+      "hostname": "LAPTOP-NFD67ATK"
+    },
+    "skipped": [
+      {
+        "test": "test_snapshot_all_17_fdfs_parse_without_unclassified_crash",
+        "reason": "historical M2 evidence requires QRAFT_HISTORICAL_CONTEXT_ROOT"
+      },
+      {
+        "test": "test_sanity_input_is_structurally_consistent",
+        "reason": "historical M2 evidence requires QRAFT_HISTORICAL_CONTEXT_ROOT"
+      },
+      {
+        "test": "test_atom_count_mismatch_fails",
+        "reason": "historical M2 evidence requires QRAFT_HISTORICAL_CONTEXT_ROOT"
+      },
+      {
+        "test": "test_documented_density_matrix_restart_keyword_is_recognized",
+        "reason": "historical M2 evidence requires QRAFT_HISTORICAL_CONTEXT_ROOT"
+      },
+      {
+        "test": "test_cg_steps_are_recognized_as_the_explicit_relaxation_step_limit",
+        "reason": "historical M2 evidence requires QRAFT_HISTORICAL_CONTEXT_ROOT"
+      },
+      {
+        "test": "test_band_path_labels_are_recognized_by_the_versioned_registry",
+        "reason": "historical M2 evidence requires QRAFT_HISTORICAL_CONTEXT_ROOT"
+      },
+      {
+        "test": "test_context_remains_exactly_642_zip_members",
+        "reason": "historical M2 evidence requires QRAFT_HISTORICAL_CONTEXT_ROOT"
+      },
+      {
+        "test": "test_mesh_series_changes_one_authorized_variable",
+        "reason": "historical M2 evidence requires QRAFT_HISTORICAL_CONTEXT_ROOT"
+      },
+      {
+        "test": "test_kgrid_changes_one_authorized_variable",
+        "reason": "historical M2 evidence requires QRAFT_HISTORICAL_CONTEXT_ROOT"
+      },
+      {
+        "test": "test_geometry_or_charge_change_is_rejected[<lambda>0]",
+        "reason": "historical M2 evidence requires QRAFT_HISTORICAL_CONTEXT_ROOT"
+      },
+      {
+        "test": "test_geometry_or_charge_change_is_rejected[<lambda>1]",
+        "reason": "historical M2 evidence requires QRAFT_HISTORICAL_CONTEXT_ROOT"
+      },
+      {
+        "test": "test_unauthorized_parameter_and_value_are_blocked",
+        "reason": "historical M2 evidence requires QRAFT_HISTORICAL_CONTEXT_ROOT"
+      }
+    ],
+    "failures": [
+      "test_wheel_clean_room_installed_cli_run_and_recovery"
+    ]
+  },
+  "e2e": {
+    "root": "/tmp/qraft-real-e2e-uxfsvrd4",
+    "wheel_sha256": "ad377190b76b7c90b53ebb0b99043b864c09028bdcafce8b3fb7fa4741fc1c88",
+    "steps": [
+      {
+        "step": "version",
+        "argv": [
+          "/tmp/qraft-real-e2e-uxfsvrd4/venv/bin/qraft",
+          "--version"
+        ],
+        "exit_code": 0,
+        "seconds": 0.328
+      },
+      {
+        "step": "help",
+        "argv": [
+          "/tmp/qraft-real-e2e-uxfsvrd4/venv/bin/qraft",
+          "--help"
+        ],
+        "exit_code": 0,
+        "seconds": 0.287
+      },
+      {
+        "step": "init",
+        "argv": [
+          "/tmp/qraft-real-e2e-uxfsvrd4/venv/bin/qraft",
+          "init",
+          "starter.yaml"
+        ],
+        "exit_code": 0,
+        "seconds": 0.327
+      },
+      {
+        "step": "env",
+        "argv": [
+          "/tmp/qraft-real-e2e-uxfsvrd4/venv/bin/qraft",
+          "env",
+          "--profile",
+          "/tmp/qraft-real-e2e-uxfsvrd4/user project/local.json",
+          "--json"
+        ],
+        "exit_code": 0,
+        "seconds": 0.452
+      },
+      {
+        "step": "check",
+        "argv": [
+          "/tmp/qraft-real-e2e-uxfsvrd4/venv/bin/qraft",
+          "check",
+          "/tmp/qraft-real-e2e-uxfsvrd4/user project/input.fdf",
+          "--profile",
+          "/tmp/qraft-real-e2e-uxfsvrd4/user project/local.json",
+          "--json"
+        ],
+        "exit_code": 0,
+        "seconds": 0.488
+      },
+      {
+        "step": "plan",
+        "argv": [
+          "/tmp/qraft-real-e2e-uxfsvrd4/venv/bin/qraft",
+          "plan",
+          "/tmp/qraft-real-e2e-uxfsvrd4/user project/input.fdf",
+          "--profile",
+          "/tmp/qraft-real-e2e-uxfsvrd4/user project/local.json",
+          "--json"
+        ],
+        "exit_code": 0,
+        "seconds": 0.347
+      },
+      {
+        "step": "run",
+        "argv": [
+          "/tmp/qraft-real-e2e-uxfsvrd4/venv/bin/qraft",
+          "run",
+          "/tmp/qraft-real-e2e-uxfsvrd4/user project/input.fdf",
+          "--profile",
+          "/tmp/qraft-real-e2e-uxfsvrd4/user project/local.json",
+          "--runs-root",
+          "/tmp/qraft-real-e2e-uxfsvrd4/user project/runs",
+          "--json"
+        ],
+        "exit_code": 0,
+        "seconds": 0.985
+      },
+      {
+        "step": "status",
+        "argv": [
+          "/tmp/qraft-real-e2e-uxfsvrd4/venv/bin/qraft",
+          "status",
+          "--runs-root",
+          "/tmp/qraft-real-e2e-uxfsvrd4/user project/runs",
+          "--json"
+        ],
+        "exit_code": 0,
+        "seconds": 0.313
+      },
+      {
+        "step": "results",
+        "argv": [
+          "/tmp/qraft-real-e2e-uxfsvrd4/venv/bin/qraft",
+          "results",
+          "--runs-root",
+          "/tmp/qraft-real-e2e-uxfsvrd4/user project/runs",
+          "--json"
+        ],
+        "exit_code": 0,
+        "seconds": 0.349
+      },
+      {
+        "step": "resume",
+        "argv": [
+          "/tmp/qraft-real-e2e-uxfsvrd4/venv/bin/qraft",
+          "resume",
+          "--runs-root",
+          "/tmp/qraft-real-e2e-uxfsvrd4/user project/runs",
+          "--json"
+        ],
+        "exit_code": 0,
+        "seconds": 0.485
+      }
+    ],
+    "status": "FAIL",
+    "semantic_checks": {
+      "run_technical_pass": true,
+      "resume_reuses_immutable_attempt": true,
+      "status_reports_completed": false,
+      "results_include_attempt_or_engine_output": false
+    },
+    "observed_status": "NOT_STARTED",
+    "installed_module": "/tmp/qraft-real-e2e-uxfsvrd4/venv/lib/python3.12/site-packages/qraft/__init__.py",
+    "engine": "SIESTA 5.4.2 serial",
+    "attempt_manifests_unchanged_on_resume": true,
+    "attempt_count": 1,
+    "scientific_validity_asserted": false
+  },
+  "launcher_collision": {
+    "live_before": 2,
+    "tracked_before": 1,
+    "termination_targets": [
+      "attempt-0001"
+    ],
+    "outcomes": [
+      {
+        "task": "task_a",
+        "exit_code": 0,
+        "outcome": "StepOutcome(task_id='task_a', attempt_id='attempt-0001', command=('/tmp/qraft-audit-20260912-venv/bin/python', '-c', 'import time; time.sleep(2)'), exit_code=0, elapsed_seconds=2.0154810699999643, terminated_by_controller=False)"
+      },
+      {
+        "task": "task_b",
+        "exit_code": -15,
+        "outcome": "StepOutcome(task_id='task_b', attempt_id='attempt-0001', command=('/tmp/qraft-audit-20260912-venv/bin/python', '-c', 'import time; time.sleep(2)'), exit_code=-15, elapsed_seconds=0.060414104000074076, terminated_by_controller=True)"
+      }
+    ],
+    "all_children_finished": true
+  },
+  "import_findings": {
+    "fixtures": "/tmp/qraft-import-audit-hwe_vaqw",
+    "results": [
+      {
+        "scenario": "valid_control",
+        "status": "REMOTE_RESULTS_IMPORTED",
+        "gate": "PASS",
+        "findings": [
+          "PROVISIONAL_UNTIL_REAL_OUTPUT_IMPORTED",
+          "SYNTHETIC_BUNDLE_NOT_REAL_EVIDENCE"
+        ]
+      },
+      {
+        "scenario": "tampered_empty_checksums",
+        "status": "REMOTE_RESULTS_IMPORTED",
+        "gate": "PASS",
+        "findings": [
+          "PROVISIONAL_UNTIL_REAL_OUTPUT_IMPORTED",
+          "SYNTHETIC_BUNDLE_NOT_REAL_EVIDENCE"
+        ]
+      },
+      {
+        "scenario": "outside_checksum_target",
+        "status": "REMOTE_RESULTS_IMPORTED",
+        "gate": "PASS",
+        "findings": [
+          "PROVISIONAL_UNTIL_REAL_OUTPUT_IMPORTED",
+          "SYNTHETIC_BUNDLE_NOT_REAL_EVIDENCE"
+        ]
+      },
+      {
+        "scenario": "manifest_array",
+        "exception": "AttributeError",
+        "message": "'list' object has no attribute 'get'"
+      }
+    ]
+  }
+}

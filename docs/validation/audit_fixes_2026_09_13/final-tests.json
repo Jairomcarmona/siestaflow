@@ -1,0 +1,63 @@
+{
+  "suite": {
+    "name": "pytest",
+    "errors": "0",
+    "failures": "0",
+    "skipped": "12",
+    "tests": "943",
+    "time": "199.649",
+    "timestamp": "2026-09-13T00:08:53.868830-06:00",
+    "hostname": "LAPTOP-NFD67ATK"
+  },
+  "passed": 931,
+  "skipped": [
+    {
+      "test": "test_snapshot_all_17_fdfs_parse_without_unclassified_crash",
+      "reason": "historical M2 evidence requires QRAFT_HISTORICAL_CONTEXT_ROOT"
+    },
+    {
+      "test": "test_sanity_input_is_structurally_consistent",
+      "reason": "historical M2 evidence requires QRAFT_HISTORICAL_CONTEXT_ROOT"
+    },
+    {
+      "test": "test_atom_count_mismatch_fails",
+      "reason": "historical M2 evidence requires QRAFT_HISTORICAL_CONTEXT_ROOT"
+    },
+    {
+      "test": "test_documented_density_matrix_restart_keyword_is_recognized",
+      "reason": "historical M2 evidence requires QRAFT_HISTORICAL_CONTEXT_ROOT"
+    },
+    {
+      "test": "test_cg_steps_are_recognized_as_the_explicit_relaxation_step_limit",
+      "reason": "historical M2 evidence requires QRAFT_HISTORICAL_CONTEXT_ROOT"
+    },
+    {
+      "test": "test_band_path_labels_are_recognized_by_the_versioned_registry",
+      "reason": "historical M2 evidence requires QRAFT_HISTORICAL_CONTEXT_ROOT"
+    },
+    {
+      "test": "test_context_remains_exactly_642_zip_members",
+      "reason": "historical M2 evidence requires QRAFT_HISTORICAL_CONTEXT_ROOT"
+    },
+    {
+      "test": "test_mesh_series_changes_one_authorized_variable",
+      "reason": "historical M2 evidence requires QRAFT_HISTORICAL_CONTEXT_ROOT"
+    },
+    {
+      "test": "test_kgrid_changes_one_authorized_variable",
+      "reason": "historical M2 evidence requires QRAFT_HISTORICAL_CONTEXT_ROOT"
+    },
+    {
+      "test": "test_geometry_or_charge_change_is_rejected[<lambda>0]",
+      "reason": "historical M2 evidence requires QRAFT_HISTORICAL_CONTEXT_ROOT"
+    },
+    {
+      "test": "test_geometry_or_charge_change_is_rejected[<lambda>1]",
+      "reason": "historical M2 evidence requires QRAFT_HISTORICAL_CONTEXT_ROOT"
+    },
+    {
+      "test": "test_unauthorized_parameter_and_value_are_blocked",
+      "reason": "historical M2 evidence requires QRAFT_HISTORICAL_CONTEXT_ROOT"
+    }
+  ]
+}

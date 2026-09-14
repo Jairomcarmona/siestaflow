@@ -10,8 +10,8 @@ from zipfile import ZipFile
 
 import pytest
 
-from siestaflow.execution.allocation_controller import load_controller_config
-from siestaflow.m4_remote_package import M4RemoteSmokePackager, PACKAGE_ID
+from qraft.execution.allocation_controller import load_controller_config
+from qraft.m4_remote_package import M4RemoteSmokePackager, PACKAGE_ID
 
 
 REPOSITORY = Path(__file__).resolve().parents[2]
@@ -33,6 +33,7 @@ def test_m4_package_is_complete_hash_bound_and_deterministic(tmp_path: Path):
     assert manifest["system_id"] == "SURF_Gr5x5_clean_v01"
     assert manifest["login_node_persistent_process_required"] is False
     assert manifest["scientific_interpretation_allowed"] is False
+    assert (root / "runtime/qraft/magnetism.py").is_file()
     for name, expected in manifest["immutable_files"].items():
         assert hashlib.sha256((root / name).read_bytes()).hexdigest() == expected
     config = load_controller_config(root / "campaign.yaml")
@@ -49,8 +50,8 @@ def test_batch_runs_controller_directly_and_reserves_srun_for_task(tmp_path: Pat
     campaign = json.loads((root / "campaign.yaml").read_text())
     assert campaign["runtime"]["srun_command"] == ["srun"]
     assert campaign["runtime"]["exclusive"] is True
-    assert "q1h-20p" not in (root / "runtime/siestaflow/execution/allocation_controller.py").read_text()
-    assert "vini" not in (root / "runtime/siestaflow/execution/allocation_controller.py").read_text()
+    assert "q1h-20p" not in (root / "runtime/qraft/execution/allocation_controller.py").read_text()
+    assert "vini" not in (root / "runtime/qraft/execution/allocation_controller.py").read_text()
 
 
 def test_clean_extraction_passes_vendored_verifier(tmp_path: Path):
@@ -63,6 +64,7 @@ def test_clean_extraction_passes_vendored_verifier(tmp_path: Path):
     assert completed.returncode == 0, completed.stderr
     assert "M4_PACKAGE_VERIFIED" in completed.stdout
     assert "NO_LOGIN_PERSISTENT_PROCESS_REQUIRED" in completed.stdout
+    (root / "qraft.out").write_text("derived campaign evidence\n", encoding="utf-8")
     repeated = subprocess.run([sys.executable, "verify_package.py"], cwd=root, capture_output=True, text=True)
     assert repeated.returncode == 0, repeated.stderr
 
@@ -100,7 +102,7 @@ def test_cli_builds_package_without_scheduler_or_engine_execution(tmp_path: Path
     env = os.environ.copy()
     env["PYTHONPATH"] = str(REPOSITORY / "src")
     completed = subprocess.run(
-        [sys.executable, "-m", "siestaflow.cli", "remote", "m4-package",
+        [sys.executable, "-m", "qraft.cli", "remote", "m4-package",
          "--profile", str(PROFILE), "--output", str(output), "--json"],
         cwd=REPOSITORY, env=env, capture_output=True, text=True,
     )

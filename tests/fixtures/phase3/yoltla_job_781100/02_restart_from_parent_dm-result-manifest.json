@@ -1,0 +1,55 @@
+{
+  "artifacts": {
+    "command.json": "3e34194521af0221c13b2fc683d5abae034ba28c32a470c9fee75098819af807",
+    "exit_code.json": "81868a6e94ffc0178bf833deb1c9013d9fab4ee95ddb876a5e8ec4f1d26376d2",
+    "phase3_acceptance.DM": "e9ef987afddcbe4ce76b8548919c5792e9214328f0dd27b0a0380d86181eed0a",
+    "stderr.txt": "e33f8390d230fd142c5957cdd6a23a9863a3f2bfe5433e7618e8931b1c5b4d8f",
+    "stdout.txt": "c6d5ba4a104e9c1e5e4e5eb6b901a5b209622bb4d424db90a4eea02dac5f6f8a",
+    "timing.json": "32a34d728fa24fbe5709b5ec69824637e143d9bbfcf7e53e1a94ce3a642e708e"
+  },
+  "attempt_id": "attempt-0001",
+  "campaign_id": "phase3-yoltla-ttv3-mem128-r4-0a51e51",
+  "exit_code": 0,
+  "input_hashes": {
+    "protected/02_restart_from_parent_dm/fdf/02_restart_from_parent_dm.fdf": "e3a7a9b7750629f17cc0335c1fa98cd425a6b63066341aef2323b68f4f91c88e",
+    "protected/02_restart_from_parent_dm/pseudo/C.psml": "ce0f6a7fd43e70d44018e94286d934e9caadc005e95da87500d85fbe501d4c41"
+  },
+  "job_id": "781100",
+  "normal_termination": true,
+  "parser_benign_warnings": [
+    "WARNING: BASIS_ENTHALPY and BASIS_HARRIS_ENTHALPY files are deprecated. They will be removed in future releases."
+  ],
+  "parser_classification": "UNKNOWN_WARNING",
+  "parser_warnings": [
+    "xc_check: WARNING: Pseudopotential generated with GGA PBE functional",
+    "# WARNING: This information might be incomplete!",
+    "************************ Begin: TS CHECKS AND WARNINGS ************************",
+    "************************ End: TS CHECKS AND WARNINGS **************************",
+    "WARNING: BASIS_ENTHALPY and BASIS_HARRIS_ENTHALPY files are deprecated. They will be removed in future releases."
+  ],
+  "restart_evidence": {
+    "dm_read_attempted": true,
+    "dm_read_succeeded": true
+  },
+  "scf_converged": true,
+  "scf_started": true,
+  "schema_version": "1.0",
+  "system_id": "phase3-yoltla-two-stage-acceptance-r4",
+  "task_id": "02_restart_from_parent_dm",
+  "task_kind": "siesta",
+  "terminated_by_controller": false,
+  "transferred_inputs": [
+    {
+      "artifact": "phase3_acceptance.DM",
+      "destination": "phase3_acceptance.DM",
+      "destination_mutable_after_launch": true,
+      "destination_sha256_before_execution": "e9ef987afddcbe4ce76b8548919c5792e9214328f0dd27b0a0380d86181eed0a",
+      "evidence_path": ".siestaflow/transfer_evidence/0001/phase3_acceptance.DM",
+      "evidence_sha256": "e9ef987afddcbe4ce76b8548919c5792e9214328f0dd27b0a0380d86181eed0a",
+      "from_attempt": "attempt-0001",
+      "from_task": "01_parent",
+      "sha256": "e9ef987afddcbe4ce76b8548919c5792e9214328f0dd27b0a0380d86181eed0a",
+      "source_result_manifest_sha256": "2d2ad8114e46eaa5b1433b8c33026ed4b3ac6c0fd96cbb0d4a28166c9cb80721"
+    }
+  ]
+}

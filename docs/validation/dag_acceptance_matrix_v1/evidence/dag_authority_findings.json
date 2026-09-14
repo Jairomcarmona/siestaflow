@@ -1,0 +1,41 @@
+{
+  "source_commit": "8def70ea80ffbed203e451a81f0cdd0c86dbd37e",
+  "findings": [
+    {
+      "path": "single_fdf",
+      "represented": true,
+      "compiled": true,
+      "executed": true,
+      "recovered": true,
+      "evidence": "tests/runtime_v1/test_single_fdf_vertical.py; docs/validation/wsl_n4_campaign_spec_v1"
+    },
+    {
+      "path": "convergence CampaignSpec",
+      "represented": true,
+      "compiled": true,
+      "executed": true,
+      "recovered": true,
+      "qualification": "protocol direct loop executes rendered points; it is not connected to the general compiler/controller",
+      "evidence": "src/qraft/protocols/convergence.py; docs/validation/wsl_n4_campaign_spec_v1"
+    },
+    {
+      "path": "WorkflowCompiler",
+      "represented": true,
+      "compiled": true,
+      "executed": false,
+      "recovered": false,
+      "qualification": "execution_authorized=false and no general executor connection found",
+      "evidence": "src/qraft/workflows; tests/workflows/test_workflow_compiler.py"
+    },
+    {
+      "path": "AllocationController",
+      "represented": true,
+      "compiled": true,
+      "executed": true,
+      "recovered": true,
+      "qualification": "separate controller campaign schema; not CampaignSpec v1 authority",
+      "evidence": "src/qraft/execution/allocation_controller.py; tests/m4/test_allocation_controller.py"
+    }
+  ],
+  "overall": "PARTIAL"
+}

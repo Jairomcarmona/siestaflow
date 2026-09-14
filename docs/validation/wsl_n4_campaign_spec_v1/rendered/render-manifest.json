@@ -1,0 +1,72 @@
+{
+  "campaign_fingerprint": "625ff46cb7b3c98079e2ad0a340f80ba012ee1867f2b5de2b75977a474a8ed27",
+  "campaign_id": "mgo-wsl-mesh-smoke",
+  "dag": [
+    {
+      "depends_on": [],
+      "kind": "validate_campaign",
+      "node_id": "validate_campaign"
+    },
+    {
+      "depends_on": [
+        "validate_campaign"
+      ],
+      "kind": "render_variants",
+      "node_id": "render_variants"
+    },
+    {
+      "depends_on": [
+        "render_variants"
+      ],
+      "kind": "single_fdf",
+      "node_id": "point_001"
+    },
+    {
+      "depends_on": [
+        "render_variants"
+      ],
+      "kind": "single_fdf",
+      "node_id": "point_002"
+    },
+    {
+      "depends_on": [
+        "point_001",
+        "point_002"
+      ],
+      "kind": "extract_metrics",
+      "node_id": "extract_metrics"
+    },
+    {
+      "depends_on": [
+        "extract_metrics"
+      ],
+      "kind": "evaluate_convergence",
+      "node_id": "evaluate_convergence"
+    },
+    {
+      "depends_on": [
+        "evaluate_convergence"
+      ],
+      "kind": "scientific_decision",
+      "node_id": "scientific_decision"
+    }
+  ],
+  "parameter": "mesh_cutoff",
+  "points": [
+    {
+      "fdf": "/home/jmc/tmp/qraft-wsl-n4-acceptance-3264c7b/rendered/point_001/input.fdf",
+      "node_id": "point_001",
+      "pseudo_manifest": null,
+      "sha256": "fd6d468350ef1ff45b71afedee0718f21322cd53d689d8139c7627893b3288c6",
+      "value": 80
+    },
+    {
+      "fdf": "/home/jmc/tmp/qraft-wsl-n4-acceptance-3264c7b/rendered/point_002/input.fdf",
+      "node_id": "point_002",
+      "pseudo_manifest": null,
+      "sha256": "007688c36d39b4558ee4bc8a7c9a6ed5a4704520ddbffa0ffdd58aacffa4fe5e",
+      "value": 100
+    }
+  ],
+  "schema_version": "1.0"
+}

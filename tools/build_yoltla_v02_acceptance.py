@@ -9,10 +9,10 @@ import json
 import shutil
 from pathlib import Path
 
-from siestaflow.controller_package import ControllerPackageBuilder
+from qraft.controller_package import ControllerPackageBuilder
 
 
-PACKAGE_ID = "SIESTAFLOW_V02_YOLTLA_TWO_STAGE_ACCEPTANCE"
+PACKAGE_ID = "QRAFT_V02_YOLTLA_TWO_STAGE_ACCEPTANCE"
 PROFILES = {
     "q1h-20p": {
         "package_id": PACKAGE_ID,

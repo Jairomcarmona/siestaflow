@@ -1,0 +1,3 @@
+value,energy_eV,energy_per_atom_eV,delta,technical_status,attempt_id,reused
+80,-457.1475,-228.57375,,PASS,20260820T015741.871140Z-7d44cce9,False
+100,-457.1475,-228.57375,0.0,PASS,20260820T015742.917312Z-885a0f86,False

@@ -4,9 +4,10 @@ import json
 import os
 import subprocess
 import sys
+import hashlib
 from pathlib import Path
 
-from siestaflow.execution.campaign_progress import (
+from qraft.execution.campaign_progress import (
     read_campaign_progress,
     render_campaign_progress,
 )
@@ -19,8 +20,6 @@ def campaign(root: Path) -> Path:
     (root / "input").mkdir()
     source = root / "input" / "task.fdf"
     source.write_text("test\n", encoding="utf-8")
-    import hashlib
-
     config = {
         "schema_version": "1.0",
         "campaign_id": "progress-test",
@@ -70,6 +69,63 @@ def test_progress_before_execution_is_read_only(tmp_path: Path):
     assert "0/1" in render_campaign_progress(snapshot)
 
 
+def test_progress_reads_uncompacted_runtime_journal(tmp_path: Path):
+    campaign(tmp_path)
+    state = {
+        "schema_version": "1.0",
+        "campaign_id": "progress-test",
+        "status": "RUNNING",
+        "revision": 0,
+        "tasks": {
+            "first": {
+                "status": "PENDING",
+                "attempts": 0,
+                "reason": "",
+                "depends_on": [],
+            }
+        },
+    }
+    canonical = json.dumps(state, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    (state_dir / "workflow_runtime.json").write_text(
+        json.dumps({
+            "schema_version": "1.0",
+            "payload": state,
+            "sha256": hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
+        }),
+        encoding="utf-8",
+    )
+    record = {
+        "schema_version": "1.0",
+        "previous_revision": 0,
+        "revision": 1,
+        "updated_at": "2026-08-25T00:00:00+00:00",
+        "mutation": {
+            "kind": "task",
+            "task_id": "first",
+            "changes": {
+                "status": "RUNNING",
+                "reason": "attempt reserved",
+                "attempts": 1,
+                "last_attempt": "attempt-0001",
+            },
+        },
+    }
+    encoded = json.dumps(record, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    record["sha256"] = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+    (state_dir / "workflow_runtime.journal.jsonl").write_text(
+        json.dumps(record, sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+    snapshot = read_campaign_progress(tmp_path)
+
+    assert snapshot["revision"] == 1
+    assert snapshot["running"] == ["first"]
+    assert snapshot["tasks"][0]["attempts"] == 1
+
+
 def test_progress_cli_supports_machine_and_human_output(tmp_path: Path):
     campaign(tmp_path)
     env = os.environ.copy()
@@ -78,7 +134,7 @@ def test_progress_cli_supports_machine_and_human_output(tmp_path: Path):
         [
             sys.executable,
             "-m",
-            "siestaflow.cli",
+            "qraft.cli",
             "campaign",
             "progress",
             str(tmp_path),
@@ -95,7 +151,7 @@ def test_progress_cli_supports_machine_and_human_output(tmp_path: Path):
         [
             sys.executable,
             "-m",
-            "siestaflow.cli",
+            "qraft.cli",
             "campaign",
             "watch",
             str(tmp_path),

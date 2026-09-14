@@ -1,0 +1,5 @@
+git branch --show-current
+git rev-parse --short HEAD
+git log -1 --format=%s
+git diff --check
+git diff --name-only

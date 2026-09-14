@@ -10,10 +10,19 @@ from pathlib import Path
 
 import pytest
 
-from siestaflow.execution.allocation_controller import AllocationController, ExecutionStatus
-from siestaflow.execution.hydra_launcher import HydraLauncher
-from siestaflow.execution.slurm_environment import ShutdownRequest, SignalHandlers, SlurmEnvironment
-from siestaflow.execution.srun_launcher import SrunLauncher, StepLaunchSpec, StepOutcome
+from qraft.execution.allocation_controller import (
+    AllocationController,
+    ExecutionStatus,
+    load_controller_config,
+)
+from qraft.execution.canonical_controller import CanonicalController
+from qraft.execution.legacy_translation import translate_controller_config
+from qraft.execution.hydra_launcher import HydraLauncher
+from qraft.execution.adapters import launcher_registry
+from qraft.execution.runtime_composition import compose_runtime
+from qraft.core import ExecutionSpec
+from qraft.execution.slurm_environment import ShutdownRequest, SignalHandlers, SlurmEnvironment
+from qraft.execution.srun_launcher import SrunLauncher, StepLaunchSpec, StepOutcome
 
 
 def sha(path: Path) -> str:
@@ -40,6 +49,10 @@ def write_runtime(root: Path) -> tuple[Path, Path]:
         " print('SIESTA started'); print('SCF iteration 1'); raise SystemExit(0)\n"
         "print('Version: 5.4.2')\n"
         "print('Reading input FDF')\n"
+        "if 'RESTART_MUTATES' in text:\n"
+        " assert pathlib.Path('required.DM').read_text() == 'dm'\n"
+        " print('Attempting to read DM from file... Succeeded...')\n"
+        " pathlib.Path('required.DM').write_text('updated-dm')\n"
         "print('SCF iteration 1')\n"
         "print('SCF converged')\n"
         "if 'ARTIFACT' in text: pathlib.Path('required.DM').write_text('dm')\n"
@@ -121,6 +134,83 @@ def test_one_successful_srun_step_is_fully_validated(tmp_path: Path):
     assert state(tmp_path)["tasks"]["task-1"]["status"] == "COMPLETED"
 
 
+@pytest.mark.parametrize("qos", ["normal", None])
+def test_schema2_controller_config_accepts_explicit_or_null_qos(
+    tmp_path: Path, qos: str | None,
+) -> None:
+    campaign, config = make_package(tmp_path, ["SUCCESS"])
+    config["schema_version"] = "2.0"
+    config["runtime"]["launcher"] = {
+        "kind": "srun", "command": [sys.executable], "arguments": [],
+        "bootstrap": "ssh",
+    }
+    config["slurm"]["qos"] = qos
+    campaign.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    assert load_controller_config(campaign).campaign_id == "m4-test"
+
+
+def test_schema2_controller_config_accepts_missing_qos(tmp_path: Path) -> None:
+    campaign, config = make_package(tmp_path, ["SUCCESS"])
+    config["schema_version"] = "2.0"
+    config["runtime"]["launcher"] = {
+        "kind": "srun", "command": [sys.executable], "arguments": [],
+        "bootstrap": "ssh",
+    }
+    config["slurm"].pop("qos")
+    campaign.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    assert load_controller_config(campaign).campaign_id == "m4-test"
+
+
+@pytest.mark.parametrize("include_account, account", [(True, "account"), (True, None), (False, None)])
+def test_schema2_controller_config_accepts_explicit_null_or_missing_account(
+    tmp_path: Path, include_account: bool, account: str | None,
+) -> None:
+    campaign, config = make_package(tmp_path, ["SUCCESS"])
+    config["schema_version"] = "2.0"
+    config["runtime"]["launcher"] = {
+        "kind": "srun", "command": [sys.executable], "arguments": [],
+        "bootstrap": "ssh",
+    }
+    if include_account:
+        config["slurm"]["account"] = account
+    else:
+        config["slurm"].pop("account")
+    campaign.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    assert load_controller_config(campaign).campaign_id == "m4-test"
+
+
+@pytest.mark.parametrize("account", ["", "MISSING_ACCOUNT", 7])
+def test_schema2_controller_config_rejects_invalid_explicit_account(
+    tmp_path: Path, account: object,
+) -> None:
+    campaign, config = make_package(tmp_path, ["SUCCESS"])
+    config["schema_version"] = "2.0"
+    config["runtime"]["launcher"] = {
+        "kind": "srun", "command": [sys.executable], "arguments": [],
+        "bootstrap": "ssh",
+    }
+    config["slurm"]["account"] = account
+    campaign.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="account"):
+        load_controller_config(campaign)
+
+
+@pytest.mark.parametrize("qos", ["", "MISSING_QOS", 7])
+def test_schema2_controller_config_rejects_invalid_explicit_qos(
+    tmp_path: Path, qos: object,
+) -> None:
+    campaign, config = make_package(tmp_path, ["SUCCESS"])
+    config["schema_version"] = "2.0"
+    config["runtime"]["launcher"] = {
+        "kind": "srun", "command": [sys.executable], "arguments": [],
+        "bootstrap": "ssh",
+    }
+    config["slurm"]["qos"] = qos
+    campaign.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="qos"):
+        load_controller_config(campaign)
+
+
 def test_sequential_steps_use_one_slot(tmp_path: Path):
     campaign, _ = make_package(tmp_path, ["SUCCESS", "SUCCESS", "SUCCESS"], max_parallel=1)
     assert controller(campaign, "1002").run(install_signal_handlers=False) is ExecutionStatus.COMPLETED
@@ -170,12 +260,26 @@ def test_shutdown_signals_stop_new_launches_and_close_active_step(tmp_path: Path
     shutdown = ShutdownRequest()
     launcher = BlockingLauncher(shutdown)
     current = controller(campaign, f"signal-{reason}", launcher=launcher, shutdown=shutdown)
-    timer = threading.Timer(0.03, lambda: shutdown.request(reason))
-    timer.start()
+    observed: dict[str, object] = {}
+
+    def request_shutdown_after_step_starts() -> None:
+        assert launcher.started.wait(timeout=2)
+        observed["task_status_before_shutdown"] = state(tmp_path)["tasks"]["task-1"]["status"]
+        observed["active_step_started"] = launcher.active
+        observed["shutdown_request_time"] = time.monotonic()
+        shutdown.request(reason)
+
+    requester = threading.Thread(target=request_shutdown_after_step_starts)
+    requester.start()
     try:
         assert current.run(install_signal_handlers=False) is ExecutionStatus.INTERRUPTED
     finally:
-        timer.cancel()
+        launcher.release.set()
+        requester.join(timeout=2)
+    assert not requester.is_alive()
+    assert observed["task_status_before_shutdown"] == "RUNNING"
+    assert observed["active_step_started"] is True
+    assert isinstance(observed["shutdown_request_time"], float)
     tasks = state(tmp_path)["tasks"]
     assert tasks["task-1"]["status"] == "INTERRUPTED"
     assert tasks["task-2"]["status"] == "INCOMPLETE"
@@ -248,6 +352,130 @@ def test_dependency_artifact_is_hash_bound_and_transferred(tmp_path: Path):
     assert state(tmp_path)["tasks"]["task-1"]["status"] == "COMPLETED"
 
 
+def test_protected_inputs_are_staged_at_declared_exact_destinations(
+    tmp_path: Path,
+) -> None:
+    campaign, config = make_package(tmp_path, ["SUCCESS"])
+    config["tasks"][0]["input_destinations"] = {
+        "input/task1.fdf": "nested/input.fdf",
+        "pseudopotentials/C.psml": "species/C.psml",
+    }
+    campaign.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+
+    result = controller(campaign, "exact-destinations").run(
+        install_signal_handlers=False
+    )
+
+    assert result is ExecutionStatus.COMPLETED
+    attempt = tmp_path / "work" / "task-1" / "attempt-0001"
+    assert (attempt / "nested" / "input.fdf").read_text() == "SUCCESS\n"
+    assert (attempt / "species" / "C.psml").read_text() == "pseudo"
+    assert not (attempt / "task1.fdf").exists()
+
+
+def test_mutable_restart_dm_keeps_immutable_input_evidence(tmp_path: Path):
+    campaign, config = make_package(
+        tmp_path,
+        ["ARTIFACT", "RESTART_MUTATES"],
+        max_parallel=1,
+        required_artifact=True,
+    )
+    config["tasks"][1]["depends_on"] = ["task-1"]
+    config["tasks"][1]["transfers"] = [{
+        "from_task": "task-1",
+        "artifact": "required.DM",
+        "destination": "required.DM",
+    }]
+    campaign.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+
+    assert (
+        controller(campaign, "mutable-dm").run(install_signal_handlers=False)
+        is ExecutionStatus.COMPLETED
+    )
+    attempt = tmp_path / "work" / "task-2" / "attempt-0001"
+    manifest = json.loads((attempt / "result_manifest.json").read_text())
+    transfer = manifest["transferred_inputs"][0]
+    evidence = attempt / transfer["evidence_path"]
+
+    assert evidence.read_text() == "dm"
+    assert sha(evidence) == transfer["sha256"]
+    assert (attempt / "required.DM").read_text() == "updated-dm"
+    assert manifest["artifacts"]["required.DM"] == sha(attempt / "required.DM")
+    assert manifest["restart_evidence"]["dm_read_succeeded"] is True
+    assert manifest["parser_classification"] == "COMPLETED"
+
+
+def test_legacy_mutated_dm_attempt_is_recovered_without_recalculation(
+    tmp_path: Path,
+):
+    campaign, config = make_package(
+        tmp_path,
+        ["ARTIFACT", "RESTART_MUTATES"],
+        max_parallel=1,
+        required_artifact=True,
+    )
+    config["tasks"][1]["depends_on"] = ["task-1"]
+    config["tasks"][1]["transfers"] = [{
+        "from_task": "task-1",
+        "artifact": "required.DM",
+        "destination": "required.DM",
+    }]
+    campaign.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    assert (
+        controller(campaign, "legacy-first").run(install_signal_handlers=False)
+        is ExecutionStatus.COMPLETED
+    )
+
+    attempt = tmp_path / "work" / "task-2" / "attempt-0001"
+    manifest_path = attempt / "result_manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    transfer = manifest["transferred_inputs"][0]
+    for field in (
+        "evidence_path",
+        "evidence_sha256",
+        "destination_sha256_before_execution",
+        "destination_mutable_after_launch",
+    ):
+        transfer.pop(field)
+    manifest["parser_classification"] = "UNKNOWN_WARNING"
+    manifest.pop("restart_evidence")
+    manifest.pop("parser_warnings")
+    manifest.pop("parser_benign_warnings")
+    manifest_path.write_text(
+        json.dumps(manifest, sort_keys=True, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    state_path = tmp_path / "state" / "campaign_state.json"
+    wrapper = json.loads(state_path.read_text())
+    payload = wrapper["payload"]
+    payload["status"] = "INCOMPLETE"
+    payload["tasks"]["task-2"].update({
+        "status": "INCOMPLETE",
+        "reason": "transferred input hash mismatch: required.DM",
+        "result_manifest_sha256": sha(manifest_path),
+    })
+    wrapper["sha256"] = hashlib.sha256(
+        json.dumps(
+            payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        ).encode("utf-8")
+    ).hexdigest()
+    state_path.write_text(
+        json.dumps(wrapper, sort_keys=True, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    assert (
+        controller(campaign, "legacy-recovery").run(
+            install_signal_handlers=False
+        )
+        is ExecutionStatus.COMPLETED
+    )
+    recovered = state(tmp_path)["tasks"]["task-2"]
+    assert recovered["attempts"] == 1
+    assert recovered["status"] == "COMPLETED"
+
+
 def test_failed_dependency_blocks_child_without_launch(tmp_path: Path):
     campaign, config = make_package(tmp_path, ["FAIL", "SUCCESS"], max_parallel=2)
     config["tasks"][1]["depends_on"] = ["task-1"]
@@ -259,23 +487,48 @@ def test_failed_dependency_blocks_child_without_launch(tmp_path: Path):
     assert not (tmp_path / "work" / "task-2").exists()
 
 
-def test_hydra_builds_explicit_yoltla_placement(tmp_path: Path):
+def test_hydra_requires_one_explicit_bootstrap_argument_pair(tmp_path: Path):
     source = tmp_path / "input.fdf"
     source.write_text("test\n", encoding="utf-8")
     spec = StepLaunchSpec(
         "u-site-1", "attempt-0001", tmp_path, source,
         tmp_path / "out", tmp_path / "err", 40, 1, "siesta",
-        hosts=("tt1", "tt2"), processes_per_node=20,
+        hosts=("tt1", "tt2"), processes_per_node=20, nodes=2,
     )
-    command = HydraLauncher().build_command(
-        spec, fabric_uuid="00000000-0000-0000-0000-000000000001"
-    )
+    with pytest.raises(ValueError, match="bootstrap"):
+        HydraLauncher()
+    with pytest.raises(ValueError, match="bootstrap"):
+        HydraLauncher(arguments=("-bootstrap", ""))
+    with pytest.raises(ValueError, match="bootstrap"):
+        HydraLauncher(arguments=("-bootstrap", "ssh", "-bootstrap", "slurm"))
+    command = HydraLauncher(arguments=("-bootstrap", "ssh")).build_command(spec)
     assert command[:7] == (
         "mpiexec.hydra", "-bootstrap", "ssh", "-hosts", "tt1,tt2", "-np", "40"
     )
     assert ("-ppn", "20") == command[7:9]
-    assert "FI_PSM3_UUID" in command
     assert command[-1] == "siesta"
+    slurm = HydraLauncher(arguments=("-bootstrap", "slurm")).build_command(spec)
+    assert slurm[slurm.index("-bootstrap") + 1] == "slurm"
+    with pytest.raises(TypeError):
+        HydraLauncher(
+            arguments=("-bootstrap", "ssh"),
+            fabric_uuid_environment="FI_PSM3_UUID",
+        )
+    with pytest.raises(TypeError):
+        HydraLauncher(arguments=("-bootstrap", "ssh")).build_command(
+            spec, fabric_uuid="00000000-0000-0000-0000-000000000001"
+        )
+
+
+def test_launcher_adapter_requires_hydra_bootstrap_only() -> None:
+    with pytest.raises(ValueError, match="bootstrap"):
+        launcher_registry.require("hydra").create()
+    assert launcher_registry.require("hydra").create(
+        arguments=("-bootstrap", "ssh")
+    ).arguments == ("-bootstrap", "ssh")
+    assert launcher_registry.require("srun").create() is not None
+    assert launcher_registry.require("direct").create() is not None
+    assert launcher_registry.require("openmpi").create() is not None
 
 
 def test_schema2_hydra_controller_assigns_exclusive_hosts(tmp_path: Path):
@@ -301,13 +554,91 @@ def test_schema2_hydra_controller_assigns_exclusive_hosts(tmp_path: Path):
     env = environment(tmp_path, "hydra-job", total_cpus=40)
     env.update({
         "SLURM_NNODES": "2",
-        "SIESTAFLOW_HOSTS": "tt76,tt77",
+        "QRAFT_HOSTS": "tt76,tt77",
     })
     current = AllocationController.from_file(
         campaign, environment=env, launcher=launcher, poll_interval_seconds=0.01
     )
     assert current.run(install_signal_handlers=False) is ExecutionStatus.COMPLETED
     assert {spec.hosts for spec in launcher.specs} == {("tt76",), ("tt77",)}
+
+
+def test_hydra_bootstrap_is_materialized_in_execution_spec_and_canonical_launcher(
+    tmp_path: Path,
+) -> None:
+    campaign, config = make_package(tmp_path, ["SUCCESS"], total_cpus=20, mpi_processes=20)
+    config["schema_version"] = "2.0"
+    config["resources"]["nodes"] = 1
+    config["runtime"].pop("srun_command")
+    config["runtime"].pop("srun_arguments")
+    config["runtime"]["launcher"] = {
+        "kind": "hydra",
+        "command": ["mpiexec.hydra"],
+        "arguments": [],
+        "bootstrap": "ssh",
+        "processes_per_node": 20,
+    }
+    config["tasks"][0]["nodes"] = 1
+    campaign.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+
+    loaded = load_controller_config(campaign)
+    assert loaded.launcher_bootstrap == "ssh"
+    assert loaded.srun_arguments == ("-bootstrap", "ssh")
+    first = translate_controller_config(loaded, root=tmp_path)
+    assert first.execution_specs["task-1"].launcher_arguments == ("-bootstrap", "ssh")
+
+    config["runtime"]["launcher"]["bootstrap"] = "slurm"
+    campaign.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    second = translate_controller_config(load_controller_config(campaign), root=tmp_path)
+    assert first.execution_specs["task-1"].fingerprint != second.execution_specs["task-1"].fingerprint
+    assert first.scientific_identities["task-1"].fingerprint == second.scientific_identities["task-1"].fingerprint
+
+    env = environment(tmp_path, "hydra-canonical", total_cpus=20)
+    env.update({"QRAFT_HOSTS": "tt76"})
+    canonical = CanonicalController.from_file(campaign, environment=env)
+    assert isinstance(canonical.launcher, HydraLauncher)
+    assert canonical.launcher.arguments == ("-bootstrap", "slurm")
+
+
+def test_runtime_composition_hydra_uses_execution_spec_arguments(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    execution = ExecutionSpec(
+        partition="test", nodes=1, mpi_ranks=20, cpus_per_rank=1,
+        memory_mb=None, launcher="hydra", executable="siesta", walltime_seconds=60,
+        launcher_arguments=("-bootstrap", "ssh"),
+    )
+    env = environment(tmp_path, "hydra-compose", total_cpus=20)
+    env.update({"QRAFT_HOSTS": "tt76", "SLURM_TASKS_PER_NODE": "20"})
+    monkeypatch.setattr(
+        "qraft.execution.runtime_composition.probe_launcher_placement",
+        lambda **_kwargs: {"status": "PASS"},
+    )
+    composition = compose_runtime(
+        execution, environment=env, placement_probe_root=tmp_path / "probe"
+    )
+    assert isinstance(composition.launcher, HydraLauncher)
+    assert composition.launcher.arguments == execution.launcher_arguments
+
+
+def test_runtime_composition_blocks_observed_runtime_contradiction(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    execution = ExecutionSpec(
+        partition="local", nodes=1, mpi_ranks=1, cpus_per_rank=1,
+        memory_mb=None, launcher="direct", executable="siesta",
+        walltime_seconds=60,
+    )
+    monkeypatch.setattr(
+        "qraft.execution.runtime_composition.observe_runtime_evidence",
+        lambda *_args: ({
+            "engine": {"runtime_instance": "instance-a"},
+            "launcher": {"runtime_instance": "instance-b"},
+            "environment": {},
+        }, {}),
+    )
+    with pytest.raises(ValueError, match="RUNTIME_COMPATIBILITY_INCOMPATIBLE"):
+        compose_runtime(execution, environment={})
 
 
 def test_hash_bound_gate_task_runs_after_parent_and_emits_decision(tmp_path: Path):
@@ -358,11 +689,15 @@ class BlockingLauncher:
     def __init__(self, shutdown: ShutdownRequest) -> None:
         self.shutdown = shutdown
         self.release = threading.Event()
+        self.started = threading.Event()
+        self.active = False
         self.terminated = False
 
     def launch(self, spec) -> StepOutcome:
         spec.stdout_path.write_text("SIESTA started\nSCF iteration 1\n", encoding="utf-8")
         spec.stderr_path.write_text("", encoding="utf-8")
+        self.active = True
+        self.started.set()
         self.release.wait(2)
         return StepOutcome(spec.task_id, spec.attempt_id, ("srun",), 143, 0.03, self.terminated)
 

@@ -2,16 +2,23 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
 
-DONOR_ROOT = (
-    Path(__file__).resolve().parents[3]
-    / "context"
-    / "donor"
-    / "qe-postprocess-framework"
-)
+_donor_root = os.environ.get("QRAFT_QEF_DONOR_ROOT")
+if not _donor_root:
+    raise RuntimeError(
+        "QRAFT_QEF_DONOR_ROOT is required when collecting historical QEF "
+        "characterization",
+    )
+
+DONOR_ROOT = Path(_donor_root)
+if not DONOR_ROOT.is_dir():
+    raise RuntimeError(
+        "QRAFT_QEF_DONOR_ROOT does not name an available QEF donor checkout",
+    )
 
 # Never leave bytecode artifacts in the read-only donor tree.
 sys.dont_write_bytecode = True

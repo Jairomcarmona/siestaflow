@@ -1,0 +1,41 @@
+{
+  "artifacts": {
+    "input_validation.json": "4ea6c54f39ef360455cf507ed4a94c670d40d20e3afadb8b61dc3f74bdadf716",
+    "plan.json": "96baa26e2d68602df387097b670b197679bd0e04074fc4a4bdff42e7fbd4731f",
+    "stderr.txt": "e33f8390d230fd142c5957cdd6a23a9863a3f2bfe5433e7618e8931b1c5b4d8f",
+    "stdout.txt": "a3c9363f1a916d7671a16e4958f5d57c19a03acebc75fc2fd933dfd7661c5366"
+  },
+  "attempt_id": "20260820T015742.917312Z-885a0f86",
+  "execution_spec_sha256": "dbbb3ce88e19964f82d1a96158485fc70439dbfdd573f5e277f364c0e7013707",
+  "exit_code": 0,
+  "finished_at": "2026-08-20T01:57:43.904149Z",
+  "node_id": "run_siesta",
+  "result": {
+    "execution_state": "COMPLETED",
+    "scientific_decision": "NOT_EVALUATED",
+    "technical_validation": {
+      "classification": "COMPLETED",
+      "parser_summary": {
+        "errors": [],
+        "line_count": 641,
+        "normal_termination": true,
+        "scf_converged": true,
+        "scf_started": true,
+        "started": true,
+        "warnings": [
+          "# WARNING: This information might be incomplete!",
+          "************************ Begin: TS CHECKS AND WARNINGS ************************",
+          "************************ End: TS CHECKS AND WARNINGS **************************",
+          "WARNING: BASIS_ENTHALPY and BASIS_HARRIS_ENTHALPY files are deprecated. They will be removed in future releases."
+        ]
+      },
+      "reasons": [],
+      "status": "PASS"
+    }
+  },
+  "schema_version": "1.0",
+  "scientific_identity_sha256": "c1c9ce567a130a5eb6f806c2916db89dad5a54abc5b72e135a7feeac7e34b747",
+  "started_at": "2026-08-20T01:57:42.918320Z",
+  "stderr": "stderr.txt",
+  "stdout": "stdout.txt"
+}
