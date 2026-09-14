@@ -13,35 +13,70 @@ reproducibility.
 
 ## Install
 
-Python 3.11 or newer is required. SIESTA, MPI and SLURM are external runtime
-capabilities and are not required to install the Python package.
+Python 3.11 or newer is required. QRAFT supports POSIX/Linux systems. SIESTA,
+MPI and SLURM are external programs supplied by the user or HPC site; they are
+not installed by the Python package.
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install qraft-0.2.0-py3-none-any.whl
-qraft --version
-qraft --help
-```
-
-For development only:
+Install from a clean clone:
 
 ```bash
 git clone https://github.com/Jairomcarmona/siestaflow.git
 cd siestaflow
-pip install -e '.[dev]'
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install .
+qraft --version
+qraft --help
 ```
+
+For development, replace the install command with:
+
+```bash
+python -m pip install -e '.[dev]'
+```
+
+A wheel is a build artifact and is not stored in the repository. An
+administrator can build one from a clean clone with `python -m build --wheel`,
+or prepare an offline wheelhouse with
+`python -m pip wheel --wheel-dir wheelhouse .`. Build the wheelhouse on a
+Linux system compatible with the target cluster, then install it there with:
+
+```bash
+python -m pip install --no-index --find-links /shared/path/wheelhouse qraft==0.2.0
+```
+
+See the [installation guide](docs/user-guide/01-installation.md) for the full
+clone, wheel and offline wheelhouse procedures.
 
 ## First calculation
 
+Start in a project directory. Generate the campaign template, then edit it
+before validation: point `system.fdf` at your real SIESTA FDF and either supply
+the referenced pseudopotentials and a valid manifest or remove the example
+manifest entry when the FDF resolves them directly. Create or select an
+execution profile for the cluster; do not reuse another site's partition,
+launcher or executable paths.
+
 ```bash
+mkdir my-qraft-project
+cd my-qraft-project
 qraft init campaign.yaml
-qraft check campaign.yaml
-qraft run campaign.yaml
-qraft status
-qraft results
-qraft resume
+# Edit campaign.yaml, the FDF and pseudopotential inputs now.
+# Create .qraft/profiles/cluster.toml using the profiles guide.
+qraft setup profile validate cluster
+qraft setup env --profile cluster
+qraft check campaign.yaml --profile cluster
+qraft inspect plan campaign.yaml --profile cluster
+qraft run campaign.yaml --profile cluster --runs-root .qraft-runs
+qraft status --runs-root .qraft-runs
+qraft results --runs-root .qraft-runs
 ```
+
+Only run after `check` accepts the inputs and the resolved execution plan.
+An `srun` or Hydra profile must run inside a matching scheduler allocation; see
+the [Slurm/HPC runbook](docs/user-guide/11-slurm-hpc.md) before submitting work.
+Continue with the [campaign quickstart](docs/user-guide/02-quickstart.md) and
+the [execution profile guide](docs/user/profiles.md).
 
 Running `qraft` without arguments prints the task-oriented V2 command guide and
 exits without prompting. Profiles live in `.qraft/profiles/` in a project or

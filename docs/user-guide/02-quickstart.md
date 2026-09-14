@@ -22,4 +22,8 @@ qraft status --runs-root .qraft-runs
 
 `rendered/` contiene los FDF concretos. Tras una ejecución, consulta `.qraft-runs/qraft.out` primero; `campaign-result.json` contiene el resultado estructurado. Los intentos están en `.qraft-runs/work/point_XXX/attempt-XXXX/`; allí están `stdout.txt` y `stderr.txt`.
 
-Si hubo convergencia, `status` muestra el punto seleccionado. Si no, `technical PASS` puede coexistir con `SCIENTIFIC_NOT_CONVERGED`: SIESTA funcionó, pero tus criterios no justifican elegir un valor.
+Si hubo convergencia, consulta el punto seleccionado en `campaign-result.json`
+o `qraft.out`; la vista compacta de `status` muestra el progreso y la siguiente
+acción. Si no, `technical PASS` puede coexistir con
+`SCIENTIFIC_NOT_CONVERGED`: SIESTA funcionó, pero tus criterios no justifican
+elegir un valor.
