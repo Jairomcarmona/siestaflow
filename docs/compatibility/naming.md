@@ -1,7 +1,7 @@
-# QRAFT naming and compatibility
+# QRAFT HPC naming and compatibility
 
-The product name is **QRAFT**. The Python distribution, import package and
-command are already `qraft`:
+The product name is **QRAFT HPC** and the Python distribution is `qraft-hpc`.
+The import package and command remain `qraft`:
 
 ```bash
 python -c "import qraft"
@@ -14,6 +14,22 @@ That repository URL is intentional; it does not change the installed package
 name. Clone instructions and package metadata must use the actual repository
 location. Update those links together if the repository is renamed, after
 checking the new location and affected integrations.
+
+## Installation and migration
+
+The distribution name avoids the existing PyPI project named `qraft`. This
+change does not publish a release or reserve a registry name. Until a release
+is published, use a clean clone or a locally built `qraft_hpc` wheel following
+the [installation guide](../user-guide/01-installation.md).
+
+Use a dedicated virtual environment: the unrelated `qraft` distribution shares
+the import package and CLI names. To migrate a previous installation of this
+project, create a fresh environment from the current clone instead of
+installing the renamed distribution over the old one. Keep existing campaign
+inputs and evidence, and point cluster scripts at the new environment.
+
+The software version remains `0.2.0` during this naming change. Existing tags
+and historical build records identify their original artifacts.
 
 ## Persistent identifiers
 

@@ -11,6 +11,6 @@ from importlib.metadata import PackageNotFoundError, version
 
 
 try:
-    __version__ = version("qraft")
+    __version__ = version("qraft-hpc")
 except PackageNotFoundError:  # pragma: no cover - only an uninstalled checkout.
     __version__ = "0+unknown"

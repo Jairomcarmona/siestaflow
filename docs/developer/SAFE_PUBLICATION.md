@@ -98,6 +98,12 @@ record missing external evidence as such.
 After integration, verify the merged commit and its CI result. Installation
 claims should refer to the tested source or distribution and environment.
 
+The distribution metadata must identify `qraft-hpc`; built wheel filenames use
+`qraft_hpc`. Verify `import qraft`, the `qraft` command and installed version
+metadata in a fresh environment. Do not install the unrelated `qraft` PyPI
+distribution alongside this package. Updating metadata does not establish
+PyPI availability or publish a release.
+
 ## Prepare a release separately
 
 Do not increment the version solely for this documentation preparation.
@@ -110,8 +116,8 @@ needs an independently selected, unused version.
 
 A GitHub repository rename is a separate publication action. Confirm the
 destination, then update repository URLs, clone instructions and integrations
-together. Preserve the Python name `qraft`, legacy namespaces and historical
-evidence. Verify links after the rename.
+together. Preserve the distribution name `qraft-hpc`, import and CLI name
+`qraft`, legacy namespaces and historical evidence. Verify links after the rename.
 
 ## Prepare JOSS material from verified facts
 

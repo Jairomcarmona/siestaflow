@@ -44,7 +44,7 @@ def test_profile_and_cli_override_are_the_execution_spec_sources() -> None:
 
 
 def test_version_is_read_from_distribution_metadata() -> None:
-    assert qraft.__version__ == version("qraft")
+    assert qraft.__version__ == version("qraft-hpc")
 
 
 def test_public_runtime_has_no_repo_root_lookup() -> None:

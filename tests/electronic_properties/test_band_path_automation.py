@@ -186,7 +186,7 @@ def test_automatic_blocks_structure_transform_and_missing_provider() -> None:
     assert transformed.status is ProposalStatus.BLOCKED
     assert "transformed structure" in (transformed.reason or "")
     assert unavailable.status is ProposalStatus.BLOCKED
-    assert "qraft[symmetry]" in (unavailable.reason or "")
+    assert "qraft-hpc[symmetry]" in (unavailable.reason or "")
 
 
 def test_time_reversal_and_scientific_parameters_are_hash_bound() -> None:

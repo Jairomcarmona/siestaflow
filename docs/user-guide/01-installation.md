@@ -1,8 +1,16 @@
 # Instalación
 
-QRAFT requiere Python 3.11 o posterior y está dirigido a sistemas
+QRAFT HPC (distribución `qraft-hpc`, importación y comando `qraft`) requiere
+Python 3.11 o posterior y está dirigido a sistemas
 POSIX/Linux. Instálalo en un entorno virtual para que tu proyecto no dependa de
 paquetes globales.
+
+El cambio de nombre no publica automáticamente el paquete en PyPI. Usa un
+clon limpio o un wheel construido desde él. El proyecto ajeno `qraft` en PyPI
+comparte el nombre de importación y comando: no instales ambos en el mismo
+entorno. Para migrar una instalación anterior, crea un entorno virtual nuevo
+con el procedimiento siguiente y actualiza la ruta en tus scripts del clúster.
+Conserva las entradas y evidencias de tus campañas.
 
 ## Desde un clon limpio
 
@@ -30,7 +38,7 @@ recibir un wheel aprobado del administrador o construirlo desde un clon limpio:
 ```bash
 python -m pip install build
 python -m build --wheel
-python -m pip install dist/qraft-0.2.0-py3-none-any.whl
+python -m pip install dist/qraft_hpc-0.2.0-py3-none-any.whl
 ```
 
 También puedes instalar un wheel entregado en una ruta compartida:
@@ -38,7 +46,7 @@ También puedes instalar un wheel entregado en una ruta compartida:
 ```bash
 python3 -m venv qraft-env
 source qraft-env/bin/activate
-python -m pip install /shared/software/qraft/qraft-0.2.0-py3-none-any.whl
+python -m pip install /shared/software/qraft/qraft_hpc-0.2.0-py3-none-any.whl
 qraft --version
 which qraft
 ```
@@ -63,7 +71,7 @@ Copia `wheelhouse/` al almacenamiento compartido del clúster. En el HPC:
 ```bash
 python3 -m venv qraft-env
 source qraft-env/bin/activate
-python -m pip install --no-index --find-links /shared/software/qraft/wheelhouse qraft==0.2.0
+python -m pip install --no-index --find-links /shared/software/qraft/wheelhouse qraft-hpc==0.2.0
 qraft --version
 which qraft
 ```

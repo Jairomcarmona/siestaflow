@@ -3,7 +3,7 @@ requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "qraft"
+name = "qraft-hpc"
 version = "0.2.0"
 description = "Declarative, evidence-oriented orchestrator for scientific HPC campaigns"
 readme = "README.md"

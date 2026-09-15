@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — QRAFT HPC distribution name
+
+- Rename the Python distribution to `qraft-hpc` to distinguish it from the
+  unrelated `qraft` project on PyPI. Keep the `qraft` import and CLI names.
+- Read version metadata from `qraft-hpc` and update installation, wheel and
+  optional-dependency instructions; preserve all `siestaflow.*` identities.
+- Verify installation by the new distribution name in the clean-wheel test
+  and guard against reading another distribution's version.
+
 ## Unreleased — safe publication preparation
 
 - Document the QRAFT product name and retained `siestaflow.*` compatibility

@@ -42,7 +42,7 @@ class SeekPathProvider:
             import spglib  # type: ignore[import-not-found]
         except ModuleNotFoundError as exc:
             raise SymmetryProviderUnavailable(
-                "SeeK-path/spglib is unavailable; install qraft[symmetry] for suggest or automatic paths"
+                "SeeK-path/spglib is unavailable; install qraft-hpc[symmetry] for suggest or automatic paths"
             ) from exc
         self._seekpath = seekpath
         self._spglib = spglib
