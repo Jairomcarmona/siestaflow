@@ -70,7 +70,7 @@ invalid, or parent M6 geometry continuity cannot be preserved.
 
 ## Symmetry and density policy
 
-Install the optional implementation with `qraft[symmetry]`; this installs
+Install the optional implementation with `qraft-hpc[symmetry]`; this installs
 SeeK-path (and its spglib dependency).  Absence is reported as a controlled
 `BLOCKED` proposal, never as a raw `ImportError`.
 

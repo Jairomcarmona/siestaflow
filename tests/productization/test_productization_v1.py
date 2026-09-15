@@ -230,7 +230,7 @@ def test_wheel_clean_room_installed_cli_run_and_recovery(tmp_path: Path) -> None
         cwd=repo, capture_output=True, text=True, check=False, timeout=180,
     )
     assert build.returncode == 0, build.stdout + build.stderr
-    wheels = tuple(wheelhouse.glob("qraft-*.whl"))
+    wheels = tuple(wheelhouse.glob("qraft_hpc-*.whl"))
     assert len(wheels) == 1
     with zipfile.ZipFile(wheels[0]) as archive:
         names = archive.namelist()
@@ -246,7 +246,7 @@ def test_wheel_clean_room_installed_cli_run_and_recovery(tmp_path: Path) -> None
     python = _venv_python(environment)
     install = subprocess.run(
         [str(python), "-m", "pip", "install", "--no-index", "--find-links", str(wheelhouse),
-         "--force-reinstall", str(wheels[0])],
+         "--force-reinstall", "qraft-hpc==0.2.0"],
         capture_output=True, text=True, check=False, timeout=120,
     )
     assert install.returncode == 0, install.stdout + install.stderr
@@ -277,7 +277,9 @@ def test_wheel_clean_room_installed_cli_run_and_recovery(tmp_path: Path) -> None
         )
 
     imported = subprocess.run(
-        [str(python), "-c", "import qraft; print(qraft.__version__); print(qraft.__file__)"],
+        [str(python), "-c", "import qraft; from importlib.metadata import version; "
+         "assert version('qraft-hpc') == qraft.__version__; "
+         "print(qraft.__version__); print(qraft.__file__)"],
         cwd=user, env=clean_env, capture_output=True, text=True, check=False, timeout=30,
     )
     assert imported.returncode == 0, imported.stdout + imported.stderr

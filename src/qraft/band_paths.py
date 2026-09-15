@@ -411,7 +411,7 @@ class BandPathPlanner:
             )
         if self.provider is None:
             return self._blocked(
-                request, "PROVIDER_UNAVAILABLE: install qraft[symmetry] or supply a SymmetryPathProvider",
+                request, "PROVIDER_UNAVAILABLE: install qraft-hpc[symmetry] or supply a SymmetryPathProvider",
                 provider_error_code="PROVIDER_UNAVAILABLE",
             )
         assert request.structure is not None

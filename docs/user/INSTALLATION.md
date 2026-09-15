@@ -2,17 +2,24 @@
 
 ## Normal installed mode
 
-QRAFT requires Python 3.11+. SIESTA, MPI and a scheduler are external
+QRAFT HPC (distribution `qraft-hpc`, import and command `qraft`) requires
+Python 3.11+. SIESTA, MPI and a scheduler are external
 capabilities; their absence does not prevent package installation.
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install qraft-0.2.0-py3-none-any.whl
+pip install qraft_hpc-0.2.0-py3-none-any.whl
 qraft --version
 qraft --help
 qraft env
 ```
+
+Build the wheel from a clean clone using the
+[installation guide](../user-guide/01-installation.md); this naming change
+does not publish it on PyPI. Use a fresh dedicated environment when migrating
+an older installation. The unrelated PyPI distribution `qraft` shares the
+import and command names and must not be installed in the same environment.
 
 The wheel is the official user path. A checkout and `PYTHONPATH` are not
 required. Cluster users install the wheel once in a venv or Python module; each

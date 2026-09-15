@@ -1,6 +1,8 @@
-# QRAFT
+# QRAFT HPC
 
-The Python package, import and command are named `qraft`. The GitHub repository
+The Python distribution is named `qraft-hpc`; the import and command remain
+`qraft`. Publication on PyPI is a separate release step; install from the
+clone or a locally built wheel as described below. The GitHub repository
 currently uses the historical name `siestaflow`; the installation URLs below
 are valid for that repository. Internal `siestaflow.*` identifiers are retained
 for compatibility with existing artifacts. See the
@@ -27,7 +29,10 @@ Python 3.11 or newer is required. QRAFT supports POSIX/Linux systems. SIESTA,
 MPI and SLURM are external programs supplied by the user or HPC site; they are
 not installed by the Python package.
 
-Install from a clean clone:
+Install from a clean clone in a dedicated virtual environment. The unrelated
+PyPI project `qraft` shares the import and command names; do not install both
+distributions in one environment. When migrating an existing installation,
+create a fresh environment using this procedure:
 
 ```bash
 git clone https://github.com/Jairomcarmona/siestaflow.git
@@ -52,7 +57,7 @@ or prepare an offline wheelhouse with
 Linux system compatible with the target cluster, then install it there with:
 
 ```bash
-python -m pip install --no-index --find-links /shared/path/wheelhouse qraft==0.2.0
+python -m pip install --no-index --find-links /shared/path/wheelhouse qraft-hpc==0.2.0
 ```
 
 See the [installation guide](docs/user-guide/01-installation.md) for the full

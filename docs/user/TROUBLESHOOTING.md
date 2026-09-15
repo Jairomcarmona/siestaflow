@@ -1,7 +1,7 @@
 # Troubleshooting
 
 - `qraft: command not found`: activate the venv and confirm the wheel is
-  installed with `python -m pip show qraft`.
+  installed with `python -m pip show qraft-hpc`.
 - SIESTA `NOT_FOUND`: load its module, fix `PATH`, or set `engine.executable`
   in a profile/`--siesta`.
 - Launcher unavailable: inspect `qraft env`; load MPI/SLURM or select a valid
