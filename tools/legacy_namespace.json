@@ -1,0 +1,151 @@
+{
+  "src/qraft/contract_adapters.py": {
+    "siestaflow.siesta-input-adapter": 1,
+    "siestaflow.siesta.legacy-input": 2
+  },
+  "src/qraft/contracts/catalog.py": {
+    "siestaflow.artifact-reference": 1,
+    "siestaflow.execution-evidence": 1,
+    "siestaflow.execution-request": 1,
+    "siestaflow.numerical-profile": 1,
+    "siestaflow.plugin-descriptor": 1,
+    "siestaflow.run-lock": 1,
+    "siestaflow.scientific-approval": 1,
+    "siestaflow.scientific-artifact": 1,
+    "siestaflow.scientific-intent": 1,
+    "siestaflow.validation-report": 1,
+    "siestaflow.workflow-definition": 1,
+    "siestaflow.workflow-event": 1,
+    "siestaflow.workflow-lock": 1
+  },
+  "src/qraft/contracts/run.py": {
+    "siestaflow.run-preparer": 1
+  },
+  "src/qraft/contracts/workflow.py": {
+    "siestaflow.workflow-compiler": 1
+  },
+  "src/qraft/engines/siesta/data/validation_rules_5.4.2.json": {
+    "siestaflow.siesta.cost-review": 1,
+    "siestaflow.siesta.d3-periodicity": 1,
+    "siestaflow.siesta.dftu-context": 1,
+    "siestaflow.siesta.electrostatic-context": 1,
+    "siestaflow.siesta.keyword-schema": 1,
+    "siestaflow.siesta.kgrid-consistency": 1,
+    "siestaflow.siesta.lattice-consistency": 1,
+    "siestaflow.siesta.requested-output": 1
+  },
+  "src/qraft/environment_check.py": {
+    "siestaflow.environment-check": 1,
+    "siestaflow.environment.launcher": 5,
+    "siestaflow.environment.python": 2,
+    "siestaflow.environment.siesta": 6,
+    "siestaflow.environment.slurm": 4,
+    "siestaflow.environment.workspace": 2
+  },
+  "src/qraft/execution/capability_plugins.py": {
+    "siestaflow.engine.siesta": 1,
+    "siestaflow.plugin.siesta-engine": 1
+  },
+  "src/qraft/project_scaffold.py": {
+    "siestaflow.project-init": 1
+  },
+  "src/qraft/protocols/chained_convergence.py": {
+    "siestaflow.numerical-profile": 1,
+    "siestaflow.numerical-selection": 1
+  },
+  "src/qraft/protocols/ground_state.py": {
+    "siestaflow.numerical-profile": 1
+  },
+  "src/qraft/run_preparation.py": {
+    "siestaflow.": 1,
+    "siestaflow.engine.siesta": 1,
+    "siestaflow.gate.deterministic-metric": 1,
+    "siestaflow.gate.maximum-selector": 1,
+    "siestaflow.gate.minimum-selector": 1,
+    "siestaflow.gate.selection-consumer": 1,
+    "siestaflow.kgrid-convergence-report": 1,
+    "siestaflow.mesh-convergence-report": 1,
+    "siestaflow.siesta.kgrid-evidence-evaluator": 1,
+    "siestaflow.siesta.mesh-evidence-evaluator": 1,
+    "siestaflow.siesta.observation-producer": 1
+  },
+  "src/qraft/scientific_approvals.py": {
+    "siestaflow.scientific-approvals": 2
+  },
+  "src/qraft/siesta_validation.py": {
+    "siestaflow.plugin.siesta-validation": 1,
+    "siestaflow.siesta-contextual-validator": 2,
+    "siestaflow.siesta.cost-review": 2,
+    "siestaflow.siesta.d3-periodicity": 1,
+    "siestaflow.siesta.dftu-context": 7,
+    "siestaflow.siesta.electrostatic-context": 3,
+    "siestaflow.siesta.keyword-schema": 4,
+    "siestaflow.siesta.kgrid-consistency": 5,
+    "siestaflow.siesta.lattice-consistency": 2,
+    "siestaflow.siesta.requested-output": 2,
+    "siestaflow.validation.siesta-input": 1
+  },
+  "src/qraft/workflow_authoring.py": {
+    "siestaflow.": 1,
+    "siestaflow.band-structure": 2,
+    "siestaflow.builtin.scientific-authoring": 1,
+    "siestaflow.convergence-report": 1,
+    "siestaflow.engine.siesta": 8,
+    "siestaflow.imaginary-dielectric-function": 2,
+    "siestaflow.kgrid-convergence-report": 1,
+    "siestaflow.kgrid-convergence-rule": 1,
+    "siestaflow.kgrid-observation": 1,
+    "siestaflow.mesh-convergence-report": 1,
+    "siestaflow.mesh-convergence-rule": 1,
+    "siestaflow.mesh-observation": 1,
+    "siestaflow.numerical-profile": 1,
+    "siestaflow.projected-density-of-states": 3,
+    "siestaflow.pseudopotential": 6,
+    "siestaflow.pseudopotential-manifest": 1,
+    "siestaflow.recipe.scientific.manual-composition": 1,
+    "siestaflow.recipe.siesta.band-structure": 1,
+    "siestaflow.recipe.siesta.converge-then-relax": 1,
+    "siestaflow.recipe.siesta.dos-pdos": 1,
+    "siestaflow.recipe.siesta.ground-state-to-dos-pdos": 1,
+    "siestaflow.recipe.siesta.ground-state-to-electronic-analysis": 1,
+    "siestaflow.recipe.siesta.kgrid-evidence-evaluation": 1,
+    "siestaflow.recipe.siesta.mesh-evidence-evaluation": 1,
+    "siestaflow.recipe.siesta.observation-production": 1,
+    "siestaflow.recipe.siesta.optical-spectrum": 1,
+    "siestaflow.recipe.siesta.structural-relaxation": 1,
+    "siestaflow.relaxed-structure": 1,
+    "siestaflow.scientific-approval": 1,
+    "siestaflow.siesta-band-structure-fdf": 1,
+    "siestaflow.siesta-density-matrix": 3,
+    "siestaflow.siesta-dos-pdos-fdf": 2,
+    "siestaflow.siesta-fdf": 1,
+    "siestaflow.siesta-force-stress": 1,
+    "siestaflow.siesta-ground-state-fdf": 1,
+    "siestaflow.siesta-optical-spectrum-fdf": 1,
+    "siestaflow.siesta-relaxation-fdf": 2,
+    "siestaflow.siesta-stdout": 1,
+    "siestaflow.siesta.band-structure": 1,
+    "siestaflow.siesta.converge-then-relax": 1,
+    "siestaflow.siesta.dos-pdos": 1,
+    "siestaflow.siesta.ground-state-to-dos-pdos": 1,
+    "siestaflow.siesta.ground-state-to-electronic-analysis": 1,
+    "siestaflow.siesta.kgrid-evidence-evaluator": 1,
+    "siestaflow.siesta.mesh-evidence-evaluator": 1,
+    "siestaflow.siesta.observation-producer": 1,
+    "siestaflow.siesta.optical-spectrum": 1,
+    "siestaflow.siesta.structural-relaxation": 1,
+    "siestaflow.total-density-of-states": 3
+  },
+  "src/qraft/workflow_preflight.py": {
+    "siestaflow.workflow-preflight": 2
+  },
+  "src/qraft/workflows/diagnostics.py": {
+    "siestaflow.workflow-compiler": 1,
+    "siestaflow.workflow-definition": 1,
+    "siestaflow.workflow.artifacts": 1,
+    "siestaflow.workflow.compiler": 1,
+    "siestaflow.workflow.graph": 1,
+    "siestaflow.workflow.resources": 1,
+    "siestaflow.workflow.schema": 1
+  }
+}
