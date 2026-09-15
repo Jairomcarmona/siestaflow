@@ -32,6 +32,7 @@ jobs:
       - name: Check source and dependencies
         run: |
           git diff --check
+          python tools/check_legacy_namespace.py
           python -m compileall -q src
           python -m pip check
       - name: Test including clean installation and recovery

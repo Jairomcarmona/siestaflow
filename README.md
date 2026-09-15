@@ -1,5 +1,15 @@
 # QRAFT
 
+The Python package, import and command are named `qraft`. The GitHub repository
+currently uses the historical name `siestaflow`; the installation URLs below
+are valid for that repository. Internal `siestaflow.*` identifiers are retained
+for compatibility with existing artifacts. See the
+[naming and compatibility policy](docs/compatibility/naming.md).
+
+Citation metadata is available in [CITATION.cff](CITATION.cff). When reporting
+research use, also record the exact release or commit executed. Contributions
+follow the [community code of conduct](CODE_OF_CONDUCT.md).
+
 QRAFT is a declarative, evidence-oriented orchestrator for scientific HPC
 campaigns. It turns an input and external execution configuration into a
 validated plan, executes through registered launchers, and preserves immutable

@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — safe publication preparation
+
+- Document the QRAFT product name and retained `siestaflow.*` compatibility
+  namespace, with a source inventory gate to detect accidental replacements.
+- Add a backup, naming and release checklist, keeping existing tags and
+  historical evidence intact.
+- Add software citation metadata from the existing maintainer metadata and
+  a community code of conduct.
+- Correct the contributor environment commands to activate the virtual
+  environment and install declared development dependencies.
+
 ## Unreleased — audit corrections
 
 - Track active processes by task and attempt in all launchers so concurrent

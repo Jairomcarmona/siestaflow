@@ -1,0 +1,13 @@
+cff-version: 1.2.0
+message: "If you use QRAFT in your research, cite this software and record the exact release or commit used."
+type: software
+title: "QRAFT: Declarative, evidence-oriented orchestration for scientific HPC campaigns"
+authors:
+  - given-names: Jairo
+    family-names: Carmona
+repository-code: "https://github.com/Jairomcarmona/siestaflow"
+license: BSD-3-Clause
+abstract: >-
+  QRAFT is a declarative orchestrator for scientific HPC campaigns. It validates
+  execution plans, executes through registered launchers, and preserves
+  attempts and execution evidence. SIESTA is the currently implemented backend.

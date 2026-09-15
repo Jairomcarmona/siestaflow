@@ -11,12 +11,12 @@ Use Python 3.11 or newer in an isolated environment:
 
 ```bash
 python -m venv .venv
-python -m pip install -e .
+source .venv/bin/activate
+python -m pip install -e '.[dev]'
 ```
 
-Install pytest and build tooling in the development environment when they are
-not already available. General YAML authoring additionally requires PyYAML;
-canonical JSON and JSON-compatible YAML do not.
+The development extra installs pytest and build tooling. PyYAML is a declared
+runtime dependency and is installed with QRAFT.
 
 ## Work on a change
 
@@ -39,6 +39,7 @@ The default gate is:
 
 ```bash
 git diff --check
+python tools/check_legacy_namespace.py
 python -m compileall -q src
 python -m pytest -q
 ```
@@ -59,6 +60,9 @@ inspects a clean wheel/sdist. Record missing external context as
   plan.
 
 Core-contract changes require contract tests and explicit compatibility.
+Read the [naming policy](docs/compatibility/naming.md) before changing legacy
+identifiers and the [safe publication guide](docs/developer/SAFE_PUBLICATION.md)
+before renaming the repository or creating a release.
 Modules in `src/qraft/contracts/` must not import engines, launchers,
 clusters, subprocesses, storage implementations or reference projects. Plugin
 registration is explicit during composition; import-time registry mutation is
