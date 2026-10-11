@@ -2,6 +2,10 @@
 
 ## Unreleased — public integration API
 
+- Add explicit fail-closed controller authority boundaries, durable native event
+  replay identities and read-only resume planning from verified signed scheduler
+  observations. Legacy scientific locks, digests and tolerances are unchanged.
+
 - Expose `qraft.api` for typed compose/compile/prepare/inspect and explicit
   capability registration without changing scientific algorithms or tolerances.
 - Compile mappings without temporary definition files, preserving original-byte

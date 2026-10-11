@@ -28,6 +28,9 @@ jobs:
         shell: python
         run: |
           import os, pathlib, subprocess, sys, tempfile
-          python = pathlib.Path('.venv/Scripts/python.exe' if os.name == 'nt' else '.venv/bin/python').resolve()
+          python = pathlib.Path('.venv/Scripts/python.exe' if os.name == 'nt' else '.venv/bin/python').absolute()
+          fixture = pathlib.Path('tools/check_installed_integration.py').resolve()
           with tempfile.TemporaryDirectory() as temporary:
-              subprocess.run([str(python), '-I', '-c', 'import qraft.api as api; import sys; from pathlib import Path; assert api.API_VERSION == "1.0"; assert Path(api.__file__).is_relative_to(Path(sys.prefix)); print(api.__all__)'], cwd=temporary, check=True)
+              copied = pathlib.Path(temporary) / fixture.name
+              copied.write_bytes(fixture.read_bytes())
+              subprocess.run([str(python), '-I', str(copied)], cwd=temporary, check=True)
