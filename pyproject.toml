@@ -40,6 +40,9 @@ Repository = "https://github.com/Jairomcarmona/siestaflow"
 Documentation = "https://github.com/Jairomcarmona/siestaflow/tree/main/docs"
 Issues = "https://github.com/Jairomcarmona/siestaflow/issues"
 
+[dependency-groups]
+ci = ["setuptools==80.9.0", "wheel==0.45.1"]
+
 [project.scripts]
 qraft = "qraft.cli:main"
 

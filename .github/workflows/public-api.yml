@@ -1,0 +1,33 @@
+name: Public API consumer Windows and Linux
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  consumer:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e
+        with:
+          version: '0.11.14'
+          enable-cache: false
+      - run: uv sync --locked --extra dev --group ci --python 3.12.10
+      - run: uv run --locked --extra dev --group ci python tools/check_legacy_namespace.py
+      - run: uv run --locked --extra dev --group ci python -m build --no-isolation
+      - run: uv pip install --reinstall --no-deps --no-index --find-links dist qraft-hpc
+      - run: uv run --no-sync python -m pytest -q tests/consumer tests/workflows tests/contracts
+      - name: Installed facade outside checkout without PYTHONPATH
+        shell: python
+        run: |
+          import os, pathlib, subprocess, sys, tempfile
+          python = pathlib.Path('.venv/Scripts/python.exe' if os.name == 'nt' else '.venv/bin/python').absolute()
+          with tempfile.TemporaryDirectory() as temporary:
+              subprocess.run([str(python), '-I', '-c', 'import qraft.api as api; import sys; from pathlib import Path; assert api.API_VERSION == "1.0"; assert Path(api.__file__).is_relative_to(Path(sys.prefix)); print(api.__all__)'], cwd=temporary, check=True)

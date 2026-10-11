@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — public integration API
+
+- Expose `qraft.api` for typed compose/compile/prepare/inspect and explicit
+  capability registration without changing scientific algorithms or tolerances.
+- Compile mappings without temporary definition files, preserving original-byte
+  native digests when supplied and verified.
+- Bind specialized prepared capabilities only against a verified immutable
+  workflow lock, with consumer fixtures and installed-wheel Windows/Linux CI.
+
 ## Unreleased — QRAFT HPC distribution name
 
 - Rename the Python distribution to `qraft-hpc` to distinguish it from the

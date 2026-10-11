@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from typing import Any, Mapping
 
 from .diagnostics import compilation_result
 from .models import WorkflowCompilation
@@ -34,6 +35,18 @@ class WorkflowCompiler:
         )
         workflow_id = parsed.workflow_id if parsed is not None else None
         return compilation_result(source, workflow_id, findings, compiled)
+
+    def compile_mapping(
+        self, definition: Mapping[str, Any], *, source_root: Path,
+        source_bytes: bytes | None = None,
+    ) -> WorkflowCompilation:
+        """Compile in memory, preserving native byte identity when bytes are supplied."""
+        source = source_root.resolve() / ".qraft-definition.json"
+        parsed, findings = self.parser.parse_mapping(
+            definition, source=source, source_bytes=source_bytes,
+        )
+        compiled = self.resolver.resolve(parsed, findings) if parsed is not None else None
+        return compilation_result(source, parsed.workflow_id if parsed else None, findings, compiled)
 
 
 def write_workflow_lock(
