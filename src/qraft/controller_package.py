@@ -64,6 +64,8 @@ class ControllerPackageBuilder:
         "src/qraft/execution/canonical_controller.py",
         "src/qraft/execution/capability_plugins.py",
         "src/qraft/execution/capability_runtime.py",
+        "src/qraft/execution/authority.py",
+        "src/qraft/execution/event_stream.py",
         "src/qraft/execution/command_capability.py",
         "src/qraft/execution/legacy_translation.py",
         "src/qraft/execution/resource_coordinator.py",

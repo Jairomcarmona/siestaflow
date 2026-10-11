@@ -15,6 +15,9 @@ from .execution.capability_runtime import CompiledWorkflowRuntime, WorkflowRunti
 from .execution.resource_coordinator import RuntimeAllocation
 from .execution.slurm_environment import ShutdownRequest
 from .siesta_validation import SiestaContextualValidator
+from .execution.authority import AuthorityBoundary, AuthorityCheck, AuthorityLost
+from .execution.event_stream import NativeEventStream, NativeEventPage, NativeCursorError
+from .scheduler_evidence import SchedulerJobIdentity, TerminalSchedulerEvidence, TerminalEvidenceVerifier
 
 API_VERSION = "1.0"
 __all__ = [
@@ -23,5 +26,7 @@ __all__ = [
     "write_workflow_lock", "load_run_lock", "load_workflow_lock", "RunPreparationRequest",
     "RunPreparationResult", "RunPreparer", "PreparedRunInspection", "ResumePlan", "RunInspector",
     "CanonicalController", "CompiledWorkflowRuntime", "WorkflowRuntimeResult", "RuntimeAllocation",
-    "ShutdownRequest", "SiestaContextualValidator",
+    "ShutdownRequest", "SiestaContextualValidator", "AuthorityBoundary", "AuthorityCheck", "AuthorityLost",
+    "NativeEventStream", "NativeEventPage", "NativeCursorError",
+    "SchedulerJobIdentity", "TerminalSchedulerEvidence", "TerminalEvidenceVerifier",
 ]

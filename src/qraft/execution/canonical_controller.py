@@ -22,6 +22,7 @@ from .allocation_controller_compat import (
 )
 from .capability_plugins import register_generic_command, register_siesta_engine
 from .capability_runtime import CompiledWorkflowRuntime, WorkflowRuntimeResult
+from .authority import AuthorityCheck
 from .direct_launcher import DirectLauncher
 from .legacy_translation import CanonicalLegacyPlan, translate_controller_config
 from .placement_validation import probe_launcher_placement
@@ -45,6 +46,8 @@ class CanonicalController:
         runtime_evidence_probe: RuntimeEvidenceProbe = observe_runtime_evidence,
         register_capabilities: Callable[[CapabilityRegistry], None] | None = None,
         capability_bindings: Mapping[str, str] | None = None,
+        authority_check: AuthorityCheck | None = None,
+        authority_generation: str | None = None,
     ) -> None:
         self.root = root.resolve()
         self.config = config
@@ -54,6 +57,8 @@ class CanonicalController:
         self.runtime_evidence_probe = runtime_evidence_probe
         self.register_capabilities = register_capabilities
         self.capability_bindings = dict(capability_bindings or {})
+        self.authority_check = authority_check
+        self.authority_generation = authority_generation
         self.launcher_adapter = launcher_registry.require(config.launcher_kind)
         self.launcher = launcher or self.launcher_adapter.create(
             command=config.srun_command,
@@ -78,6 +83,8 @@ class CanonicalController:
         runtime_evidence_probe: RuntimeEvidenceProbe = observe_runtime_evidence,
         register_capabilities: Callable[[CapabilityRegistry], None] | None = None,
         capability_bindings: Mapping[str, str] | None = None,
+        authority_check: AuthorityCheck | None = None,
+        authority_generation: str | None = None,
     ) -> "CanonicalController":
         campaign_path = campaign_path.resolve()
         selected_root = (root or campaign_path.parent).resolve()
@@ -97,6 +104,8 @@ class CanonicalController:
             runtime_evidence_probe=runtime_evidence_probe,
             register_capabilities=register_capabilities,
             capability_bindings=capability_bindings,
+            authority_check=authority_check,
+            authority_generation=authority_generation,
         )
 
     def _validate_runtime_compatibility(self) -> None:
@@ -172,15 +181,21 @@ class CanonicalController:
         self.plan = translate_controller_config(self.config, root=self.root)
         if self.capability_bindings:
             from ..run_inspection import RunInspector
-            from ..workflows.lock_loader import load_workflow_lock
+            from ..workflows.lock_loader import load_workflow_lock, load_run_lock
             RunInspector().inspect(self.root)
-            _, locked = load_workflow_lock(self.root / "workflow.lock.json")
+            workflow_envelope, locked = load_workflow_lock(self.root / "workflow.lock.json")
+            run_envelope, _ = load_run_lock(self.root / "run.lock.json")
             declared = {task.task_id: task.capability_id for task in locked.tasks}
             if any(declared.get(task_id) != capability_id
                    for task_id, capability_id in self.capability_bindings.items()):
                 raise ValueError("capability binding disagrees with verified workflow lock")
             self.plan = replace(self.plan, workflow=replace(
-                self.plan.workflow, tasks=tuple(
+                self.plan.workflow,
+                metadata={**self.plan.workflow.metadata, 'qraft.native_contract_bindings': {
+                    'workflow_lock_sha256': workflow_envelope.content_sha256,
+                    'run_lock_sha256': run_envelope.content_sha256,
+                }},
+                tasks=tuple(
                     replace(task, capability_id=self.capability_bindings.get(task.task_id, task.capability_id))
                     for task in self.plan.workflow.tasks
                 ),
@@ -212,11 +227,14 @@ class CanonicalController:
             allocation=self._allocation(),
             shutdown=self.shutdown,
             poll_interval_seconds=self.poll_interval_seconds,
+            authority_check=self.authority_check,
+            authority_generation=self.authority_generation,
         )
         handlers = SignalHandlers(self.shutdown) if install_signal_handlers else nullcontext()
         with handlers:
             self.result = self.runtime.run()
         status = ExecutionStatus(self.result.status)
+        self.runtime.check_authority("publish_summary")
         RealFileSystem().atomic_write_json(
             self.summary_path,
             {

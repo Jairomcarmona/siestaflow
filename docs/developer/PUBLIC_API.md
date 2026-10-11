@@ -83,6 +83,67 @@ The Windows/Linux consumer gate builds and tests an installed wheel outside the
 checkout with isolated Python. Existing complete Linux 3.11–3.13 regressions
 remain separate; this Windows gate does not claim HPC acceptance.
 
+## Runtime boundaries (U-Q7, U-Q4, U-Q5)
+
+`CompiledWorkflowRuntime` and `CanonicalController.from_file` accept
+`authority_check: Callable[[AuthorityBoundary], bool]` and an explicit positive
+decimal-string `authority_generation`. A trusted caller verifies ownership using
+the run fingerprint and generation. Exactly `True` permits a boundary; false,
+non-boolean answers or exceptions latch `AuthorityLost`, stop new launches and
+request termination of active launchers. Checks precede attempt reservation,
+launch, state/journal/event publication, immutable attempt publication and final
+controller summary. No canonical publication occurs after denial. Adapter or
+launcher writes outside this API are the caller's responsibility.
+Fenced native events and attempt manifests record the decimal-string generation;
+the generation does not alter scientific identity or native lock digests.
+
+The callback is a **boundary hook, not an atomic multi-process lease**. Remote
+launch and artifact publication must enforce the same token to close the
+check/use race. Without a callback the original conservative single-controller
+policy applies. No takeover or multi-worker safety is advertised by this change.
+
+`NativeEventStream` publishes additive `stream_id`, `sequence` (starting at 1)
+and `event_id` fields in the existing native JSONL. The UUID and high-water mark
+are persisted in the adjacent `.stream.json`; sequence and IDs survive runtime
+restart and replay. Read pages using `read(after=cursor, limit=...)`; cursors are
+opaque and scoped to that native stream. Retain JSONL and metadata together.
+There is no automatic rotation. Truncation, deletion, changed identities, partial
+tails and foreign writers fail closed with diagnostics; do not repair in place.
+Legacy complete lines receive stable derived replay identities without rewriting
+their original bytes. A missing stream header has no stable replay and requires
+platform snapshot/reconciliation, rather than an invented cursor. These native
+IDs remain distinct from platform EventRecord IDs and cursors.
+New native runtime state journals/snapshots retain `native_event_stream_id` as an
+independent reference; losing both event files after initialization cannot create
+a replacement stream or rewind existing cursors. Old pre-feature runtime state
+with no stable ID can adopt complete legacy lines once, preserving their bytes.
+
+`RunInspector.resume(..., terminal_evidence=TerminalSchedulerEvidence(...),
+verify_terminal_evidence=verifier, expected_job=SchedulerJobIdentity(...))` is a
+read-only verified resubmission plan. The receipt must match native run ID, both
+lock digests and the last observed allocation, including cluster/user from the
+trusted expected identity. It contains terminal `sacct` state, explicit absence
+of a live/requeued allocation, timezone-aware observation/expiry, signer ID and
+signature. The verifier validates **the exact `signed_bytes()`** and signature
+against trusted keys; secrets and keys never enter engine state. Current time
+must be in the observation validity interval. Unknown jobs, mismatched scope,
+missing verifier, failure or expiry cannot permit resume. The synthetic consumer
+fixture verifies a real HMAC; it is not cluster evidence or a signing service.
+
+The legacy CLI flag `--previous-job-terminal` is still a human assertion for
+compatibility and is unsuitable for platform reconciliation. The platform must
+use the typed verified path, never trust the flag. Planning never performs
+`sbatch` or proves scientific success. Collection/signing of live scheduler
+evidence and production generation enforcement remain deployment qualifications.
+
+When specialized `capability_bindings` are active, effective workflow metadata
+references the **verified** original workflow/run lock content digests under
+`qraft.native_contract_bindings`. These references enter the runtime fingerprint,
+so a changed native contract or task policy cannot silently reuse an old attempt
+with unchanged translated capability ID. No original lock/settings are rewritten
+or recanonicalized by this binding; the legacy path without bindings preserves
+its previous fingerprint semantics.
+
 For package version 0.2, only names in `qraft.__all__` are intentional public
 Python API: application/configuration, ScientificIdentity, ExecutionSpec,
 ExecutionProfile/ProfileStore, OutputModel, engine/launcher/scheduler adapter
