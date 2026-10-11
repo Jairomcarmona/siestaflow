@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -82,6 +83,37 @@ class WorkflowDefinitionParser:
                 )
             )
             return None, findings
+
+        return self._parse_data(data, source=source, raw_bytes=raw_bytes)
+
+    def parse_mapping(
+        self, data: Mapping[str, Any], *, source: Path, source_bytes: bytes | None = None,
+    ) -> tuple[ParsedWorkflow | None, list[ValidationFinding]]:
+        """Parse without creating a file; source supplies artifact resolution context."""
+        findings: list[ValidationFinding] = []
+        if not isinstance(data, Mapping):
+            raise TypeError("workflow definition must be a mapping")
+        normalized = canonical_primitive(dict(data))
+        if source_bytes is None:
+            raw_bytes = json.dumps(normalized, sort_keys=True, separators=(",", ":"),
+                                   ensure_ascii=False, allow_nan=False).encode("utf-8")
+        else:
+            import yaml
+            if not isinstance(source_bytes, bytes):
+                raise TypeError("source_bytes must be bytes")
+            try:
+                supplied = json.loads(source_bytes)
+            except (ValueError, UnicodeDecodeError):
+                supplied = yaml.safe_load(source_bytes)
+            if canonical_primitive(supplied) != normalized:
+                raise ValueError("source_bytes do not represent the supplied definition")
+            raw_bytes = source_bytes
+
+        return self._parse_data(data, source=source, raw_bytes=raw_bytes)
+
+    def _parse_data(self, data: Mapping[str, Any], *, source: Path, raw_bytes: bytes
+                    ) -> tuple[ParsedWorkflow | None, list[ValidationFinding]]:
+        findings: list[ValidationFinding] = []
 
         self._unknown_fields(data, TOP_LEVEL_FIELDS, "workflow", findings)
         schema = str(data.get("schema_version", "")).strip()

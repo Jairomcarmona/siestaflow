@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import os
 from contextlib import nullcontext
+from dataclasses import replace
 from pathlib import Path
-from typing import Mapping
+from typing import Callable, Mapping
 
-from ..contracts import CapabilityRegistry
+from ..contracts import CapabilityRegistry, CapabilityKind, EXECUTION_REQUEST, EXECUTION_EVIDENCE
 from ..core import ExecutionSpec
 from ..filesystem import RealFileSystem
 from ..runtime_compatibility import INCOMPATIBLE, evaluate_runtime_compatibility
@@ -42,6 +43,8 @@ class CanonicalController:
         shutdown: ShutdownRequest | None = None,
         poll_interval_seconds: float = 0.05,
         runtime_evidence_probe: RuntimeEvidenceProbe = observe_runtime_evidence,
+        register_capabilities: Callable[[CapabilityRegistry], None] | None = None,
+        capability_bindings: Mapping[str, str] | None = None,
     ) -> None:
         self.root = root.resolve()
         self.config = config
@@ -49,6 +52,8 @@ class CanonicalController:
         self.shutdown = shutdown or ShutdownRequest()
         self.poll_interval_seconds = max(0.001, float(poll_interval_seconds))
         self.runtime_evidence_probe = runtime_evidence_probe
+        self.register_capabilities = register_capabilities
+        self.capability_bindings = dict(capability_bindings or {})
         self.launcher_adapter = launcher_registry.require(config.launcher_kind)
         self.launcher = launcher or self.launcher_adapter.create(
             command=config.srun_command,
@@ -71,6 +76,8 @@ class CanonicalController:
         shutdown: ShutdownRequest | None = None,
         poll_interval_seconds: float = 0.05,
         runtime_evidence_probe: RuntimeEvidenceProbe = observe_runtime_evidence,
+        register_capabilities: Callable[[CapabilityRegistry], None] | None = None,
+        capability_bindings: Mapping[str, str] | None = None,
     ) -> "CanonicalController":
         campaign_path = campaign_path.resolve()
         selected_root = (root or campaign_path.parent).resolve()
@@ -88,6 +95,8 @@ class CanonicalController:
             shutdown=shutdown,
             poll_interval_seconds=poll_interval_seconds,
             runtime_evidence_probe=runtime_evidence_probe,
+            register_capabilities=register_capabilities,
+            capability_bindings=capability_bindings,
         )
 
     def _validate_runtime_compatibility(self) -> None:
@@ -161,11 +170,33 @@ class CanonicalController:
     def run(self, *, install_signal_handlers: bool = True) -> ExecutionStatus:
         self._validate_runtime_compatibility()
         self.plan = translate_controller_config(self.config, root=self.root)
-        self._validate_runtime_placement()
+        if self.capability_bindings:
+            from ..run_inspection import RunInspector
+            from ..workflows.lock_loader import load_workflow_lock
+            RunInspector().inspect(self.root)
+            _, locked = load_workflow_lock(self.root / "workflow.lock.json")
+            declared = {task.task_id: task.capability_id for task in locked.tasks}
+            if any(declared.get(task_id) != capability_id
+                   for task_id, capability_id in self.capability_bindings.items()):
+                raise ValueError("capability binding disagrees with verified workflow lock")
+            self.plan = replace(self.plan, workflow=replace(
+                self.plan.workflow, tasks=tuple(
+                    replace(task, capability_id=self.capability_bindings.get(task.task_id, task.capability_id))
+                    for task in self.plan.workflow.tasks
+                ),
+            ))
         registry = CapabilityRegistry()
         register_siesta_engine(registry)
         register_generic_command(registry)
+        if self.register_capabilities is not None:
+            self.register_capabilities(registry)
         registry.freeze()
+        for capability_id in self.capability_bindings.values():
+            registered = registry.resolve(capability_id, required_inputs=(EXECUTION_REQUEST,),
+                                          required_outputs=(EXECUTION_EVIDENCE,))
+            if registered.descriptor.kind not in {CapabilityKind.ENGINE, CapabilityKind.EXECUTABLE}:
+                raise ValueError("prepared task requires an executable capability")
+        self._validate_runtime_placement()
         launchers: dict[str, StepLauncher] = {
             self.config.launcher_kind: self.launcher,
             "direct": DirectLauncher(),

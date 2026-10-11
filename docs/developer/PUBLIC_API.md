@@ -1,5 +1,49 @@
 # Public API and extension points
 
+## Integration API 1.0 (Ola 1)
+
+`qraft.api.__all__` is additionally public, with `API_VERSION = "1.0"`.
+It exports the typed compose → compile → prepare → inspect route, its request,
+result and policy types, lock readers/writer, contextual validator, canonical
+controller and compiled runtime. The existing `qraft.__all__` is unchanged.
+Changes to this surface follow the package 0.x compatibility policy; API version
+and native contract versions are independent. No CLI JSON surface is promoted.
+
+`WorkflowCompiler.compile_mapping(definition, source_root=..., source_bytes=None)`
+uses `source_root` to resolve external artifacts without creating a definition
+file. Native definition identity remains the SHA-256 of **document bytes**.
+Without `source_bytes` it hashes compact, sorted UTF-8 JSON; with verified original
+JSON/YAML bytes it returns the exact same lock as `compile(path)`. Different
+whitespace or serialization still means a different native definition digest.
+Supplied bytes disagreeing with the mapping are rejected. Legacy digests and
+`compile(path)` are unchanged.
+
+`RunPreparer(repository_root, task_adapters={capability_id: callable})` explicitly
+registers preparation adapters. The callable receives `task` and keyword arguments
+`by_task`, `artifacts`, `resolved_sources`, `profile`, `protected`, and returns one
+controller task mapping. It must protect every scientific input in `protected`
+(relative path → source Path); package validation and hashes remain mandatory.
+Built-in adapters cannot be replaced. This does not execute or authorize tasks.
+
+`CanonicalController.from_file(..., register_capabilities=callback,
+capability_bindings={task_id: capability_id})` invokes the callback on its fresh
+registry after built-ins and before freezing. Bindings require a verified prepared
+run package and must equal the capability already fixed in its native workflow
+lock. An arbitrary runtime override is forbidden. Effective capability IDs enter
+the compiled workflow payload and runtime fingerprint before any attempts. The
+registry rejects duplicate IDs, incomplete implementations and incompatible
+contracts. Installed external capability dependencies are the deployment's
+responsibility; they are not copied or dynamically discovered in QRAFT. The
+legacy worker continues to use its existing built-ins; HF-1 orchestration and HPC
+qualification remain pending, rather than calling Hubbard through a generic
+command or pretending to establish its scientific outcome.
+
+Consumer fixtures: `tests/consumer/`; reproducible CPython 3.12.10/uv 0.11.14
+environment: `uv sync --locked --extra dev --group ci --python 3.12.10`.
+The Windows/Linux consumer gate builds and tests an installed wheel outside the
+checkout with isolated Python. Existing complete Linux 3.11–3.13 regressions
+remain separate; this Windows gate does not claim HPC acceptance.
+
 For package version 0.2, only names in `qraft.__all__` are intentional public
 Python API: application/configuration, ScientificIdentity, ExecutionSpec,
 ExecutionProfile/ProfileStore, OutputModel, engine/launcher/scheduler adapter
