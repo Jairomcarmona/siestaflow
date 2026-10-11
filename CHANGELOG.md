@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — integration metadata
+
+- Validate opt-in `qraft.integration@1.0` capability metadata for modes, targets,
+  cancel/resume and test references while preserving legacy descriptor shapes.
+- Explicitly classify CLI JSON as diagnostic and non-contractual; typed
+  integration API and native contracts remain the platform boundary.
+
 ## Unreleased — public integration API
 
 - Expose `qraft.api` for typed compose/compile/prepare/inspect and explicit

@@ -89,6 +89,8 @@ from .versioning import (
 )
 
 __all__ = [
+    "CapabilitySupport", "CapabilityTarget", "CancellationSupport", "ResumeSupport",
+    "SUPPORT_METADATA_KEY", "capability_support",
     "ARTIFACT_REFERENCE",
     "CORE_CONTRACTS",
     "CORE_CONTRACT_VERSION",
@@ -157,3 +159,8 @@ __all__ = [
     "require_namespaced_identifier",
     "validate_extensions",
 ]
+
+from .support import (
+    CapabilitySupport, CapabilityTarget, CancellationSupport, ResumeSupport,
+    SUPPORT_METADATA_KEY, capability_support,
+)
