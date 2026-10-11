@@ -19,8 +19,48 @@ from qraft.execution.controller_files import read_controller_json
 from qraft.execution.controller_launcher import ControllerLauncher
 from qraft.execution.controller_processes import PidfdSignals, process_identity
 from qraft.execution.controller_reservation import ControllerReservation
+from qraft.execution.controller_state import ControllerStateError, previous_controller_owner
 from qraft.execution.resource_coordinator import RuntimeAllocation
 from qraft.execution.srun_launcher import StepLaunchSpec
+
+
+def assert_live_owner_blocked(root, state):
+    """Use a real supervisor birth identity, without treating PID absence as closure."""
+    owner = read_controller_json(state / "owner.json")
+    identity = process_identity(owner["supervisor_pid"])
+    assert identity.boot_id == owner["boot_id"]
+    assert identity.start_time_ticks == owner["supervisor_start_time_ticks"]
+    try:
+        previous_controller_owner(root, state, current_boot_id=identity.boot_id,
+                                  current_host=owner["host"])
+    except ControllerStateError as exc:
+        assert str(exc) == "CONTROLLER_PREVIOUS_OWNER_ALIVE", str(exc)
+    else:
+        raise AssertionError("a live supervisor authorized a new owner")
+
+
+def assert_closed_owner_and_tamper_veto(root, state):
+    """Closure permits the sealed state only; changes still require a veto."""
+    owner = read_controller_json(state / "owner.json")
+    previous = previous_controller_owner(root, state, current_boot_id=owner["boot_id"],
+                                         current_host=owner["host"])
+    assert previous is not None and previous["attempt_id"] == owner["attempt_id"]
+    assert previous["closure"] == "CLOSED"
+    marker = state / "synthetic-state-tamper.json"
+    assert not marker.exists()
+    try:
+        marker.write_text('{}\n', encoding="utf-8")
+        try:
+            previous_controller_owner(root, state, current_boot_id=owner["boot_id"],
+                                      current_host=owner["host"])
+        except ControllerStateError as exc:
+            assert str(exc) == "CONTROLLER_STATE_TAMPERED", str(exc)
+        else:
+            raise AssertionError("CLOSED authorized altered native state")
+    finally:
+        marker.unlink()
+    assert previous_controller_owner(root, state, current_boot_id=owner["boot_id"],
+                                     current_host=owner["host"]) == previous
 
 
 def run_fixture(root, mode):
@@ -72,7 +112,10 @@ def run_fixture(root, mode):
                     raise AssertionError("synthetic descendants did not start: " + (attempt / "stderr.txt").read_text())
                 time.sleep(.01)
             identities = [process_identity(int(path.read_text())) for path in paths]
-            assert launcher.terminate_all() == ("attempt-0001",)
+            try:
+                assert_live_owner_blocked(root, root / descriptor["paths"]["state_dir"])
+            finally:
+                assert launcher.terminate_all() == ("attempt-0001",)
         outcome = future.result(timeout=15)
     assert launcher.closure_proven("fixture", "attempt-0001"), (attempt / "stderr.txt").read_text()
     closure = read_controller_json(attempt / ".qraft" / "controller-closure.json")
@@ -88,7 +131,10 @@ def run_fixture(root, mode):
             assert current != identity, "owned escaped descendant survived closure"
     else:
         assert outcome.exit_code == (75 if mode == "refuse" else 0)
-    return {"mode": mode, "closure": closure["state"], "exit_code": outcome.exit_code}
+    assert_closed_owner_and_tamper_veto(root, root / descriptor["paths"]["state_dir"])
+    return {"mode": mode, "closure": closure["state"], "exit_code": outcome.exit_code,
+            "live_owner_rejected": mode == "escaped", "closed_owner_claimable": True,
+            "state_tamper_rejected": True}
 
 
 def main():

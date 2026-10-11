@@ -93,6 +93,16 @@ file therefore cannot serve as closure evidence after a failed handshake.
 Windows/Python3.12.10: 21 launcher/state cases passed; the legacy namespace
 guard still preserves all 16 files. This does not implement coordinator release.
 
+The installed supervisor consumer also checks actual live ownership before
+stopping its escaping synthetic descendants: the supervisor birth identity
+matches owner.json and a claim is rejected as CONTROLLER_PREVIOUS_OWNER_ALIVE.
+After native CLOSED/ECHILD, the sealed state can be inspected as a previous
+attempt; adding a file is rejected as CONTROLLER_STATE_TAMPERED, and restoring
+the same bytes restores the same state identity. All three modes pass under
+WSL CPython3.12.10 with the wheel built at3148848; Windows retains the explicit
+POSIX rejection. Only the consumer and this status note change. This is not a
+runtime-crash/retry, retained-lease or complete installed acceptance test6.
+
 Controller campaign2.1 preparation, compiled runtime reservation-map integration,
 resource admission/release and finalization vetos are **not implemented or enabled**.
 U-H7 integration, engine pinning and real HF-1 qualification remain pending.
