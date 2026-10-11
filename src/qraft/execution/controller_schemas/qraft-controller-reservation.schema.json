@@ -1,0 +1,335 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dftlab.invalid/contracts/schemas/qraft-controller-reservation.schema.json",
+  "title": "QraftControllerReservation",
+  "description": "Descriptor qraft.controller-reservation@1.0 que QRAFT escribe antes de lanzar un controlador (ADR-017 §4 y Adenda 1). Contrato nativo de QRAFT; la plataforma lo valida al importar la evidencia. QRAFT empaqueta una copia idéntica de este schema.",
+  "type": "object",
+  "required": [
+    "contract",
+    "run_fingerprint",
+    "task_id",
+    "attempt_id",
+    "attempt_number",
+    "authority_generation",
+    "capability",
+    "allocation",
+    "reserved",
+    "containment",
+    "inner",
+    "deadline",
+    "paths",
+    "previous_attempt"
+  ],
+  "properties": {
+    "contract": {
+      "const": "qraft.controller-reservation@1.0"
+    },
+    "run_fingerprint": {
+      "$ref": "defs.schema.json#/$defs/sha256_hex"
+    },
+    "task_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "attempt_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "attempt_number": {
+      "$ref": "defs.schema.json#/$defs/safe_count"
+    },
+    "authority_generation": {
+      "anyOf": [
+        {
+          "$ref": "defs.schema.json#/$defs/big_int_string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "capability": {
+      "type": "object",
+      "required": [
+        "capability_id",
+        "version",
+        "plugin_version"
+      ],
+      "properties": {
+        "capability_id": {
+          "$ref": "defs.schema.json#/$defs/namespaced_id"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "plugin_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        }
+      },
+      "additionalProperties": false
+    },
+    "allocation": {
+      "type": "object",
+      "required": [
+        "scheduler",
+        "allocation_id"
+      ],
+      "properties": {
+        "scheduler": {
+          "enum": [
+            "slurm",
+            "local"
+          ]
+        },
+        "allocation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        }
+      },
+      "additionalProperties": false
+    },
+    "reserved": {
+      "type": "object",
+      "required": [
+        "hosts",
+        "nodes",
+        "runtime_cpus",
+        "min_cpus",
+        "scheduler_cpus_on_host"
+      ],
+      "properties": {
+        "hosts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "minItems": 1,
+          "maxItems": 1
+        },
+        "nodes": {
+          "const": 1,
+          "description": "Adenda 1 §A.2: v1 solo reserva el host donde corre el runtime."
+        },
+        "runtime_cpus": {
+          "$ref": "defs.schema.json#/$defs/safe_count",
+          "description": "CPU que el modelo de allocation de QRAFT atribuye a ese host (total_cpus/nodes del perfil). Es lo que el lease ocupa en exclusiva dentro de la allocation."
+        },
+        "min_cpus": {
+          "$ref": "defs.schema.json#/$defs/safe_count",
+          "description": "inner_processes_per_node × inner_cpus_per_process × max_concurrent_inner_launches; debe ser ≤ runtime_cpus."
+        },
+        "scheduler_cpus_on_host": {
+          "type": "object",
+          "required": [
+            "value",
+            "source"
+          ],
+          "properties": {
+            "value": {
+              "anyOf": [
+                {
+                  "$ref": "defs.schema.json#/$defs/safe_count"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "source": {
+              "enum": [
+                "SLURM_JOB_CPUS_PER_NODE",
+                "LOCAL_PROFILE_DECLARATION"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "description": "Observación de lo que el scheduler asignó en ese host; evidencia, no facturación. La facturación sale de AllocTRES observado por la plataforma."
+        }
+      },
+      "additionalProperties": false
+    },
+    "containment": {
+      "type": "object",
+      "required": [
+        "method",
+        "supervisor"
+      ],
+      "properties": {
+        "method": {
+          "enum": [
+            "SUBREAPER_PIDFD",
+            "CGROUP_V2_DELEGATED"
+          ]
+        },
+        "supervisor": {
+          "type": "object",
+          "required": [
+            "pid",
+            "start_time_ticks",
+            "boot_id"
+          ],
+          "properties": {
+            "pid": {
+              "$ref": "defs.schema.json#/$defs/safe_count"
+            },
+            "start_time_ticks": {
+              "$ref": "defs.schema.json#/$defs/big_int_string"
+            },
+            "boot_id": {
+              "type": "string",
+              "pattern": "^[0-9a-f-]{36}$"
+            }
+          },
+          "additionalProperties": false
+        },
+        "cgroup_path": {
+          "anyOf": [
+            {
+              "$ref": "defs.schema.json#/$defs/relative_path"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "inner": {
+      "type": "object",
+      "required": [
+        "launcher_kind",
+        "launcher_command",
+        "processes_per_node",
+        "cpus_per_process",
+        "max_concurrent",
+        "environment"
+      ],
+      "properties": {
+        "launcher_kind": {
+          "enum": [
+            "hydra",
+            "openmpi"
+          ]
+        },
+        "launcher_command": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^/",
+            "minLength": 2,
+            "maxLength": 4096
+          }
+        },
+        "processes_per_node": {
+          "$ref": "defs.schema.json#/$defs/safe_count"
+        },
+        "cpus_per_process": {
+          "const": 1
+        },
+        "max_concurrent": {
+          "$ref": "defs.schema.json#/$defs/safe_count"
+        },
+        "environment": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "deadline": {
+      "type": "object",
+      "required": [
+        "stop_launching_at",
+        "hard_stop_at"
+      ],
+      "properties": {
+        "stop_launching_at": {
+          "$ref": "defs.schema.json#/$defs/timestamp"
+        },
+        "hard_stop_at": {
+          "$ref": "defs.schema.json#/$defs/timestamp"
+        }
+      },
+      "additionalProperties": false
+    },
+    "paths": {
+      "type": "object",
+      "required": [
+        "state_dir",
+        "stop_request",
+        "inner_ledger",
+        "resume_verdict"
+      ],
+      "properties": {
+        "state_dir": {
+          "$ref": "defs.schema.json#/$defs/relative_path"
+        },
+        "stop_request": {
+          "$ref": "defs.schema.json#/$defs/relative_path"
+        },
+        "inner_ledger": {
+          "$ref": "defs.schema.json#/$defs/relative_path"
+        },
+        "resume_verdict": {
+          "$ref": "defs.schema.json#/$defs/relative_path"
+        }
+      },
+      "additionalProperties": false
+    },
+    "previous_attempt": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "required": [
+            "attempt_id",
+            "outcome",
+            "closure",
+            "state_manifest_sha256"
+          ],
+          "properties": {
+            "attempt_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            },
+            "outcome": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "closure": {
+              "enum": [
+                "CLOSED",
+                "OWNER_DEAD_BY_BOOT_CHANGE",
+                "OWNER_DEAD_BY_SCHEDULER_TERMINAL"
+              ]
+            },
+            "state_manifest_sha256": {
+              "$ref": "defs.schema.json#/$defs/sha256_hex"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  "additionalProperties": false
+}

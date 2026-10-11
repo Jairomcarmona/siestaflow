@@ -8,7 +8,7 @@ from qraft.api import ControllerReservation, RuntimeAllocation
 
 
 def reservation(**changes):
-    values = dict(nodes=1, cpus=8, inner_launcher="openmpi",
+    values = dict(nodes=1, inner_launcher="openmpi",
                   inner_processes_per_node=4, inner_cpus_per_process=1,
                   max_concurrent_inner_launches=1)
     return ControllerReservation.from_mapping(values | changes)
@@ -18,14 +18,14 @@ def test_value_is_immutable_and_roundtrips_without_adding_fields():
     value = reservation()
     assert ControllerReservation.from_mapping(value.to_mapping()) == value
     with pytest.raises(FrozenInstanceError):
-        value.cpus = 1
+        value.nodes = 2
     external = value.to_mapping()
-    external["cpus"] = 1
-    assert value.cpus == 8
+    external["nodes"] = 2
+    assert value.nodes == 1
 
 
 @pytest.mark.parametrize("field", [
-    "nodes", "cpus", "inner_processes_per_node", "inner_cpus_per_process",
+    "nodes", "inner_processes_per_node", "inner_cpus_per_process",
     "max_concurrent_inner_launches",
 ])
 @pytest.mark.parametrize("invalid", [True, False, 0, -1, 1.5, "1", None])
@@ -41,8 +41,7 @@ def test_only_declared_inner_launcher_kinds(invalid):
 
 
 @pytest.mark.parametrize("change", [
-    {"inner_cpus_per_process": 2}, {"inner_processes_per_node": 9},
-    {"max_concurrent_inner_launches": 3}, {"nodes": 3},
+    {"inner_cpus_per_process": 2}, {"nodes": 2},
 ])
 def test_invalid_per_node_inner_shape(change):
     with pytest.raises(ValueError):
@@ -68,18 +67,20 @@ def test_charged_allocation_cpus_are_separate_from_inner_ranks():
     assert request.task_id == "hf1"
 
 
-@pytest.mark.parametrize("cpus", [4, 12])
-def test_partial_or_physical_host_capacity_cannot_replace_allocation(cpus):
-    with pytest.raises(ValueError, match="whole allocation nodes"):
-        reservation(cpus=cpus).resource_request(
+@pytest.mark.parametrize("change", [
+    {"inner_processes_per_node": 9}, {"max_concurrent_inner_launches": 3},
+])
+def test_inner_shape_must_fit_allocation(change):
+    with pytest.raises(ValueError, match="CONTROLLER_ALLOCATION_INSUFFICIENT"):
+        reservation(**change).resource_request(
             "hf1", RuntimeAllocation(8, 1, hosts=("allocated-host",)),
         )
 
 
-def test_multi_node_shape_is_arithmetic_only_and_request_is_ungranted():
+def test_one_host_capacity_from_multi_node_allocation_not_billing_or_physical_cpus():
     allocation = RuntimeAllocation(24, 3, hosts=("a", "b", "c"))
-    request = reservation(nodes=2, cpus=16).resource_request("hf1", allocation)
-    assert (request.cpus, request.nodes, request.exclusive_hosts) == (16, 2, True)
+    request = reservation().resource_request("hf1", allocation)
+    assert (request.cpus, request.nodes, request.exclusive_hosts) == (8, 1, True)
 
 
 @pytest.mark.parametrize("allocation", [
@@ -90,8 +91,6 @@ def test_no_implicit_hosts_or_fractional_allocation_capacity(allocation):
         reservation().resource_request("hf1", allocation)
 
 
-def test_cannot_reserve_more_nodes_than_allocation():
-    with pytest.raises(ValueError, match="exceeds allocated nodes"):
-        reservation(nodes=2, cpus=16).resource_request(
-            "hf1", RuntimeAllocation(8, 1, hosts=("a",)),
-        )
+def test_cannot_declare_cpus_in_package():
+    with pytest.raises(ValueError, match="fields are missing or unknown"):
+        ControllerReservation.from_mapping(reservation().to_mapping() | {"cpus": 8})

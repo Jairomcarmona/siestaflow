@@ -1,0 +1,306 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dftlab.invalid/contracts/schemas/qraft-controller-resume-verdict.schema.json",
+  "title": "QraftControllerResumeVerdict",
+  "description": "Veredicto de reanudación qraft.controller-resume-verdict@1.0 que el controlador escribe en paths.resume_verdict antes de cualquier lanzamiento interno de un intento N > 1 (ADR-017 Adenda 2). Separa la continuidad técnica del checkpoint de la reutilización científica de respuestas: NOT_ESTABLISHED de check_resume es neutral, nunca una aceptación. Contrato nativo de QRAFT; QRAFT empaqueta una copia idéntica de este schema.",
+  "type": "object",
+  "required": [
+    "contract",
+    "task_id",
+    "attempt_id",
+    "previous_attempt_id",
+    "checkpoint_identity",
+    "decision",
+    "reason",
+    "check_resume",
+    "blocking",
+    "continuation",
+    "scientific_effect"
+  ],
+  "properties": {
+    "contract": {
+      "const": "qraft.controller-resume-verdict@1.0"
+    },
+    "task_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "attempt_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "previous_attempt_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "checkpoint_identity": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "campaign_digest del checkpoint nativo cargado, byte a byte; null si no se llegó a cargar."
+    },
+    "decision": {
+      "enum": [
+        "CONTINUE",
+        "REFUSE"
+      ],
+      "description": "REFUSE implica salida con el código reservado 75 y la tarea BLOCKED, sin reintento desde cero."
+    },
+    "reason": {
+      "enum": [
+        "TECHNICAL_CONTINUATION",
+        "RESUME_EVIDENCE_INVALID",
+        "RESUME_INPUTS_CHANGED",
+        "RESUME_STATUS_UNRECOGNIZED",
+        "CHECKPOINT_IDENTITY_MISMATCH",
+        "LEDGER_CHECKPOINT_INCONSISTENT",
+        "SETTLED_FAILURE_PRESENT",
+        "SETTLED_EVIDENCE_INVALID"
+      ]
+    },
+    "check_resume": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "description": "Copia literal de native_status, assessment y de estos campos del payload del ApiResult de check_resume.",
+          "required": [
+            "native_status",
+            "assessment",
+            "changed",
+            "reusable_response_ids",
+            "physical_equivalence"
+          ],
+          "properties": {
+            "native_status": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "description": "Vocabulario abierto de HubbardFlow, tal cual."
+            },
+            "assessment": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "changed": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              }
+            },
+            "reusable_response_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              }
+            },
+            "physical_equivalence": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "blocking": {
+      "type": "array",
+      "description": "Lo que provoca el rechazo: las entradas de changed o los node_id nativos implicados. Vacío en CONTINUE.",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4096
+      }
+    },
+    "continuation": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "required": [
+            "retained",
+            "recovered",
+            "launch_pending"
+          ],
+          "properties": {
+            "retained": {
+              "$ref": "#/$defs/node_ids",
+              "description": "Nodos lanzados con recibo VALIDATED que la revalidación nativa conserva; no se relanzan."
+            },
+            "recovered": {
+              "$ref": "#/$defs/node_ids",
+              "description": "Subconjunto de retained que recibe SETTLEMENT_RECOVERED en este intento."
+            },
+            "launch_pending": {
+              "$ref": "#/$defs/node_ids",
+              "description": "Nodos lanzables sin recibo (no iniciados o interrumpidos) que este intento puede lanzar."
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "scientific_effect": {
+      "const": "NONE",
+      "description": "Continuar un checkpoint no cambia ni promueve ningún estado científico; la ciencia sigue siendo la del análisis nativo."
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "decision": {
+            "const": "CONTINUE"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "reason": {
+            "const": "TECHNICAL_CONTINUATION"
+          },
+          "checkpoint_identity": {
+            "type": "string"
+          },
+          "check_resume": {
+            "type": "object",
+            "properties": {
+              "native_status": {
+                "const": "NOT_ESTABLISHED"
+              },
+              "assessment": {
+                "const": "NOT_ESTABLISHED"
+              },
+              "changed": {
+                "maxItems": 0
+              },
+              "reusable_response_ids": {
+                "maxItems": 0
+              },
+              "physical_equivalence": {
+                "const": "NOT_ESTABLISHED"
+              }
+            }
+          },
+          "blocking": {
+            "maxItems": 0
+          },
+          "continuation": {
+            "type": "object"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "reason": {
+            "not": {
+              "const": "TECHNICAL_CONTINUATION"
+            }
+          },
+          "continuation": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "reason": {
+            "const": "RESUME_EVIDENCE_INVALID"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "check_resume": {
+            "type": "null"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "check_resume": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "reason": {
+            "const": "RESUME_INPUTS_CHANGED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "check_resume": {
+            "properties": {
+              "native_status": {
+                "const": "IDENTITY_MISMATCH"
+              },
+              "changed": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "reason": {
+            "enum": [
+              "RESUME_INPUTS_CHANGED",
+              "LEDGER_CHECKPOINT_INCONSISTENT",
+              "SETTLED_FAILURE_PRESENT",
+              "SETTLED_EVIDENCE_INVALID"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "blocking": {
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "node_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4096
+      }
+    }
+  }
+}

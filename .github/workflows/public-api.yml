@@ -22,16 +22,26 @@ jobs:
       - run: uv sync --locked --extra dev --group ci --python 3.12.10
       - run: uv run --locked --extra dev --group ci python tools/check_legacy_namespace.py
       - run: uv run --locked --extra dev --group ci python -m build --no-isolation
+      - run: uv run --no-sync python -m build --wheel --no-isolation tests/fixtures/controller-consumer --outdir dist/controller-fixture
       - run: uv pip install --reinstall --no-deps --no-index --find-links dist qraft-hpc
-      - run: uv run --no-sync python -m pytest -q tests/consumer tests/workflows tests/contracts
+      - name: Install the declared synthetic controller distribution
+        shell: python
+        run: |
+          import pathlib, subprocess
+          python = pathlib.Path('.venv/Scripts/python.exe' if __import__('os').name == 'nt' else '.venv/bin/python').absolute()
+          wheel = next(pathlib.Path('dist/controller-fixture').glob('qraft_test_controller-*.whl'))
+          subprocess.run(['uv', 'pip', 'install', '--python', str(python), '--no-deps', str(wheel)], check=True)
+      - run: uv run --no-sync python -m pytest -q tests/consumer tests/workflows tests/contracts tests/execution/test_controller_entrypoint.py tests/execution/test_controller_ledger.py tests/execution/test_controller_state.py
       - name: Installed facade outside checkout without PYTHONPATH
         shell: python
         run: |
           import os, pathlib, subprocess, sys, tempfile
           python = pathlib.Path('.venv/Scripts/python.exe' if os.name == 'nt' else '.venv/bin/python').absolute()
           with tempfile.TemporaryDirectory() as temporary:
-              for name in ('check_installed_integration.py', 'check_packaged_controller.py'):
+              environment = os.environ.copy()
+              environment.pop('PYTHONPATH', None)
+              for name in ('check_installed_integration.py', 'check_packaged_controller.py', 'check_installed_controller.py'):
                   fixture = pathlib.Path('tools') / name
                   copied = pathlib.Path(temporary) / name
                   copied.write_bytes(fixture.read_bytes())
-                  subprocess.run([str(python), '-I', str(copied)], cwd=temporary, check=True)
+                  subprocess.run([str(python), '-I', str(copied)], cwd=temporary, env=environment, check=True)

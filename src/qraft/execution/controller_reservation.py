@@ -15,10 +15,9 @@ from .resource_coordinator import ResourceRequest, RuntimeAllocation
 
 @dataclass(frozen=True)
 class ControllerReservation:
-    """The six reservation fields specified by ADR-017, without coercion."""
+    """The five reservation fields in ADR-017 Adenda 1, without coercion."""
 
     nodes: int
-    cpus: int
     inner_launcher: str
     inner_processes_per_node: int
     inner_cpus_per_process: int
@@ -26,7 +25,7 @@ class ControllerReservation:
 
     def __post_init__(self) -> None:
         for name in (
-            "nodes", "cpus", "inner_processes_per_node",
+            "nodes", "inner_processes_per_node",
             "inner_cpus_per_process", "max_concurrent_inner_launches",
         ):
             value = getattr(self, name)
@@ -34,16 +33,15 @@ class ControllerReservation:
                 raise ValueError(f"controller reservation {name} must be a positive integer")
         if self.inner_launcher not in ("hydra", "openmpi"):
             raise ValueError("controller inner_launcher must be hydra or openmpi")
+        if self.nodes != 1:
+            raise ValueError("CONTROLLER_CONTAINMENT_UNAVAILABLE: v1 requires one host")
         if self.inner_cpus_per_process != 1:
             raise ValueError("controller inner_cpus_per_process must be 1")
-        if self.cpus % self.nodes:
-            raise ValueError("controller reservation must have integral CPUs per node")
-        concurrent_cpus_per_node = (
-            self.inner_processes_per_node * self.inner_cpus_per_process
-            * self.max_concurrent_inner_launches
-        )
-        if concurrent_cpus_per_node > self.cpus // self.nodes:
-            raise ValueError("controller inner shape exceeds reserved CPUs per node")
+
+    @property
+    def min_cpus(self) -> int:
+        return (self.inner_processes_per_node * self.inner_cpus_per_process
+                * self.max_concurrent_inner_launches)
 
     @classmethod
     def from_mapping(cls, value: Mapping[str, Any]) -> ControllerReservation:
@@ -65,11 +63,9 @@ class ControllerReservation:
         """
         if allocation.total_cpus % allocation.total_nodes:
             raise ValueError("controller allocation must have integral CPUs per node")
-        if self.nodes > allocation.total_nodes:
-            raise ValueError("controller reservation exceeds allocated nodes")
-        expected_cpus = self.nodes * (allocation.total_cpus // allocation.total_nodes)
-        if self.cpus != expected_cpus:
-            raise ValueError("controller reservation must reserve whole allocation nodes")
+        runtime_cpus = allocation.total_cpus // allocation.total_nodes
+        if self.min_cpus > runtime_cpus:
+            raise ValueError("CONTROLLER_ALLOCATION_INSUFFICIENT")
         if len(allocation.hosts) != allocation.total_nodes:
             raise ValueError("controller reservation requires explicit allocation hosts")
-        return ResourceRequest(task_id, self.cpus, self.nodes, exclusive_hosts=True)
+        return ResourceRequest(task_id, runtime_cpus, self.nodes, exclusive_hosts=True)

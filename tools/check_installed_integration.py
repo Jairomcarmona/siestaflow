@@ -13,17 +13,17 @@ import qraft.api
 assert Path(qraft.api.__file__).is_relative_to(Path(sys.prefix))
 
 # Value transport only: this does not enable a controller or qualify HF-1.
-reservation = ControllerReservation(1, 8, 'openmpi', 4, 1, 1)
+reservation = ControllerReservation(1, 'openmpi', 4, 1, 1)
 assert ControllerReservation.from_mapping(reservation.to_mapping()) == reservation
 request = reservation.resource_request('fixture-hf1', RuntimeAllocation(8, 1, hosts=('fixture-host',)))
 assert request.cpus == 8 and request.nodes == 1 and request.exclusive_hosts
 try:
-    ControllerReservation(1, 4, 'openmpi', 4, 1, 1).resource_request(
+    ControllerReservation(1, 'openmpi', 9, 1, 1).resource_request(
         'fixture-hf1', RuntimeAllocation(8, 1, hosts=('fixture-host',)))
 except ValueError:
     pass
 else:
-    raise AssertionError('partial allocation node accepted')
+    raise AssertionError('inner shape exceeding the allocation accepted')
 definition = {
     'schema_version': '1.0', 'workflow_id': 'installed-consumer', 'project_id': 'fixture',
     'tasks': [{'task_id': 'read', 'kind': 'postprocess', 'capability': 'consumer.reader',

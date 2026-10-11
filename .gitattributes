@@ -1,2 +1,4 @@
 # Hash-bound scientific XML must retain repository bytes on every platform.
 *.psml -text
+src/qraft/execution/controller_schemas/*.json -text
+tests/fixtures/controller-ledger/*.json -text
