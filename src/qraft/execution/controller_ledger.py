@@ -34,17 +34,30 @@ class ControllerLedgerVerdict:
 
 def evaluate_controller_ledger(
     reservation: Mapping[str, Any], attempts: Sequence[Mapping[str, Any]],
+    *, attempt_reservations: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> ControllerLedgerVerdict:
     """Return the first broken rule, in the normative conformance-vector order.
 
     `reservation` is the rules projection (task_id, hosts, runtime_cpus,
     max_concurrent, stop_launching_at); attempts are ordered native ledgers.
     No native identity, receipt state or evidence digest is synthesized here.
+    Actual history supplies each attempt's recorded rules projection separately:
+    its old launches are never judged against a later attempt's deadline/hosts.
+    This is an internal argument, not an additional descriptor or ledger field.
     """
+    ids = [attempt["attempt_id"] for attempt in attempts]
+    if len(set(ids)) != len(ids):
+        return ControllerLedgerVerdict("LEDGER_MALFORMED")
+    if attempt_reservations is not None and set(attempt_reservations) != set(ids):
+        return ControllerLedgerVerdict("LEDGER_MALFORMED")
     settled: set[tuple[str, str]] = set()
     finished_by_attempt: dict[str, set[tuple[str, str]]] = {}
     identity: str | None = None
     for attempt in attempts:
+        rules = (reservation if attempt_reservations is None
+                 else attempt_reservations[attempt["attempt_id"]])
+        if rules["task_id"] != reservation["task_id"]:
+            return ControllerLedgerVerdict("LEDGER_MALFORMED")
         opened: dict[str, tuple[tuple[str, str], int]] = {}
         closed: dict[str, tuple[tuple[str, str], bool]] = {}
         finished: set[tuple[str, str]] = set()
@@ -68,18 +81,18 @@ def evaluate_controller_ledger(
             if event == "LAUNCH_INTENT":
                 if trace != f"{line['task_id']}/{line['attempt_id']}/{seq}":
                     return ControllerLedgerVerdict("LEDGER_MALFORMED")
-                if timestamp_key(line["at"]) > timestamp_key(reservation["stop_launching_at"]):
+                if timestamp_key(line["at"]) > timestamp_key(rules["stop_launching_at"]):
                     return ControllerLedgerVerdict("INTENT_AFTER_DEADLINE")
-                if any(host not in reservation["hosts"] for host in line["hosts"]):
+                if any(host not in rules["hosts"] for host in line["hosts"]):
                     return ControllerLedgerVerdict("HOSTS_OUTSIDE_RESERVATION")
                 if key in settled:
                     return ControllerLedgerVerdict("DUPLICATE_SETTLED_LAUNCH")
                 if any(item[0] == key for item in opened.values()):
                     return ControllerLedgerVerdict("CONCURRENT_KEY_LAUNCH")
-                if len(opened) + 1 > reservation["max_concurrent"]:
+                if len(opened) + 1 > rules["max_concurrent"]:
                     return ControllerLedgerVerdict("CONCURRENCY_EXCEEDED")
                 cpus = line["ranks"] * line["cpus_per_rank"]
-                if sum(item[1] for item in opened.values()) + cpus > reservation["runtime_cpus"]:
+                if sum(item[1] for item in opened.values()) + cpus > rules["runtime_cpus"]:
                     return ControllerLedgerVerdict("CPU_EXCEEDED")
                 opened[trace] = (key, cpus)
                 launched = True

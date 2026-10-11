@@ -28,6 +28,32 @@ def test_normative_ledger_vectors(case):
     assert (verdict.reason is None) == verdict.accepted
 
 
+def test_previous_attempt_uses_its_own_deadline_and_allocated_host():
+    attempts = copy.deepcopy(_VECTORS["cases"][0]["attempts"])
+    attempt_id = attempts[0]["attempt_id"]
+    original = _VECTORS["reservation"]
+    later = dict(original, stop_launching_at="2020-01-01T00:00:00Z", hosts=["different-host"])
+    assert evaluate_controller_ledger(later, attempts).code == "INTENT_AFTER_DEADLINE"
+    verdict = evaluate_controller_ledger(later, attempts, attempt_reservations={attempt_id: original})
+    assert verdict.accepted
+
+
+def test_later_deadline_cannot_launder_old_attempt_violation():
+    attempts = copy.deepcopy(_VECTORS["cases"][0]["attempts"])
+    attempt_id = attempts[0]["attempt_id"]
+    original = dict(_VECTORS["reservation"], stop_launching_at="2020-01-01T00:00:00Z")
+    verdict = evaluate_controller_ledger(_VECTORS["reservation"], attempts,
+                                        attempt_reservations={attempt_id: original})
+    assert verdict.code == "INTENT_AFTER_DEADLINE"
+
+
+def test_history_requires_exact_coverage_and_unique_attempts():
+    attempts = copy.deepcopy(_VECTORS["cases"][0]["attempts"])
+    assert evaluate_controller_ledger(_VECTORS["reservation"], attempts,
+                                     attempt_reservations={}).code == "LEDGER_MALFORMED"
+    assert evaluate_controller_ledger(_VECTORS["reservation"], attempts * 2).code == "LEDGER_MALFORMED"
+
+
 def test_schema_bytes_identical_to_normative_contracts():
     expected = {
         "defs.schema.json": "2c4245ded2988c8ffeb5f9bed55fcac0d0aa57cf2805277a67b0408edebfb5f4",

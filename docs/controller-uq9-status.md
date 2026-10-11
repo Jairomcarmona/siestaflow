@@ -64,6 +64,14 @@ cases gives 197 passed, 1 skipped/32.51s; legacy namespace guard remains PASS.
 The installed synthetic supervisor fixture exercises this admission helper too.
 This is not yet compiled-runtime integration or scheduler qualification.
 
+Independent campaign declaration checks enforce schema2.1 only for controller
+tasks, exact outer placement, required capability/reservation, forbidden command
+and executable/SCF overrides, and declaration/binding/verified-lock equality.
+They do not yet change load_controller_config or the preparer. History evaluation
+can use each attempt's recorded reservation separately, so a later deadline or
+host cannot launder a prior violation. The 28 declaration cases and 33 ledger
+cases pass on Windows3.12.10; all 21 normative ledger vectors remain intact.
+
 [DFT Lab #57](https://github.com/Jairomcarmona/dftlab-suite/issues/57) asks for the
 precise byte-identical 2.0 package guarantee. The current builder vendors runtime
 source bytes, so an inert comment changes the ZIP, manifest and checksums despite
