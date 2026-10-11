@@ -133,12 +133,13 @@ class RunPreparer:
 
     def __init__(
         self,
-        repository_root: Path,
+        repository_root: Path | None = None,
         *,
         validator: SiestaContextualValidator | None = None,
         task_adapters: Mapping[str, Callable[..., dict[str, Any]]] | None = None,
     ) -> None:
-        self.repository_root = repository_root.resolve()
+        self.repository_root = repository_root.resolve() if repository_root is not None else None
+        self._runtime_sources = ControllerPackageBuilder(self.repository_root)
         self.validator = validator or SiestaContextualValidator()
         self._task_adapters: dict[str, Callable[..., dict[str, Any]]] = {
             capability: partial(self._evidence_evaluator_task, evaluator=evaluator)
@@ -354,6 +355,8 @@ class RunPreparer:
 
     def _source_identity(self) -> dict[str, Any]:
         """Capture repository identity without making Git a runtime dependency."""
+        if self.repository_root is None:
+            return {"source_commit": None, "source_tree_dirty": None}
         def run(*args: str) -> str | None:
             result = subprocess.run(
                 ["git", *args], cwd=self.repository_root,
@@ -463,7 +466,7 @@ class RunPreparer:
             raise ValueError(
                 f"adaptive gate tasks cannot consume external scientific inputs: {task.task_id}"
             )
-        script = self.repository_root / _ADAPTIVE_GATE_SCRIPT
+        script = self._runtime_sources._source_path(_ADAPTIVE_GATE_SCRIPT)
         if not script.is_file():
             raise ValueError("adaptive gate runtime script is missing")
         script_relative = (
@@ -593,7 +596,7 @@ class RunPreparer:
         port = next(item for item in task.outputs if item.name == "report")
         if port.artifact_type != evaluator["artifact_type"]:
             raise ValueError(f"scientific evaluator report artifact type mismatch: {task.task_id}")
-        script = self.repository_root / evaluator["script"]
+        script = self._runtime_sources._source_path(evaluator["script"])
         if not script.is_file():
             raise ValueError("scientific evaluator runtime script is missing")
         script_relative = (
@@ -690,7 +693,7 @@ class RunPreparer:
         required = {"fdf", "stdout", "force_stress", "pseudopotential_manifest"}
         if {item.name for item in task.inputs} != required or any(item.external_artifact_id is None for item in task.inputs):
             raise ValueError("observation producer currently consumes four external immutable artifacts")
-        script = self.repository_root / "src/qraft/scientific_observations.py"
+        script = self._runtime_sources._source_path("src/qraft/scientific_observations.py")
         if not script.is_file():
             raise ValueError("scientific observation runtime script is missing")
         script_relative = (PurePosixPath("protected") / task.task_id / "scientific_observations.py").as_posix()

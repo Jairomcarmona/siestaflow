@@ -153,3 +153,27 @@ stability is independent from Python import stability.
 Tests for a new adapter must cover missing executable, resource validation,
 command rendering and registry extension. Never add cluster-specific defaults
 to the core.
+
+## Installed preparation and generated-runtime boundary
+
+`RunPreparer()` and `ControllerPackageBuilder()` use the installed distribution's
+Python sources and packaged engine resources by default. An explicit
+`repository_root` still selects that checkout's `src/qraft` tree; a missing
+explicit tree is an error, with no silent fallback. Installed preparation records
+no invented Git commit or clean-tree assertion. Source revision qualification is
+the deployment manifest's responsibility. Native workflow/run hashes and input
+script bytes retain their existing algorithms.
+
+A prepared package vendors the transitive inspection/profile/scheduler-evidence
+and workflow modules required by frozen `CanonicalController` bindings. Its
+`runtime/` is an allocation-runtime subset, not an installation of the full
+authoring `qraft.api` facade. Platform authoring uses the installed wheel; generated
+workers use `qraft.execution.canonical_controller.CanonicalController`. The same
+class verifies original native lock references before creating its runtime.
+
+The installed consumer gate prepares and inspects a real adaptive fixture and
+checks ZIP member bytes outside the checkout, then starts a subprocess with
+`-I -S` loading only the package runtime. It checks frozen bindings/fingerprints
+and rejects authority before any attempt or launch. External scheduler placement
+probes are explicit fixture seams; this proves packaging, not HPC or scientific
+acceptance.

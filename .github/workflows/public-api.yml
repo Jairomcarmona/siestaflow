@@ -29,8 +29,9 @@ jobs:
         run: |
           import os, pathlib, subprocess, sys, tempfile
           python = pathlib.Path('.venv/Scripts/python.exe' if os.name == 'nt' else '.venv/bin/python').absolute()
-          fixture = pathlib.Path('tools/check_installed_integration.py').resolve()
           with tempfile.TemporaryDirectory() as temporary:
-              copied = pathlib.Path(temporary) / fixture.name
-              copied.write_bytes(fixture.read_bytes())
-              subprocess.run([str(python), '-I', str(copied)], cwd=temporary, check=True)
+              for name in ('check_installed_integration.py', 'check_packaged_controller.py'):
+                  fixture = pathlib.Path('tools') / name
+                  copied = pathlib.Path(temporary) / name
+                  copied.write_bytes(fixture.read_bytes())
+                  subprocess.run([str(python), '-I', str(copied)], cwd=temporary, check=True)

@@ -59,6 +59,17 @@ class ControllerPackageBuilder:
         "src/qraft/project_packages.py",
         "src/qraft/runtime_compatibility.py",
         "src/qraft/runtime_evidence.py",
+        "src/qraft/run_inspection.py",
+        "src/qraft/execution_profile.py",
+        "src/qraft/scheduler_evidence.py",
+        "src/qraft/workflows/__init__.py",
+        "src/qraft/workflows/compiler.py",
+        "src/qraft/workflows/diagnostics.py",
+        "src/qraft/workflows/lock_loader.py",
+        "src/qraft/workflows/models.py",
+        "src/qraft/workflows/parser.py",
+        "src/qraft/workflows/render.py",
+        "src/qraft/workflows/resolver.py",
         "src/qraft/execution/allocation_controller.py",
         "src/qraft/execution/allocation_controller_compat.py",
         "src/qraft/execution/canonical_controller.py",
@@ -86,23 +97,37 @@ class ControllerPackageBuilder:
         "src/qraft/output/text_writer.py",
     )
 
-    def __init__(self, repository_root: Path) -> None:
-        self.repository_root = repository_root.resolve()
+    def __init__(self, repository_root: Path | None = None) -> None:
+        self.repository_root = repository_root.resolve() if repository_root is not None else None
+        self.package_root = (
+            self.repository_root / "src/qraft"
+            if self.repository_root is not None else Path(__file__).resolve().parent
+        )
+
+    def _source_path(self, relative: str) -> Path:
+        """Read the selected source tree, or the installed distribution by default."""
+        path = _safe(relative)
+        if path.parts[:2] != ("src", "qraft"):
+            raise ValueError(f"runtime source must be inside src/qraft: {relative}")
+        return self.package_root.joinpath(*path.parts[2:])
+
+    def _source_name(self, path: Path) -> str:
+        return "src/qraft/" + path.relative_to(self.package_root).as_posix()
 
     def _runtime_files(self) -> tuple[str, ...]:
         contracts = tuple(
-            path.relative_to(self.repository_root).as_posix()
+            self._source_name(path)
             for path in sorted(
-                (self.repository_root / "src/qraft/contracts").glob("*.py")
+                (self.package_root / "contracts").glob("*.py")
             )
         )
         if not contracts:
             raise ValueError("core contract runtime sources are missing")
         support = tuple(
-            path.relative_to(self.repository_root).as_posix()
+            self._source_name(path)
             for directory in (
-                self.repository_root / "src/qraft/core",
-                self.repository_root / "src/qraft/engines/siesta",
+                self.package_root / "core",
+                self.package_root / "engines/siesta",
             )
             for path in sorted(
                 item
@@ -219,14 +244,14 @@ class ControllerPackageBuilder:
             files[relative] = source_root.joinpath(*_safe(relative).parts).read_bytes()
         files.update(provenance)
         for relative in self._runtime_files():
-            source = self.repository_root / relative
+            source = self._source_path(relative)
             if not source.is_file():
                 raise ValueError(f"runtime source is missing: {relative}")
             target = relative.removeprefix("src/")
             files[f"runtime/{target}"] = source.read_bytes()
         files.update({
             "runtime/qraft/__init__.py": (
-                self.repository_root / "src/qraft/__init__.py"
+                self._source_path("src/qraft/__init__.py")
             ).read_bytes(),
             "runtime/qraft/execution/__init__.py": b"",
             "runtime/qraft/engines/__init__.py": b"",

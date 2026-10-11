@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — installed runtime packages
+
+- Prepare controller packages from installed distribution sources by default,
+  retaining explicit checkout selection and native scientific identity rules.
+- Vendor the frozen-binding inspection import closure and verify real installed
+  preparation plus isolated generated-runtime authority denial on Windows/Linux.
+
 ## Unreleased — public integration API
 
 - Add explicit fail-closed controller authority boundaries, durable native event
