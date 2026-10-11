@@ -60,6 +60,7 @@ def test_state_without_an_owner_is_not_a_silent_fresh_start(tmp_path):
     ("supervisor_pid", -1), ("supervisor_start_time_ticks", "NaN"),
     ("supervisor_start_time_ticks", "01"), ("attempt_id", None),
     ("authority_generation", 2),
+    ("boot_id", "-" * 36), ("boot_id", "0" * 36),
 ])
 def test_corrupt_owner_identity_never_proves_death_even_if_state_is_sealed(tmp_path, field, value):
     state, closure = owned_state(tmp_path)

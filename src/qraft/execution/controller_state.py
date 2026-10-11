@@ -75,7 +75,7 @@ def previous_controller_owner(
                 or type(owner["supervisor_pid"]) is not int
                 or not 1 <= owner["supervisor_pid"] <= 9007199254740991
                 or not isinstance(owner["boot_id"], str)
-                or re.fullmatch(r"[0-9a-f-]{36}", owner["boot_id"]) is None
+                or re.fullmatch(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}", owner["boot_id"]) is None
                 or not isinstance(owner["supervisor_start_time_ticks"], str)
                 or re.fullmatch(r"-?(0|[1-9][0-9]*)", owner["supervisor_start_time_ticks"]) is None):
             raise ValueError("invalid owner process birth identity")

@@ -103,6 +103,14 @@ WSL CPython3.12.10 with the wheel built at3148848; Windows retains the explicit
 POSIX rejection. Only the consumer and this status note change. This is not a
 runtime-crash/retry, retained-lease or complete installed acceptance test6.
 
+Owner recovery also requires the recorded boot_id to have the canonical UUID
+layout used by the Linux kernel and the ADR descriptor. A 36-character string
+of only hyphens or uninterrupted hex must not become positive boot-change
+evidence, even if a state manifest matches. Both regressions failed before the
+validation correction. Windows/Python3.12.10: the selected controller suites
+pass171 cases with1 POSIX skip; the legacy namespace guard preserves16 files.
+Installed-wheel and CI results for this source correction remain pending.
+
 Controller campaign2.1 preparation, compiled runtime reservation-map integration,
 resource admission/release and finalization vetos are **not implemented or enabled**.
 U-H7 integration, engine pinning and real HF-1 qualification remain pending.
