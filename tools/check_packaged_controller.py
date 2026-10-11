@@ -1,4 +1,5 @@
 """Prepare from a distribution, then consume only its isolated vendored runtime."""
+import hashlib
 import json
 import subprocess
 import sys
@@ -110,8 +111,15 @@ def check_packaged_controller(*, require_installed=True):
         package = Path(result.package_path)
         assert not result.execution_authorized and not result.submission_performed
         assert RunInspector().inspect(package).status == 'PREPARED_RUN_VERIFIED'
+        assert hashlib.sha256(Path(result.zip_path).read_bytes()).hexdigest() == result.zip_sha256
         with ZipFile(result.zip_path) as archive:
-            for name in archive.namelist():
+            names = archive.namelist()
+            assert len(names) == len(set(names))
+            assert set(names) == {
+                path.relative_to(package.parent).as_posix()
+                for path in package.rglob('*') if path.is_file()
+            }
+            for name in names:
                 assert archive.read(name) == (package.parent / name).read_bytes()
         subprocess.run([sys.executable, '-I', '-S', '-c', ISOLATED_CONTROLLER, str(package)],
                        cwd=temporary, check=True)
