@@ -1,20 +1,17 @@
 # Changelog
 
-<<<<<<< HEAD
 ## Unreleased — installed runtime packages
 
 - Prepare controller packages from installed distribution sources by default,
   retaining explicit checkout selection and native scientific identity rules.
 - Vendor the frozen-binding inspection import closure and verify real installed
   preparation plus isolated generated-runtime authority denial on Windows/Linux.
-=======
 ## Unreleased — integration metadata
 
 - Validate opt-in `qraft.integration@1.0` capability metadata for modes, targets,
   cancel/resume and test references while preserving legacy descriptor shapes.
 - Explicitly classify CLI JSON as diagnostic and non-contractual; typed
   integration API and native contracts remain the platform boundary.
->>>>>>> origin/main
 
 ## Unreleased — public integration API
 
