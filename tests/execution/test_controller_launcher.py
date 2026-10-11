@@ -32,3 +32,29 @@ def test_command_is_checked_against_bound_resolved_entrypoint(tmp_path, monkeypa
         launcher.launch(spec)
     assert not (work / "stdout").exists()
     assert not launcher.closure_proven("hf1", "attempt-0001")
+
+
+@pytest.mark.parametrize("name", [
+    "controller-reservation.json", "controller-supervisor-ready.json",
+    "controller-closure.json", "controller-state-manifest.json",
+])
+def test_staged_attempt_ipc_cannot_become_a_closure_proof(tmp_path, monkeypatch, name):
+    monkeypatch.setattr(module, "os", SimpleNamespace(name="posix"))
+    monkeypatch.setattr(module, "PidfdSignals", lambda: object())
+    monkeypatch.setattr(module.subprocess, "Popen", lambda *a, **k: pytest.fail("staged IPC launched"))
+    work = tmp_path / "work" / "hf1" / "attempt-0001"
+    metadata = work / ".qraft"
+    metadata.mkdir(parents=True)
+    (metadata / name).write_text(
+        '{"state":"CLOSED","method":"SUBREAPER_PIDFD","remaining":[]}', encoding="utf-8",
+    )
+    entrypoint = Path("/installed/declared-controller")
+    relative = "work/hf1/attempt-0001/.qraft/controller-reservation.json"
+    spec = StepLaunchSpec("hf1", "attempt-0001", work, work / "unused",
+        work / "stdout", work / "stderr", 1, 1, str(entrypoint), ("--qraft-reservation", relative))
+    launcher = ControllerLauncher(root=tmp_path)
+    launcher.bind_attempt(spec, {"task_id": "hf1", "attempt_id": "attempt-0001"}, entrypoint=entrypoint)
+    with pytest.raises(ValueError, match="IPC must be absent"):
+        launcher.launch(spec)
+    assert not (work / "stdout").exists()
+    assert not launcher.closure_proven("hf1", "attempt-0001")

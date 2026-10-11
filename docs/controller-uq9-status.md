@@ -86,6 +86,13 @@ source bytes, so an inert comment changes the ZIP, manifest and checksums despit
 identical campaign/scientific inputs. A synthetic paired-package reproduction is
 preserved; no old runtime duplication or hash omission is introduced.
 
+Native attempt IPC must be absent before launching the new supervisor. Staged
+reservation, ready, closure or state-manifest files are rejected before Popen,
+and descriptor paths cannot escape the run through symlinks. A forged CLOSED
+file therefore cannot serve as closure evidence after a failed handshake.
+Windows/Python3.12.10: 21 launcher/state cases passed; the legacy namespace
+guard still preserves all 16 files. This does not implement coordinator release.
+
 Controller campaign2.1 preparation, compiled runtime reservation-map integration,
 resource admission/release and finalization vetos are **not implemented or enabled**.
 U-H7 integration, engine pinning and real HF-1 qualification remain pending.

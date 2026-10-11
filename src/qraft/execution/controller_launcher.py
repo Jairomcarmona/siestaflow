@@ -70,6 +70,17 @@ class ControllerLauncher:
         root = self.root or spec.workdir.parents[2].resolve()
         descriptor_path = spec.workdir / ".qraft" / "controller-reservation.json"
         relative = descriptor_path.relative_to(root).as_posix()
+        descriptor_path = contained_path(root, relative)
+        # Attempt IPC is created only by this launcher and its new supervisor.
+        # Reusing staged files could turn a stale or forged CLOSED document
+        # into a closure proof after a failed supervisor handshake.
+        for name in (
+            "controller-reservation.json", "controller-supervisor-ready.json",
+            "controller-closure.json", "controller-state-manifest.json",
+        ):
+            ipc_path = descriptor_path.with_name(name)
+            if ipc_path.exists() or ipc_path.is_symlink():
+                raise ValueError("controller attempt IPC must be absent before launch")
         command = validate_controller_command(
             (spec.executable, *spec.executable_arguments), entrypoint, relative,
         )
