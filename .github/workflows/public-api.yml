@@ -31,7 +31,7 @@ jobs:
           python = pathlib.Path('.venv/Scripts/python.exe' if __import__('os').name == 'nt' else '.venv/bin/python').absolute()
           wheel = next(pathlib.Path('dist/controller-fixture').glob('qraft_test_controller-*.whl'))
           subprocess.run(['uv', 'pip', 'install', '--python', str(python), '--no-deps', str(wheel)], check=True)
-      - run: uv run --no-sync python -m pytest -q tests/consumer tests/workflows tests/contracts tests/execution/test_controller_entrypoint.py tests/execution/test_controller_ledger.py tests/execution/test_controller_state.py tests/execution/test_controller_admission.py tests/execution/test_controller_campaign.py
+      - run: uv run --no-sync python -m pytest -q tests/consumer tests/workflows tests/contracts tests/execution/test_controller_entrypoint.py tests/execution/test_controller_ledger.py tests/execution/test_controller_state.py tests/execution/test_controller_admission.py tests/execution/test_controller_campaign.py tests/execution/test_controller_launcher.py
       - name: Installed facade outside checkout without PYTHONPATH
         shell: python
         run: |

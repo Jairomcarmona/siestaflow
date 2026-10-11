@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 from pathlib import Path
+import re
 from typing import Any, Mapping
 
 from qraft.contracts.serialization import contract_sha256
@@ -70,6 +71,19 @@ def previous_controller_owner(
                     "supervisor_pid", "supervisor_start_time_ticks", "closure_ref"}
         if set(owner) != expected or owner["host"] != current_host:
             raise ValueError("invalid owner identity or remote host")
+        if (not isinstance(owner["attempt_id"], str) or not owner["attempt_id"]
+                or type(owner["supervisor_pid"]) is not int
+                or not 1 <= owner["supervisor_pid"] <= 9007199254740991
+                or not isinstance(owner["boot_id"], str)
+                or re.fullmatch(r"[0-9a-f-]{36}", owner["boot_id"]) is None
+                or not isinstance(owner["supervisor_start_time_ticks"], str)
+                or re.fullmatch(r"-?(0|[1-9][0-9]*)", owner["supervisor_start_time_ticks"]) is None):
+            raise ValueError("invalid owner process birth identity")
+        generation = owner["authority_generation"]
+        if generation is not None and (
+            not isinstance(generation, str) or re.fullmatch(r"-?(0|[1-9][0-9]*)", generation) is None
+        ):
+            raise ValueError("invalid owner authority generation")
         closure_path = contained_path(root, owner["closure_ref"])
         closure = None
         try:

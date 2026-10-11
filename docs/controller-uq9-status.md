@@ -72,6 +72,14 @@ can use each attempt's recorded reservation separately, so a later deadline or
 host cannot launder a prior violation. The 28 declaration cases and 33 ledger
 cases pass on Windows3.12.10; all 21 normative ledger vectors remain intact.
 
+The launcher additionally binds commands to the resolved entrypoint supplied by
+admission, rather than trusting the command's own executable. Corrupt owner birth
+identity cannot prove death even with a matching state manifest. Finite grace is
+required, and a supervisor that fails after claiming ownership seals its state
+only after ECHILD, without changing another owner's evidence. Seventeen focused
+launcher/state cases pass on Windows3.12.10, including executable substitution
+rejection before Popen and corrupt owner identities.
+
 [DFT Lab #57](https://github.com/Jairomcarmona/dftlab-suite/issues/57) asks for the
 precise byte-identical 2.0 package guarantee. The current builder vendors runtime
 source bytes, so an inert comment changes the ZIP, manifest and checksums despite

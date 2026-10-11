@@ -48,6 +48,7 @@ def supervise(descriptor_relative: str, grace_seconds: float, command: list[str]
     leader = None
     descriptor = None
     guard = None
+    owner_claimed = False
     exit_code = 1
     try:
         if not stopping:
@@ -81,6 +82,7 @@ def supervise(descriptor_relative: str, grace_seconds: float, command: list[str]
                 "supervisor_start_time_ticks": identity.start_time_ticks,
                 "closure_ref": closure_path.relative_to(root).as_posix(),
             })
+            owner_claimed = True
             env = os.environ.copy()
             env["QRAFT_CONTROLLER_RESERVATION"] = descriptor_relative
             leader = subprocess.Popen(command, stdin=subprocess.DEVNULL, env=env)
@@ -132,6 +134,9 @@ def supervise(descriptor_relative: str, grace_seconds: float, command: list[str]
                 break
             children.signal_all(signal.SIGKILL)
             time.sleep(0.01)
+        if empty and owner_claimed:
+            atomic_controller_json(closure_path.with_name("controller-state-manifest.json"),
+                                   controller_state_manifest(state_dir).to_mapping())
         atomic_controller_json(closure_path, {
             "state": "CLOSED" if empty else "OPEN", "method": "SUBREAPER_PIDFD",
             "remaining": [item.to_mapping() for item in children.descendants().values()],

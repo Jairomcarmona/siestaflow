@@ -60,7 +60,7 @@ def run_fixture(root, mode):
                           attempt / "stdout.txt", attempt / "stderr.txt", 1, 1, str(executable),
                           ("--qraft-reservation", descriptor_relative, "--mode", mode))
     launcher = ControllerLauncher(root=root, grace_seconds=.2)
-    launcher.bind_attempt(spec, descriptor)
+    launcher.bind_attempt(spec, descriptor, entrypoint=admission.entrypoint)
     with ThreadPoolExecutor(max_workers=1) as executor:
         future = executor.submit(launcher.launch, spec)
         if mode == "escaped":

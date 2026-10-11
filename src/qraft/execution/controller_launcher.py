@@ -37,14 +37,14 @@ class ControllerLauncher:
         if not math.isfinite(grace_seconds) or grace_seconds < 0:
             raise ValueError("controller grace must be finite and nonnegative")
         self.grace_seconds = grace_seconds
-        self._templates: dict[tuple[str, str], tuple[dict[str, Any], Callable[[], None]]] = {}
+        self._templates: dict[tuple[str, str], tuple[dict[str, Any], Path, Callable[[], None]]] = {}
         self._active: dict[tuple[str, str], _Supervisor] = {}
         self._closures: dict[tuple[str, str], bool] = {}
         self._lock = threading.RLock()
 
     def bind_attempt(
         self, spec: StepLaunchSpec, descriptor: Mapping[str, Any],
-        *, check_authority: Callable[[], None] = lambda: None,
+        *, entrypoint: Path, check_authority: Callable[[], None] = lambda: None,
     ) -> None:
         """Compose a native descriptor; only the supervisor birth identity is deferred."""
         if descriptor["task_id"] != spec.task_id or descriptor["attempt_id"] != spec.attempt_id:
@@ -53,7 +53,7 @@ class ControllerLauncher:
             key = (spec.task_id, spec.attempt_id)
             if key in self._templates or key in self._active:
                 raise ValueError("controller attempt is already bound")
-            self._templates[key] = (copy.deepcopy(dict(descriptor)), check_authority)
+            self._templates[key] = (copy.deepcopy(dict(descriptor)), entrypoint, check_authority)
 
     def closure_proven(self, task_id: str, attempt_id: str) -> bool:
         with self._lock:
@@ -65,13 +65,13 @@ class ControllerLauncher:
         signals = PidfdSignals()  # unsupported containment rejected before Popen
         key = (spec.task_id, spec.attempt_id)
         with self._lock:
-            template, check_authority = self._templates.pop(key)
+            template, entrypoint, check_authority = self._templates.pop(key)
             self._closures[key] = False
         root = self.root or spec.workdir.parents[2].resolve()
         descriptor_path = spec.workdir / ".qraft" / "controller-reservation.json"
         relative = descriptor_path.relative_to(root).as_posix()
         command = validate_controller_command(
-            (spec.executable, *spec.executable_arguments), Path(spec.executable), relative,
+            (spec.executable, *spec.executable_arguments), entrypoint, relative,
         )
         environment = os.environ.copy()
         environment.update(spec.environment or {})
