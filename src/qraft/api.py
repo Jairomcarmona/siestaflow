@@ -13,6 +13,7 @@ from .run_inspection import PreparedRunInspection, ResumePlan, RunInspector
 from .execution.canonical_controller import CanonicalController
 from .execution.capability_runtime import CompiledWorkflowRuntime, WorkflowRuntimeResult
 from .execution.resource_coordinator import RuntimeAllocation
+from .execution.controller_reservation import ControllerReservation
 from .execution.slurm_environment import ShutdownRequest
 from .siesta_validation import SiestaContextualValidator
 from .execution.authority import AuthorityBoundary, AuthorityCheck, AuthorityLost
@@ -26,6 +27,7 @@ __all__ = [
     "write_workflow_lock", "load_run_lock", "load_workflow_lock", "RunPreparationRequest",
     "RunPreparationResult", "RunPreparer", "PreparedRunInspection", "ResumePlan", "RunInspector",
     "CanonicalController", "CompiledWorkflowRuntime", "WorkflowRuntimeResult", "RuntimeAllocation",
+    "ControllerReservation",
     "ShutdownRequest", "SiestaContextualValidator", "AuthorityBoundary", "AuthorityCheck", "AuthorityLost",
     "NativeEventStream", "NativeEventPage", "NativeCursorError",
     "SchedulerJobIdentity", "TerminalSchedulerEvidence", "TerminalEvidenceVerifier",
