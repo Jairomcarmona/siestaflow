@@ -11,14 +11,29 @@ import tempfile
 import time
 
 import qraft
+from qraft.contracts import CapabilityDescriptor, CapabilityKind, EXECUTION_REQUEST
+from qraft.core import ExecutionSpec
+from qraft.execution.controller_admission import admit_controller
 from qraft.execution.controller_entrypoint import ControllerExtension, resolve_controller_entrypoint
 from qraft.execution.controller_files import read_controller_json
 from qraft.execution.controller_launcher import ControllerLauncher
 from qraft.execution.controller_processes import PidfdSignals, process_identity
+from qraft.execution.controller_reservation import ControllerReservation
+from qraft.execution.resource_coordinator import RuntimeAllocation
 from qraft.execution.srun_launcher import StepLaunchSpec
 
 
 def run_fixture(root, mode):
+    capability = CapabilityDescriptor("consumer.controller.fixture", CapabilityKind.EXECUTABLE,
+        "1.0.0", (EXECUTION_REQUEST,), (), metadata={"qraft.controller": {
+            "schema_version": "1.0", "distribution": "qraft-test-controller",
+            "entrypoint": "qraft-test-controller", "inner_launchers": ["openmpi"], "resume": "NONE",
+        }})
+    admission = admit_controller(ControllerReservation(1, "openmpi", 4, 1, 1), capability,
+        RuntimeAllocation(4, 1, hosts=("localhost",), allocation_id="fixture-only"),
+        ExecutionSpec("local", 1, 1, 1, None, "controller", "unused", 300,
+                      launcher_command=("/synthetic/never-executed-mpirun",)),
+        scheduler="local", environment=os.environ)
     now = datetime.now(timezone.utc)
     attempt = root / "work" / "fixture" / "attempt-0001"
     attempt.mkdir(parents=True)
@@ -40,9 +55,7 @@ def run_fixture(root, mode):
                   "resume_verdict": "work/fixture/attempt-0001/.qraft/resume-verdict.json"},
         "previous_attempt": None,
     }
-    executable = resolve_controller_entrypoint(ControllerExtension(
-        "qraft-test-controller", "qraft-test-controller", ("openmpi",), "NONE",
-    ))
+    executable = admission.entrypoint
     spec = StepLaunchSpec("fixture", "attempt-0001", attempt, attempt / "unused",
                           attempt / "stdout.txt", attempt / "stderr.txt", 1, 1, str(executable),
                           ("--qraft-reservation", descriptor_relative, "--mode", mode))

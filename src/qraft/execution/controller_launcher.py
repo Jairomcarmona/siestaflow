@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import copy
+import math
 import os
 from pathlib import Path
 import signal
@@ -32,8 +34,8 @@ class ControllerLauncher:
 
     def __init__(self, *, root: Path | None = None, grace_seconds: float = 0) -> None:
         self.root = root.resolve() if root is not None else None
-        if grace_seconds < 0:
-            raise ValueError("controller grace cannot be negative")
+        if not math.isfinite(grace_seconds) or grace_seconds < 0:
+            raise ValueError("controller grace must be finite and nonnegative")
         self.grace_seconds = grace_seconds
         self._templates: dict[tuple[str, str], tuple[dict[str, Any], Callable[[], None]]] = {}
         self._active: dict[tuple[str, str], _Supervisor] = {}
@@ -51,7 +53,7 @@ class ControllerLauncher:
             key = (spec.task_id, spec.attempt_id)
             if key in self._templates or key in self._active:
                 raise ValueError("controller attempt is already bound")
-            self._templates[key] = (dict(descriptor), check_authority)
+            self._templates[key] = (copy.deepcopy(dict(descriptor)), check_authority)
 
     def closure_proven(self, task_id: str, attempt_id: str) -> bool:
         with self._lock:

@@ -55,6 +55,15 @@ fixtures, CLOSED/ECHILD and unrelated process untouched. This wheel came from an
 uncommitted development snapshot: it is not a release pin or complete qualification.
 No scientific job.
 
+Read-only admission now resolves the declared installed entrypoint, selects the
+runtime's unique allocated host, expands SLURM_JOB_CPUS_PER_NODE in allocation
+host order, rejects profile overrides of scheduler evidence, and positively
+probes pidfd/subreaping before any lease. Local CPU capacity remains the explicit
+profile declaration. Windows11/Python3.12.10: the same selection with admission
+cases gives 197 passed, 1 skipped/32.51s; legacy namespace guard remains PASS.
+The installed synthetic supervisor fixture exercises this admission helper too.
+This is not yet compiled-runtime integration or scheduler qualification.
+
 [DFT Lab #57](https://github.com/Jairomcarmona/dftlab-suite/issues/57) asks for the
 precise byte-identical 2.0 package guarantee. The current builder vendors runtime
 source bytes, so an inert comment changes the ZIP, manifest and checksums despite

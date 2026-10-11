@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timezone
 import hashlib
+import math
 import os
 from pathlib import Path
 import signal
@@ -148,7 +149,7 @@ def main() -> int:
     parser.add_argument("--grace", type=float, required=True)
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args()
-    if args.grace < 0 or not args.command or args.command[0] != "--":
+    if not math.isfinite(args.grace) or args.grace < 0 or not args.command or args.command[0] != "--":
         parser.error("nonnegative grace and explicit controller command required")
     return supervise(args.descriptor, args.grace, args.command[1:])
 
