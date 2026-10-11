@@ -181,15 +181,21 @@ class CanonicalController:
         self.plan = translate_controller_config(self.config, root=self.root)
         if self.capability_bindings:
             from ..run_inspection import RunInspector
-            from ..workflows.lock_loader import load_workflow_lock
+            from ..workflows.lock_loader import load_workflow_lock, load_run_lock
             RunInspector().inspect(self.root)
-            _, locked = load_workflow_lock(self.root / "workflow.lock.json")
+            workflow_envelope, locked = load_workflow_lock(self.root / "workflow.lock.json")
+            run_envelope, _ = load_run_lock(self.root / "run.lock.json")
             declared = {task.task_id: task.capability_id for task in locked.tasks}
             if any(declared.get(task_id) != capability_id
                    for task_id, capability_id in self.capability_bindings.items()):
                 raise ValueError("capability binding disagrees with verified workflow lock")
             self.plan = replace(self.plan, workflow=replace(
-                self.plan.workflow, tasks=tuple(
+                self.plan.workflow,
+                metadata={**self.plan.workflow.metadata, 'qraft.native_contract_bindings': {
+                    'workflow_lock_sha256': workflow_envelope.content_sha256,
+                    'run_lock_sha256': run_envelope.content_sha256,
+                }},
+                tasks=tuple(
                     replace(task, capability_id=self.capability_bindings.get(task.task_id, task.capability_id))
                     for task in self.plan.workflow.tasks
                 ),

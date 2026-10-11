@@ -97,6 +97,14 @@ use the typed verified path, never trust the flag. Planning never performs
 `sbatch` or proves scientific success. Collection/signing of live scheduler
 evidence and production generation enforcement remain deployment qualifications.
 
+When specialized `capability_bindings` are active, effective workflow metadata
+references the **verified** original workflow/run lock content digests under
+`qraft.native_contract_bindings`. These references enter the runtime fingerprint,
+so a changed native contract or task policy cannot silently reuse an old attempt
+with unchanged translated capability ID. No original lock/settings are rewritten
+or recanonicalized by this binding; the legacy path without bindings preserves
+its previous fingerprint semantics.
+
 For package version 0.2, only names in `qraft.__all__` are intentional public
 Python API: application/configuration, ScientificIdentity, ExecutionSpec,
 ExecutionProfile/ProfileStore, OutputModel, engine/launcher/scheduler adapter
