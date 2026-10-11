@@ -1,5 +1,44 @@
 # Public API and extension points
 
+## Typed capability integration metadata (U-Q8)
+
+`qraft.contracts.CapabilitySupport` and its `CapabilityTarget`,
+`CancellationSupport` and `ResumeSupport` enums describe deployment modes,
+targets, cancel/resume semantics and source test references. Put
+`support.to_mapping()` under the opt-in namespaced
+`CapabilityDescriptor.metadata['qraft.integration']` key. Read it using public
+`capability_support(descriptor)`; absence returns `None`, meaning **not declared**.
+The extension version is `1.0`; unknown fields, versions, target/support enums,
+non-boolean-to-enum coercions, malformed mode codes and duplicate entries are
+rejected when constructing the descriptor. Other metadata namespaces are
+preserved. Mode codes include `HF-1` without admitting it for execution.
+
+The extension has fields `schema_version`, `modes` (code array), `targets` (enum
+array), `supports` (`cancel`, `resume`) and `test_refs` (source-reference array).
+It changes no existing default descriptor fields or native digests. Test
+references name tests to run; their presence is not proof those tests passed.
+`catalog_state`, `admitted_for` and actual qualification receipts belong to the
+platform and cannot be claimed through this extension. In particular, a plugin
+cannot self-declare runtime or scientific qualification by listing a target.
+
+## CLI JSON compatibility decision (U-Q6)
+
+All CLI `--json` payloads, including `check`, `status`, `run inspect` and
+`advanced run ...`, are **non-contractual diagnostic output** in 0.2. No versioned
+payload schema is promised for them. They are intended for logging and human
+inspection; do not build platform state, authority or scientific decisions on
+their field names. CLI command/exit-code stability does not imply JSON-field
+stability. The Python integration consumer uses `qraft.api` typed
+`WorkflowCompilation`, `RunPreparationResult`, `PreparedRunInspection` and
+`ResumePlan` plus native public contract objects. Persist native locks as their
+original bytes/digests, never recanonicalize CLI output into evidence.
+
+Consumer fixtures assert this compatibility classification and exercise typed
+descriptor round-trips, future-enum/version rejection and unchanged legacy
+descriptor digests. A future versioned CLI JSON format must have a distinct
+schema/version and fixtures before becoming contractual; this change does not
+silently freeze the current diagnostics.
+
 ## Integration API 1.0 (Ola 1)
 
 `qraft.api.__all__` is additionally public, with `API_VERSION = "1.0"`.
