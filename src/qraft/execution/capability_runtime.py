@@ -36,6 +36,8 @@ from ..core import (
 )
 from ..filesystem import RealFileSystem
 from .adapters import launcher_registry
+from .authority import AuthorityBoundary, AuthorityCheck, AuthorityLost
+from .event_stream import NativeEventStream
 from .resource_coordinator import (
     CooperativeShutdown,
     ResourceCoordinator,
@@ -266,11 +268,22 @@ class CompiledWorkflowRuntime:
         shutdown: ShutdownControl | None = None,
         poll_interval_seconds: float = 0.05,
         force_new_attempts: bool = False,
+        authority_check: AuthorityCheck | None = None,
+        authority_generation: str | None = None,
     ) -> None:
         if not registry.frozen:
             raise ValueError("capability registry must be frozen before execution")
         self.workflow = workflow
         self.registry = registry
+        if authority_check is not None and (
+            not callable(authority_check) or not isinstance(authority_generation, str)
+            or not authority_generation.isascii() or not authority_generation.isdecimal()
+            or authority_generation.startswith("0")
+        ):
+            raise ValueError("authority callback requires an explicit positive decimal generation string")
+        self.authority_check = authority_check
+        self.authority_generation = authority_generation
+        self._authority_lost = threading.Event()
         self.root = root.resolve()
         self.source_root = source_root.resolve()
         self.scientific_identities = dict(scientific_identities)
@@ -309,6 +322,10 @@ class CompiledWorkflowRuntime:
         self._reused: set[str] = set()
         self._assigned_hosts: dict[str, tuple[str, ...]] = {}
         self._state_lock = threading.RLock()
+        self._event_stream = NativeEventStream(
+            self.events_path, self.runtime_fingerprint,
+            check_publish=lambda: self.check_authority("publish_event"),
+        )
 
     @property
     def runtime_fingerprint(self) -> str:
@@ -392,6 +409,7 @@ class CompiledWorkflowRuntime:
         return self.allocation.remaining_seconds() > required
 
     def run(self) -> WorkflowRuntimeResult:
+        self.check_authority("initialize")
         self.root.mkdir(parents=True, exist_ok=True)
         self._verify_external_artifacts()
         self._load_or_initialize_state()
@@ -499,6 +517,8 @@ class CompiledWorkflowRuntime:
                         task, lease = active.pop(future)
                         try:
                             future.result()
+                        except AuthorityLost:
+                            raise
                         except Exception as exc:  # defensive isolation
                             self._set_task(
                                 task.task_id,
@@ -585,6 +605,7 @@ class CompiledWorkflowRuntime:
     def _load_or_initialize_state(self) -> None:
         if not self.state_path.is_file():
             self._state = self._initial_state()
+            self._state['native_event_stream_id'] = self._event_stream.ensure_identity()
             self._save_state()
             return
         payload = load_runtime_state_payload(
@@ -595,11 +616,17 @@ class CompiledWorkflowRuntime:
         if set(payload.get("tasks", {})) != {task.task_id for task in self.workflow.tasks}:
             raise ValueError("workflow runtime task set mismatch")
         self._state = payload
+        stream_id = payload.get('native_event_stream_id')
+        self._event_stream.expected_stream_id = stream_id
+        observed_stream = self._event_stream.ensure_identity()
+        if stream_id is None:
+            self._append_state_mutation({'kind': 'state', 'changes': {'native_event_stream_id': observed_stream}})
 
     def _save_state(self) -> None:
         """Materialize the current canonical snapshot without changing revision."""
 
         with self._state_lock:
+            self.check_authority("publish_state")
             payload = json.loads(_canonical(self._state))
             wrapper = {
                 "schema_version": self.STATE_SCHEMA,
@@ -614,6 +641,7 @@ class CompiledWorkflowRuntime:
         """Durably append one local state mutation before applying it in memory."""
 
         with self._state_lock:
+            self.check_authority("publish_journal")
             previous = self._state.get("revision")
             if isinstance(previous, bool) or not isinstance(previous, int):
                 raise ValueError("workflow runtime state revision is invalid")
@@ -646,10 +674,11 @@ class CompiledWorkflowRuntime:
 
     def _event(self, event: str, **fields: object) -> None:
         with self._state_lock:
+            self.check_authority("publish_event")
             record = {"event": event, "at": _utc_now(), **fields}
-            self.filesystem.append_text(
-                self.events_path, _canonical(record) + "\n"
-            )
+            if self.authority_check is not None:
+                record['controller_authority_generation'] = self.authority_generation
+            self._event_stream.append(record)
 
     def _set_task(self, task_id: str, status: str, reason: str, **fields: object) -> None:
         with self._state_lock:
@@ -991,6 +1020,7 @@ class CompiledWorkflowRuntime:
         return frozenset(declared)
 
     def _execute_task(self, task: WorkflowTaskNode) -> None:
+        self.check_authority("reserve_attempt", task_id=task.task_id)
         hosts = self._assigned_hosts.get(task.task_id, ())
         record = self._state["tasks"][task.task_id]
         try:
@@ -1092,6 +1122,7 @@ class CompiledWorkflowRuntime:
                     *execution_spec.executable_arguments,
                     *command[1:],
                 )
+            self.check_authority("launch_attempt", task_id=task.task_id, attempt_id=attempt_id)
             outcome = self._launcher_for(task).launch(
                 StepLaunchSpec(
                     task_id=task.task_id,
@@ -1123,6 +1154,8 @@ class CompiledWorkflowRuntime:
                 working_input_evidence,
                 mutable_inputs,
             )
+        except AuthorityLost:
+            raise
         except Exception as exc:
             self._set_task(task.task_id, "INCOMPLETE", f"attempt error: {type(exc).__name__}: {exc}")
             return
@@ -1154,6 +1187,7 @@ class CompiledWorkflowRuntime:
         working_input_evidence: Mapping[str, str],
         mutable_inputs: frozenset[str],
     ) -> Attempt:
+        self.check_authority("finalize_attempt", task_id=task.task_id, attempt_id=attempt_id)
         stdout_path = attempt_root / "stdout.txt"
         stderr_path = attempt_root / "stderr.txt"
         stdout_path.touch(exist_ok=True)
@@ -1275,13 +1309,51 @@ class CompiledWorkflowRuntime:
             },
             "attempt": attempt.to_dict(),
         }
+        if self.authority_check is not None:
+            payload['controller_authority_generation'] = self.authority_generation
         wrapper = {
             "schema_version": self.MANIFEST_SCHEMA,
             "payload": payload,
             "sha256": hashlib.sha256(_canonical(payload).encode("utf-8")).hexdigest(),
         }
+        self.check_authority("publish_attempt", task_id=task.task_id, attempt_id=attempt_id)
         self.filesystem.atomic_write_json(attempt_root / "attempt.json", wrapper)
         return attempt
+
+    def check_authority(self, action: str, *, task_id: str | None = None,
+                        attempt_id: str | None = None) -> None:
+        """Validate the caller-owned generation immediately before a boundary.
+
+        Denial is latched for this runtime instance. This hook alone is not an
+        atomic cross-process lease: the platform must enforce the same generation
+        at remote launch and artifact publication to prevent check/use races.
+        """
+        if self._authority_lost.is_set():
+            raise AuthorityLost("controller authority was previously lost")
+        if self.authority_check is None:
+            return
+        boundary = AuthorityBoundary(self.runtime_fingerprint, self.authority_generation,
+                                     action, task_id, attempt_id)
+        try:
+            accepted = self.authority_check(boundary) is True
+        except Exception as exc:
+            self._authority_lost.set()
+            self.shutdown.request("AUTHORITY_LOST")
+            try:
+                self._terminate_launchers()
+            except Exception:
+                pass
+            raise AuthorityLost(f"authority verifier failed at {action}") from exc
+        if self._authority_lost.is_set():
+            raise AuthorityLost("controller authority was lost during verification")
+        if not accepted:
+            self._authority_lost.set()
+            self.shutdown.request("AUTHORITY_LOST")
+            try:
+                self._terminate_launchers()
+            except Exception:
+                pass
+            raise AuthorityLost(f"controller authority rejected at {action}")
 
     def _attempt_path(self, task_id: str, attempt_id: str) -> Path:
         return self.root / "work" / task_id / attempt_id

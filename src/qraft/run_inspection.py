@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any, Mapping
 
@@ -13,6 +14,7 @@ from .execution.allocation_controller import ExecutionStatus, load_controller_co
 from .execution.campaign_progress import read_campaign_progress
 from .execution_profile import SlurmExecutionProfile
 from .workflows import load_run_lock, load_workflow_lock
+from .scheduler_evidence import SchedulerJobIdentity, TerminalSchedulerEvidence, TerminalEvidenceVerifier
 
 
 _CHECKSUM_LINE = re.compile(r"([0-9a-f]{64})\s+(.+)")
@@ -154,11 +156,47 @@ class RunInspector:
         package: Path,
         *,
         previous_job_terminal: bool = False,
+        terminal_evidence: TerminalSchedulerEvidence | None = None,
+        verify_terminal_evidence: TerminalEvidenceVerifier | None = None,
+        expected_job: SchedulerJobIdentity | None = None,
+        now: datetime | None = None,
     ) -> ResumePlan:
         inspection = self.inspect(package)
         root = Path(inspection.package_path)
         config = load_controller_config(root / "campaign.yaml")
         progress = read_campaign_progress(root)
+        if terminal_evidence is not None:
+            if previous_job_terminal:
+                raise ValueError("do not mix verified evidence with legacy terminal assertion")
+            if verify_terminal_evidence is None or expected_job is None:
+                raise ValueError("scheduler evidence needs trusted verifier and expected job identity")
+            workflow_envelope, _ = load_workflow_lock(root / "workflow.lock.json")
+            run_envelope, _ = load_run_lock(root / "run.lock.json")
+            observed_job = progress.get("job_id")
+            state_path = root / "state" / "workflow_runtime.json"
+            if state_path.exists():
+                from .execution.capability_runtime import load_runtime_state_payload
+                allocations = load_runtime_state_payload(state_path).get("allocation_history", [])
+                # Canonical allocation history outranks a stale controller summary.
+                observed_job = allocations[-1].get("allocation_id") if allocations else None
+            if (terminal_evidence.run_id != inspection.run_id
+                    or terminal_evidence.workflow_lock_sha256 != workflow_envelope.content_sha256
+                    or terminal_evidence.run_lock_sha256 != run_envelope.content_sha256
+                    or terminal_evidence.job != expected_job
+                    or observed_job is None or expected_job.job_id != str(observed_job)):
+                raise ValueError("scheduler evidence does not match native run/locks/observed allocation")
+            observed = terminal_evidence.timestamp(terminal_evidence.observed_at)
+            expiry = terminal_evidence.timestamp(terminal_evidence.expires_at)
+            current = now or datetime.now(timezone.utc)
+            if current.utcoffset() is None or not observed <= current < expiry:
+                raise ValueError("scheduler evidence is expired or from the future")
+            try:
+                verified = verify_terminal_evidence(terminal_evidence) is True
+            except Exception as exc:
+                raise ValueError("scheduler evidence signature verifier failed") from exc
+            if not verified:
+                raise ValueError("scheduler evidence signature verification failed")
+            previous_job_terminal = True
         task_state = {
             str(item["task_id"]): item for item in progress["tasks"]
         }
