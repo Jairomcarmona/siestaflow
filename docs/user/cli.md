@@ -1,5 +1,10 @@
 # Public CLI
 
+`--json` is non-contractual diagnostic output in 0.2, including `check`,
+`status` and `run inspect`. Stable command names and exit codes do not freeze
+JSON field names. Platform integrations use the typed `qraft.api` surface and
+native contracts instead; see [PUBLIC_API.md](../developer/PUBLIC_API.md).
+
 ## Stable in 0.2
 
 ```text

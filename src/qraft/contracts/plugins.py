@@ -11,6 +11,7 @@ from enum import Enum
 from typing import Any, Iterable, Mapping, Protocol, runtime_checkable
 
 from .serialization import canonical_primitive
+from .support import capability_support
 from .versioning import (
     ContractCompatibilityError,
     ContractRef,
@@ -81,6 +82,7 @@ class CapabilityDescriptor:
         if not self.input_contracts and not self.output_contracts:
             raise ValueError("capabilities must declare at least one contract")
         canonical_primitive(self.metadata)
+        capability_support(self)
 
 
 @dataclass(frozen=True)
