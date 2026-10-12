@@ -98,12 +98,31 @@ def previous_controller_owner(
             raise ControllerStateError("CONTROLLER_PREVIOUS_OWNER_ALIVE")
         # The supervisor seals the final state independently of the parent
         # runtime, so a runtime crash cannot lose an otherwise proved closure.
-        recorded = read_controller_json(closure_path.with_name("controller-state-manifest.json"))
+        seal_path = closure_path.with_name("controller-state-manifest.json")
+        seal_present = seal_path.exists() or seal_path.is_symlink()
+        closure_present = closure_path.exists() or closure_path.is_symlink()
         manifest = controller_state_manifest(state_dir)
-        if recorded != manifest.to_mapping():
+        state_seal = None
+        if seal_present:
+            recorded = read_controller_json(seal_path)
+            if recorded != manifest.to_mapping():
+                raise ControllerStateError("CONTROLLER_STATE_TAMPERED")
+        elif proof == "CLOSED" or closure_present:
+            # A clean supervisor closure always writes a seal before closure.
+            # Likewise, an unsealed closure is not the signature of a host
+            # restart and cannot be treated as a crash-recovery case.
             raise ControllerStateError("CONTROLLER_STATE_TAMPERED")
-        return {"attempt_id": owner["attempt_id"], "outcome": "INTERRUPTED",
-                "closure": proof, "state_manifest_sha256": manifest.sha256}
+        else:
+            # A changed boot ID is positive proof that the old owner cannot
+            # still hold the host. The current manifest becomes the measured
+            # admission baseline; the caller records this marker as attempt
+            # evidence without extending the reservation schema.
+            state_seal = "ABSENT_AFTER_BOOT_CHANGE"
+        previous = {"attempt_id": owner["attempt_id"], "outcome": "INTERRUPTED",
+                    "closure": proof, "state_manifest_sha256": manifest.sha256}
+        if state_seal is not None:
+            previous["state_seal"] = state_seal
+        return previous
     except ControllerStateError:
         raise
     except (OSError, TypeError, ValueError) as exc:
