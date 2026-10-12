@@ -10,7 +10,7 @@ import hashlib
 import json
 import math
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -27,6 +27,7 @@ from ..contracts import (
 )
 from ..core import ExecutionSpec, ScientificIdentity
 from .allocation_controller_compat import ControllerConfig, ControllerTask
+from .controller_reservation import ControllerReservation
 from .capability_plugins import (
     GENERIC_COMMAND_CAPABILITY,
     SIESTA_ENGINE_CAPABILITY,
@@ -85,6 +86,7 @@ class CanonicalLegacyPlan:
     workflow: CompiledWorkflow
     scientific_identities: Mapping[str, ScientificIdentity]
     execution_specs: Mapping[str, ExecutionSpec]
+    controller_reservations: Mapping[str, ControllerReservation] = field(default_factory=dict)
 
 
 def translate_controller_config(
@@ -99,6 +101,7 @@ def translate_controller_config(
     edges: list[WorkflowEdge] = []
     identities: dict[str, ScientificIdentity] = {}
     executions: dict[str, ExecutionSpec] = {}
+    reservations: dict[str, ControllerReservation] = {}
     output_names: dict[tuple[str, str], str] = {}
 
     for task in tasks:
@@ -188,6 +191,11 @@ def translate_controller_config(
             for relative in (*task.required_artifacts, *task.optional_artifacts)
         )
         is_command = task.task_kind == "gate"
+        is_controller = task.task_kind == "controller"
+        if is_controller:
+            if task.reservation is None or task.capability_id is None:
+                raise ValueError("controller declaration requires reservation and capability_id")
+            reservations[task.task_id] = task.reservation
         settings: dict[str, Any] = {
             "primary_input": primary_name,
             "legacy_task_kind": task.task_kind,
@@ -195,7 +203,7 @@ def translate_controller_config(
         }
         if is_command:
             settings["command"] = list(task.command)
-        else:
+        elif not is_controller:
             settings["require_scf_converged"] = task.require_scf_converged
         nodes.append(
             WorkflowTaskNode(
@@ -206,7 +214,7 @@ def translate_controller_config(
                     else WorkflowTaskKind.CALCULATION
                 ),
                 capability_id=(
-                    GENERIC_COMMAND_CAPABILITY
+                    task.capability_id if is_controller else GENERIC_COMMAND_CAPABILITY
                     if is_command
                     else SIESTA_ENGINE_CAPABILITY
                 ),
@@ -238,7 +246,7 @@ def translate_controller_config(
         scientific_inputs = dict(sorted(task.input_hashes.items()))
         protected_content_digest = _digest(sorted(scientific_inputs.values()))
         identities[task.task_id] = ScientificIdentity(
-            engine="command" if is_command else "siesta",
+            engine=task.capability_id if is_controller else "command" if is_command else "siesta",
             effective_fdf_sha256=primary_digest,
             geometry_sha256=geometry_digest,
             species_mapping_sha256=protected_content_digest,
@@ -258,12 +266,14 @@ def translate_controller_config(
             mpi_ranks=task.mpi_processes,
             cpus_per_rank=task.cpus_per_process,
             memory_mb=None,
-            launcher="direct" if is_command else config.launcher_kind,
-            executable=task.command[0] if is_command else config.siesta_executable,
+            launcher="controller" if is_controller else "direct" if is_command else config.launcher_kind,
+            # A controller binds an installed entrypoint at admission. This
+            # declaration is an identity, never a command to search in PATH.
+            executable=task.capability_id if is_controller else task.command[0] if is_command else config.siesta_executable,
             walltime_seconds=max(1, int(math.ceil(task.estimated_runtime_seconds))),
             environment=config.environment,
             executable_arguments=(
-                task.command[1:] if is_command else config.executable_arguments
+                () if is_controller else task.command[1:] if is_command else config.executable_arguments
             ),
             launcher_command=(() if is_command else config.srun_command),
             launcher_arguments=(() if is_command else config.srun_arguments),
@@ -282,6 +292,12 @@ def translate_controller_config(
             for task in tasks
         ],
     }
+    if reservations:
+        definition["controller_reservations"] = {
+            task_id: {"capability_id": next(task.capability_id for task in tasks if task.task_id == task_id),
+                      "reservation": reservation.to_mapping()}
+            for task_id, reservation in sorted(reservations.items())
+        }
     workflow = CompiledWorkflow(
         workflow_id=_local_id(config.campaign_id, fallback="legacy-workflow"),
         project_id=_local_id(config.system_id, fallback="legacy-project"),
@@ -294,4 +310,4 @@ def translate_controller_config(
             "legacy_campaign_id": config.campaign_id,
         },
     )
-    return CanonicalLegacyPlan(workflow, identities, executions)
+    return CanonicalLegacyPlan(workflow, identities, executions, reservations)

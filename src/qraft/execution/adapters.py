@@ -160,6 +160,14 @@ def _direct(command: tuple[str, ...], arguments: tuple[str, ...]) -> StepLaunche
     return DirectLauncher()
 
 
+def _controller(command: tuple[str, ...], arguments: tuple[str, ...]) -> StepLauncher:
+    # Keep 2.0 vendored packages importable without optional schema libraries.
+    if command or arguments:
+        raise ValueError("controller launcher does not accept executable overrides")
+    from .controller_launcher import ControllerLauncher
+    return ControllerLauncher()
+
+
 def _srun(command: tuple[str, ...], arguments: tuple[str, ...]) -> StepLauncher:
     return SrunLauncher(srun_command=command, srun_arguments=arguments, exclusive=True)
 
@@ -192,6 +200,11 @@ def _preview_mpi_np(
 launcher_registry = LauncherRegistry()
 launcher_registry.register(RegisteredLauncher(
     "direct", (), _direct, max_mpi_ranks=1, supports_controller_siesta=False,
+    version_arguments=(), probe_required=False,
+))
+launcher_registry.register(RegisteredLauncher(
+    "controller", (), _controller, requires_hosts=True,
+    max_mpi_ranks=1, supports_controller_siesta=False,
     version_arguments=(), probe_required=False,
 ))
 launcher_registry.register(RegisteredLauncher(

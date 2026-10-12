@@ -1,0 +1,66 @@
+{
+  "contract": "qraft.controller-reservation@1.0",
+  "run_fingerprint": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "task_id": "hf1-lru",
+  "attempt_id": "attempt-0002",
+  "attempt_number": 2,
+  "authority_generation": "3",
+  "capability": {
+    "capability_id": "hubbardflow.hf1.lr-u",
+    "version": "0.1.0",
+    "plugin_version": "0.1.0"
+  },
+  "allocation": {
+    "scheduler": "slurm",
+    "allocation_id": "440"
+  },
+  "reserved": {
+    "hosts": [
+      "node-a"
+    ],
+    "nodes": 1,
+    "runtime_cpus": 4,
+    "min_cpus": 4,
+    "scheduler_cpus_on_host": {
+      "value": 8,
+      "source": "SLURM_JOB_CPUS_PER_NODE"
+    }
+  },
+  "containment": {
+    "method": "SUBREAPER_PIDFD",
+    "supervisor": {
+      "pid": 31337,
+      "start_time_ticks": "912345",
+      "boot_id": "0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b"
+    },
+    "cgroup_path": null
+  },
+  "inner": {
+    "launcher_kind": "openmpi",
+    "launcher_command": [
+      "/usr/bin/mpirun.openmpi"
+    ],
+    "processes_per_node": 4,
+    "cpus_per_process": 1,
+    "max_concurrent": 1,
+    "environment": {
+      "OMP_NUM_THREADS": "1"
+    }
+  },
+  "deadline": {
+    "stop_launching_at": "2026-10-11T19:30:00Z",
+    "hard_stop_at": "2026-10-11T19:35:00Z"
+  },
+  "paths": {
+    "state_dir": "controller-state/hf1-lru",
+    "stop_request": "controller-state/hf1-lru/stop-request.json",
+    "inner_ledger": "tasks/hf1-lru/attempt-0002/.qraft/inner-ledger.jsonl",
+    "resume_verdict": "tasks/hf1-lru/attempt-0002/.qraft/resume-verdict.json"
+  },
+  "previous_attempt": {
+    "attempt_id": "attempt-0001",
+    "outcome": "INTERRUPTED",
+    "closure": "CLOSED",
+    "state_manifest_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+  }
+}

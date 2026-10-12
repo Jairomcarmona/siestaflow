@@ -72,6 +72,8 @@ class ControllerPackageBuilder:
         "src/qraft/workflows/resolver.py",
         "src/qraft/execution/allocation_controller.py",
         "src/qraft/execution/allocation_controller_compat.py",
+        "src/qraft/execution/controller_campaign.py",
+        "src/qraft/execution/controller_reservation.py",
         "src/qraft/execution/canonical_controller.py",
         "src/qraft/execution/capability_plugins.py",
         "src/qraft/execution/capability_runtime.py",
@@ -143,7 +145,15 @@ class ControllerPackageBuilder:
             "src/qraft/filesystem.py",
             "src/qraft/hpc.py",
         )
-        return tuple(dict.fromkeys((*self.RUNTIME_FILES, *contracts, *support, *standalone)))
+        controller = tuple(
+            self._source_name(path)
+            for path in sorted((self.package_root / "execution").glob("controller_*.py"))
+        ) + tuple(
+            self._source_name(path)
+            for path in sorted((self.package_root / "execution/controller_schemas").glob("*"))
+            if path.is_file() and path.suffix in {".py", ".json"}
+        )
+        return tuple(dict.fromkeys((*self.RUNTIME_FILES, *contracts, *support, *standalone, *controller)))
 
     def build(
         self,
@@ -260,7 +270,9 @@ class ControllerPackageBuilder:
             "scripts/progress.py": _progress().encode("utf-8"),
             "submit.slurm": self._slurm(load_structured(campaign_path)).encode("utf-8"),
             "progress.sh": _progress_sh().encode("utf-8"),
-            "verify_package.py": _verifier(package_id).encode("utf-8"),
+            "verify_package.py": _verifier(package_id, controller_state=any(
+                task.task_kind == "controller" for task in config.tasks
+            )).encode("utf-8"),
             "README.md": _readme(package_id).encode("utf-8"),
         })
         immutable = {name: _sha(content) for name, content in sorted(files.items())}
@@ -476,7 +488,8 @@ squeue -u "$USER" || true
 """
 
 
-def _verifier(package_id: str) -> str:
+def _verifier(package_id: str, *, controller_state: bool = False) -> str:
+    mutable = '{"state","work","results","evidence","controller-state"}' if controller_state else '{"state","work","results","evidence"}'
     return f"""#!/usr/bin/env python3
 import hashlib,json,re,subprocess,sys
 from pathlib import Path,PurePosixPath
@@ -499,7 +512,7 @@ for line in (root/"checksums.sha256").read_text(encoding="utf-8").splitlines():
  if name in seen: fail("DUPLICATE_CHECKSUM",name)
  seen.add(name); target=root.joinpath(*PurePosixPath(name).parts)
  if not target.is_file() or hashlib.sha256(target.read_bytes()).hexdigest()!=expected: fail("CHECKSUM_MISMATCH",name)
-mutable={{"state","work","results","evidence"}}
+mutable={mutable}
 actual={{p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file() and p.name!="qraft.out" and p.relative_to(root).parts[0] not in mutable and not p.name.startswith(("OUT.","ERROR."))}}
 if actual != seen|{{"checksums.sha256"}}: fail("CHECKSUM_COVERAGE_MISMATCH",str(sorted(actual^(seen|{{"checksums.sha256"}}))))
 sys.path.insert(0,str(root/"runtime"))

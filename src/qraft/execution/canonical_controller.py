@@ -22,6 +22,7 @@ from .allocation_controller_compat import (
 )
 from .capability_plugins import register_generic_command, register_siesta_engine
 from .capability_runtime import CompiledWorkflowRuntime, WorkflowRuntimeResult
+from .controller_campaign import ControllerTaskDeclaration, validate_controller_bindings
 from .authority import AuthorityCheck
 from .direct_launcher import DirectLauncher
 from .legacy_translation import CanonicalLegacyPlan, translate_controller_config
@@ -57,6 +58,13 @@ class CanonicalController:
         self.runtime_evidence_probe = runtime_evidence_probe
         self.register_capabilities = register_capabilities
         self.capability_bindings = dict(capability_bindings or {})
+        self._controller_declarations = tuple(
+            ControllerTaskDeclaration(task.task_id, task.capability_id, task.reservation)
+            for task in config.tasks if task.task_kind == "controller"
+        )
+        for declaration in self._controller_declarations:
+            if self.capability_bindings.get(declaration.task_id) != declaration.capability_id:
+                raise ValueError("controller capability_bindings are mandatory and must match the declaration")
         self.authority_check = authority_check
         self.authority_generation = authority_generation
         self.launcher_adapter = launcher_registry.require(config.launcher_kind)
@@ -69,6 +77,7 @@ class CanonicalController:
         self.runtime: CompiledWorkflowRuntime | None = None
         self.result: WorkflowRuntimeResult | None = None
         self._validated_hosts: tuple[str, ...] = ()
+        self._controller_environment = dict(os.environ)
 
     @classmethod
     def from_file(
@@ -94,7 +103,7 @@ class CanonicalController:
                 f"campaign root must equal SLURM_SUBMIT_DIR: "
                 f"{selected_root} != {slurm.submit_dir}"
             )
-        return cls(
+        controller = cls(
             root=selected_root,
             config=load_controller_config(campaign_path),
             slurm=slurm,
@@ -107,6 +116,9 @@ class CanonicalController:
             authority_check=authority_check,
             authority_generation=authority_generation,
         )
+        if environment is not None:
+            controller._controller_environment = dict(environment)
+        return controller
 
     def _validate_runtime_compatibility(self) -> None:
         components, conflicts = self.runtime_evidence_probe(
@@ -186,6 +198,7 @@ class CanonicalController:
             workflow_envelope, locked = load_workflow_lock(self.root / "workflow.lock.json")
             run_envelope, _ = load_run_lock(self.root / "run.lock.json")
             declared = {task.task_id: task.capability_id for task in locked.tasks}
+            validate_controller_bindings(self._controller_declarations, self.capability_bindings, declared)
             if any(declared.get(task_id) != capability_id
                    for task_id, capability_id in self.capability_bindings.items()):
                 raise ValueError("capability binding disagrees with verified workflow lock")
@@ -216,6 +229,17 @@ class CanonicalController:
             self.config.launcher_kind: self.launcher,
             "direct": DirectLauncher(),
         }
+        controller_options = {}
+        if self.plan.controller_reservations:
+            from .controller_launcher import ControllerLauncher
+            launchers["controller"] = ControllerLauncher(
+                root=self.root, grace_seconds=self.config.termination_grace_seconds,
+            )
+            controller_options = {
+                "controller_reservations": self.plan.controller_reservations,
+                "controller_scheduler": "slurm",
+                "controller_environment": self._controller_environment,
+            }
         self.runtime = CompiledWorkflowRuntime(
             workflow=self.plan.workflow,
             registry=registry,
@@ -229,6 +253,7 @@ class CanonicalController:
             poll_interval_seconds=self.poll_interval_seconds,
             authority_check=self.authority_check,
             authority_generation=self.authority_generation,
+            **controller_options,
         )
         handlers = SignalHandlers(self.shutdown) if install_signal_handlers else nullcontext()
         with handlers:

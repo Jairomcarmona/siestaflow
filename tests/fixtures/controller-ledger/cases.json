@@ -1,0 +1,1489 @@
+{
+  "description": "Vectores de conformidad de las reglas del libro qraft.controller-inner-ledger@1.0 (ADR-017 Adenda 1 §A.1). check-contracts.mjs los evalúa con el evaluador de referencia y validate_fixtures.py valida cada línea contra qraft-controller-ledger-entry.schema.json. Las pruebas de QRAFT deben dar el mismo veredicto para cada caso.",
+  "reservation": {
+    "task_id": "hf1-lru",
+    "hosts": [
+      "node-a"
+    ],
+    "runtime_cpus": 4,
+    "max_concurrent": 1,
+    "stop_launching_at": "2026-10-11T19:30:00Z"
+  },
+  "cases": [
+    {
+      "name": "una-sola-ejecucion-asentada",
+      "attempts": [
+        {
+          "attempt_id": "attempt-0001",
+          "end": "NORMAL",
+          "lines": [
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 1,
+              "event": "LAUNCH_INTENT",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "hosts": [
+                "node-a"
+              ],
+              "ranks": 4,
+              "cpus_per_rank": 1,
+              "argv_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 2,
+              "event": "LAUNCH_STARTED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "pid": 4242
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 3,
+              "event": "LAUNCH_FINISHED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "exit_code": 0
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 4,
+              "event": "NODE_SETTLED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "native_state": "VALIDATED",
+              "evidence_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }
+          ]
+        }
+      ],
+      "expect": "ACCEPT"
+    },
+    {
+      "name": "reintento-de-lanzamiento-interrumpido",
+      "attempts": [
+        {
+          "attempt_id": "attempt-0001",
+          "end": "INTERRUPTED",
+          "lines": [
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 1,
+              "event": "LAUNCH_INTENT",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "response:r1"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "hosts": [
+                "node-a"
+              ],
+              "ranks": 4,
+              "cpus_per_rank": 1,
+              "argv_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 2,
+              "event": "LAUNCH_STARTED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "response:r1"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "pid": 4242
+            }
+          ]
+        },
+        {
+          "attempt_id": "attempt-0002",
+          "end": "NORMAL",
+          "lines": [
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 1,
+              "event": "LAUNCH_INTENT",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0002",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "response:r1"
+              },
+              "trace_id": "hf1-lru/attempt-0002/1",
+              "hosts": [
+                "node-a"
+              ],
+              "ranks": 4,
+              "cpus_per_rank": 1,
+              "argv_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 2,
+              "event": "LAUNCH_STARTED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0002",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "response:r1"
+              },
+              "trace_id": "hf1-lru/attempt-0002/1",
+              "pid": 4242
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 3,
+              "event": "LAUNCH_FINISHED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0002",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "response:r1"
+              },
+              "trace_id": "hf1-lru/attempt-0002/1",
+              "exit_code": 0
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 4,
+              "event": "NODE_SETTLED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0002",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "response:r1"
+              },
+              "trace_id": "hf1-lru/attempt-0002/1",
+              "native_state": "VALIDATED",
+              "evidence_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }
+          ]
+        }
+      ],
+      "expect": "ACCEPT"
+    },
+    {
+      "name": "reintento-tras-salida-sin-asentar",
+      "attempts": [
+        {
+          "attempt_id": "attempt-0001",
+          "end": "INTERRUPTED",
+          "lines": [
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 1,
+              "event": "LAUNCH_INTENT",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "response:r1"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "hosts": [
+                "node-a"
+              ],
+              "ranks": 4,
+              "cpus_per_rank": 1,
+              "argv_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 2,
+              "event": "LAUNCH_FINISHED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "response:r1"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "exit_code": 0
+            }
+          ]
+        },
+        {
+          "attempt_id": "attempt-0002",
+          "end": "NORMAL",
+          "lines": [
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 1,
+              "event": "LAUNCH_INTENT",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0002",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "response:r1"
+              },
+              "trace_id": "hf1-lru/attempt-0002/1",
+              "hosts": [
+                "node-a"
+              ],
+              "ranks": 4,
+              "cpus_per_rank": 1,
+              "argv_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 2,
+              "event": "LAUNCH_FINISHED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0002",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "response:r1"
+              },
+              "trace_id": "hf1-lru/attempt-0002/1",
+              "exit_code": 0
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 3,
+              "event": "NODE_SETTLED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0002",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "response:r1"
+              },
+              "trace_id": "hf1-lru/attempt-0002/1",
+              "native_state": "VALIDATED",
+              "evidence_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }
+          ]
+        }
+      ],
+      "expect": "ACCEPT"
+    },
+    {
+      "name": "fallback-de-sombra-en-el-mismo-intento",
+      "attempts": [
+        {
+          "attempt_id": "attempt-0001",
+          "end": "NORMAL",
+          "lines": [
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 1,
+              "event": "LAUNCH_INTENT",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "response:lr_s001_p0p05_bare"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "hosts": [
+                "node-a"
+              ],
+              "ranks": 4,
+              "cpus_per_rank": 1,
+              "argv_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 2,
+              "event": "LAUNCH_STARTED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "response:lr_s001_p0p05_bare"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "pid": 4242
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 3,
+              "event": "LAUNCH_FINISHED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "response:lr_s001_p0p05_bare"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "exit_code": 0
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 4,
+              "event": "LAUNCH_INTENT",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "response:lr_s001_p0p05_bare"
+              },
+              "trace_id": "hf1-lru/attempt-0001/4",
+              "hosts": [
+                "node-a"
+              ],
+              "ranks": 4,
+              "cpus_per_rank": 1,
+              "argv_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 5,
+              "event": "LAUNCH_STARTED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "response:lr_s001_p0p05_bare"
+              },
+              "trace_id": "hf1-lru/attempt-0001/4",
+              "pid": 4242
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 6,
+              "event": "LAUNCH_FINISHED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "response:lr_s001_p0p05_bare"
+              },
+              "trace_id": "hf1-lru/attempt-0001/4",
+              "exit_code": 0
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 7,
+              "event": "NODE_SETTLED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "response:lr_s001_p0p05_bare"
+              },
+              "trace_id": "hf1-lru/attempt-0001/4",
+              "native_state": "VALIDATED",
+              "evidence_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }
+          ]
+        }
+      ],
+      "expect": "ACCEPT"
+    },
+    {
+      "name": "relanzar-nodo-asentado-en-otro-intento",
+      "attempts": [
+        {
+          "attempt_id": "attempt-0001",
+          "end": "INTERRUPTED",
+          "lines": [
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 1,
+              "event": "LAUNCH_INTENT",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "hosts": [
+                "node-a"
+              ],
+              "ranks": 4,
+              "cpus_per_rank": 1,
+              "argv_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 2,
+              "event": "LAUNCH_STARTED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "pid": 4242
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 3,
+              "event": "LAUNCH_FINISHED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "exit_code": 0
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 4,
+              "event": "NODE_SETTLED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "native_state": "VALIDATED",
+              "evidence_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }
+          ]
+        },
+        {
+          "attempt_id": "attempt-0002",
+          "end": "NORMAL",
+          "lines": [
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 1,
+              "event": "LAUNCH_INTENT",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0002",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0002/1",
+              "hosts": [
+                "node-a"
+              ],
+              "ranks": 4,
+              "cpus_per_rank": 1,
+              "argv_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          ]
+        }
+      ],
+      "expect": "DUPLICATE_SETTLED_LAUNCH"
+    },
+    {
+      "name": "relanzar-nodo-con-fallo-cientifico-asentado",
+      "attempts": [
+        {
+          "attempt_id": "attempt-0001",
+          "end": "INTERRUPTED",
+          "lines": [
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 1,
+              "event": "LAUNCH_INTENT",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "response:r2"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "hosts": [
+                "node-a"
+              ],
+              "ranks": 4,
+              "cpus_per_rank": 1,
+              "argv_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 2,
+              "event": "LAUNCH_FINISHED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "response:r2"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "exit_code": 0
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 3,
+              "event": "NODE_SETTLED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "response:r2"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "native_state": "FAILED_SCIENCE",
+              "evidence_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }
+          ]
+        },
+        {
+          "attempt_id": "attempt-0002",
+          "end": "NORMAL",
+          "lines": [
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 1,
+              "event": "LAUNCH_INTENT",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0002",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "response:r2"
+              },
+              "trace_id": "hf1-lru/attempt-0002/1",
+              "hosts": [
+                "node-a"
+              ],
+              "ranks": 4,
+              "cpus_per_rank": 1,
+              "argv_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          ]
+        }
+      ],
+      "expect": "DUPLICATE_SETTLED_LAUNCH"
+    },
+    {
+      "name": "asentamiento-recuperado-del-checkpoint",
+      "attempts": [
+        {
+          "attempt_id": "attempt-0001",
+          "end": "INTERRUPTED",
+          "lines": [
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 1,
+              "event": "LAUNCH_INTENT",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "hosts": [
+                "node-a"
+              ],
+              "ranks": 4,
+              "cpus_per_rank": 1,
+              "argv_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 2,
+              "event": "LAUNCH_FINISHED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "exit_code": 0
+            }
+          ]
+        },
+        {
+          "attempt_id": "attempt-0002",
+          "end": "NORMAL",
+          "lines": [
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 1,
+              "event": "SETTLEMENT_RECOVERED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0002",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "native_state": "VALIDATED",
+              "evidence_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              "source_attempt_id": "attempt-0001"
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 2,
+              "event": "LAUNCH_INTENT",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0002",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "response:r1"
+              },
+              "trace_id": "hf1-lru/attempt-0002/2",
+              "hosts": [
+                "node-a"
+              ],
+              "ranks": 4,
+              "cpus_per_rank": 1,
+              "argv_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 3,
+              "event": "LAUNCH_FINISHED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0002",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "response:r1"
+              },
+              "trace_id": "hf1-lru/attempt-0002/2",
+              "exit_code": 0
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 4,
+              "event": "NODE_SETTLED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0002",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "response:r1"
+              },
+              "trace_id": "hf1-lru/attempt-0002/2",
+              "native_state": "VALIDATED",
+              "evidence_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }
+          ]
+        }
+      ],
+      "expect": "ACCEPT"
+    },
+    {
+      "name": "recuperado-y-relanzado",
+      "attempts": [
+        {
+          "attempt_id": "attempt-0001",
+          "end": "INTERRUPTED",
+          "lines": [
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 1,
+              "event": "LAUNCH_INTENT",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "hosts": [
+                "node-a"
+              ],
+              "ranks": 4,
+              "cpus_per_rank": 1,
+              "argv_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 2,
+              "event": "LAUNCH_FINISHED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "exit_code": 0
+            }
+          ]
+        },
+        {
+          "attempt_id": "attempt-0002",
+          "end": "NORMAL",
+          "lines": [
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 1,
+              "event": "SETTLEMENT_RECOVERED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0002",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "native_state": "VALIDATED",
+              "evidence_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              "source_attempt_id": "attempt-0001"
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 2,
+              "event": "LAUNCH_INTENT",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0002",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0002/2",
+              "hosts": [
+                "node-a"
+              ],
+              "ranks": 4,
+              "cpus_per_rank": 1,
+              "argv_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          ]
+        }
+      ],
+      "expect": "DUPLICATE_SETTLED_LAUNCH"
+    },
+    {
+      "name": "recuperacion-despues-de-lanzar",
+      "attempts": [
+        {
+          "attempt_id": "attempt-0001",
+          "end": "INTERRUPTED",
+          "lines": [
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 1,
+              "event": "LAUNCH_INTENT",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "hosts": [
+                "node-a"
+              ],
+              "ranks": 4,
+              "cpus_per_rank": 1,
+              "argv_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 2,
+              "event": "LAUNCH_FINISHED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "exit_code": 0
+            }
+          ]
+        },
+        {
+          "attempt_id": "attempt-0002",
+          "end": "NORMAL",
+          "lines": [
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 1,
+              "event": "LAUNCH_INTENT",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0002",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "response:r1"
+              },
+              "trace_id": "hf1-lru/attempt-0002/1",
+              "hosts": [
+                "node-a"
+              ],
+              "ranks": 4,
+              "cpus_per_rank": 1,
+              "argv_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 2,
+              "event": "SETTLEMENT_RECOVERED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0002",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "native_state": "VALIDATED",
+              "evidence_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              "source_attempt_id": "attempt-0001"
+            }
+          ]
+        }
+      ],
+      "expect": "RECOVERY_AFTER_LAUNCH"
+    },
+    {
+      "name": "recuperacion-sin-lanzamiento-terminado",
+      "attempts": [
+        {
+          "attempt_id": "attempt-0001",
+          "end": "INTERRUPTED",
+          "lines": [
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 1,
+              "event": "LAUNCH_INTENT",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "hosts": [
+                "node-a"
+              ],
+              "ranks": 4,
+              "cpus_per_rank": 1,
+              "argv_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          ]
+        },
+        {
+          "attempt_id": "attempt-0002",
+          "end": "NORMAL",
+          "lines": [
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 1,
+              "event": "SETTLEMENT_RECOVERED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0002",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "native_state": "VALIDATED",
+              "evidence_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              "source_attempt_id": "attempt-0001"
+            }
+          ]
+        }
+      ],
+      "expect": "RECOVERED_WITHOUT_LAUNCH"
+    },
+    {
+      "name": "asentar-dos-veces",
+      "attempts": [
+        {
+          "attempt_id": "attempt-0001",
+          "end": "NORMAL",
+          "lines": [
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 1,
+              "event": "LAUNCH_INTENT",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "hosts": [
+                "node-a"
+              ],
+              "ranks": 4,
+              "cpus_per_rank": 1,
+              "argv_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 2,
+              "event": "LAUNCH_STARTED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "pid": 4242
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 3,
+              "event": "LAUNCH_FINISHED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "exit_code": 0
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 4,
+              "event": "NODE_SETTLED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "native_state": "VALIDATED",
+              "evidence_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 5,
+              "event": "NODE_SETTLED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "native_state": "VALIDATED",
+              "evidence_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }
+          ]
+        }
+      ],
+      "expect": "DUPLICATE_SETTLEMENT"
+    },
+    {
+      "name": "asentar-con-otra-clave",
+      "attempts": [
+        {
+          "attempt_id": "attempt-0001",
+          "end": "NORMAL",
+          "lines": [
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 1,
+              "event": "LAUNCH_INTENT",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "hosts": [
+                "node-a"
+              ],
+              "ranks": 4,
+              "cpus_per_rank": 1,
+              "argv_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 2,
+              "event": "LAUNCH_STARTED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "pid": 4242
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 3,
+              "event": "LAUNCH_FINISHED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "exit_code": 0
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 4,
+              "event": "NODE_SETTLED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "response:r1"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "native_state": "VALIDATED",
+              "evidence_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }
+          ]
+        }
+      ],
+      "expect": "SETTLED_KEY_MISMATCH"
+    },
+    {
+      "name": "asentar-lanzamiento-abandonado",
+      "attempts": [
+        {
+          "attempt_id": "attempt-0001",
+          "end": "NORMAL",
+          "lines": [
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 1,
+              "event": "LAUNCH_INTENT",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "hosts": [
+                "node-a"
+              ],
+              "ranks": 4,
+              "cpus_per_rank": 1,
+              "argv_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 2,
+              "event": "LAUNCH_ABANDONED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "reason": "STOP_REQUESTED"
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 3,
+              "event": "NODE_SETTLED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "native_state": "VALIDATED",
+              "evidence_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }
+          ]
+        }
+      ],
+      "expect": "SETTLED_WITHOUT_FINISHED_LAUNCH"
+    },
+    {
+      "name": "mismo-nodo-concurrente",
+      "attempts": [
+        {
+          "attempt_id": "attempt-0001",
+          "end": "NORMAL",
+          "lines": [
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 1,
+              "event": "LAUNCH_INTENT",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "hosts": [
+                "node-a"
+              ],
+              "ranks": 2,
+              "cpus_per_rank": 1,
+              "argv_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 2,
+              "event": "LAUNCH_INTENT",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0001/2",
+              "hosts": [
+                "node-a"
+              ],
+              "ranks": 2,
+              "cpus_per_rank": 1,
+              "argv_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          ]
+        }
+      ],
+      "expect": "CONCURRENT_KEY_LAUNCH"
+    },
+    {
+      "name": "identidad-de-checkpoint-cambiada",
+      "attempts": [
+        {
+          "attempt_id": "attempt-0001",
+          "end": "INTERRUPTED",
+          "lines": [
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 1,
+              "event": "LAUNCH_INTENT",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "hosts": [
+                "node-a"
+              ],
+              "ranks": 4,
+              "cpus_per_rank": 1,
+              "argv_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          ]
+        },
+        {
+          "attempt_id": "attempt-0002",
+          "end": "NORMAL",
+          "lines": [
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 1,
+              "event": "LAUNCH_INTENT",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0002",
+              "key": {
+                "checkpoint_identity": "adaptive:9999",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0002/1",
+              "hosts": [
+                "node-a"
+              ],
+              "ranks": 4,
+              "cpus_per_rank": 1,
+              "argv_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          ]
+        }
+      ],
+      "expect": "LEDGER_IDENTITY_CHANGED"
+    },
+    {
+      "name": "intent-sin-cierre-en-salida-normal",
+      "attempts": [
+        {
+          "attempt_id": "attempt-0001",
+          "end": "NORMAL",
+          "lines": [
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 1,
+              "event": "LAUNCH_INTENT",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "hosts": [
+                "node-a"
+              ],
+              "ranks": 4,
+              "cpus_per_rank": 1,
+              "argv_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          ]
+        }
+      ],
+      "expect": "UNCLOSED_INTENT"
+    },
+    {
+      "name": "host-fuera-de-la-reserva",
+      "attempts": [
+        {
+          "attempt_id": "attempt-0001",
+          "end": "NORMAL",
+          "lines": [
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 1,
+              "event": "LAUNCH_INTENT",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "hosts": [
+                "node-b"
+              ],
+              "ranks": 4,
+              "cpus_per_rank": 1,
+              "argv_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          ]
+        }
+      ],
+      "expect": "HOSTS_OUTSIDE_RESERVATION"
+    },
+    {
+      "name": "cpu-por-encima-de-la-reserva",
+      "attempts": [
+        {
+          "attempt_id": "attempt-0001",
+          "end": "NORMAL",
+          "lines": [
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 1,
+              "event": "LAUNCH_INTENT",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "hosts": [
+                "node-a"
+              ],
+              "ranks": 8,
+              "cpus_per_rank": 1,
+              "argv_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          ]
+        }
+      ],
+      "expect": "CPU_EXCEEDED"
+    },
+    {
+      "name": "concurrencia-excedida",
+      "attempts": [
+        {
+          "attempt_id": "attempt-0001",
+          "end": "NORMAL",
+          "lines": [
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 1,
+              "event": "LAUNCH_INTENT",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "response:r1"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "hosts": [
+                "node-a"
+              ],
+              "ranks": 2,
+              "cpus_per_rank": 1,
+              "argv_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 2,
+              "event": "LAUNCH_INTENT",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "response:r2"
+              },
+              "trace_id": "hf1-lru/attempt-0001/2",
+              "hosts": [
+                "node-a"
+              ],
+              "ranks": 2,
+              "cpus_per_rank": 1,
+              "argv_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          ]
+        }
+      ],
+      "expect": "CONCURRENCY_EXCEEDED"
+    },
+    {
+      "name": "intent-tras-el-plazo",
+      "attempts": [
+        {
+          "attempt_id": "attempt-0001",
+          "end": "NORMAL",
+          "lines": [
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 1,
+              "event": "LAUNCH_INTENT",
+              "at": "2026-10-11T19:45:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "hosts": [
+                "node-a"
+              ],
+              "ranks": 4,
+              "cpus_per_rank": 1,
+              "argv_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          ]
+        }
+      ],
+      "expect": "INTENT_AFTER_DEADLINE"
+    },
+    {
+      "name": "seq-no-contigua",
+      "attempts": [
+        {
+          "attempt_id": "attempt-0001",
+          "end": "NORMAL",
+          "lines": [
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 1,
+              "event": "LAUNCH_INTENT",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "hosts": [
+                "node-a"
+              ],
+              "ranks": 4,
+              "cpus_per_rank": 1,
+              "argv_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            {
+              "contract": "qraft.controller-inner-ledger@1.0",
+              "seq": 3,
+              "event": "LAUNCH_FINISHED",
+              "at": "2026-10-11T19:00:00Z",
+              "task_id": "hf1-lru",
+              "attempt_id": "attempt-0001",
+              "key": {
+                "checkpoint_identity": "adaptive:5f0c",
+                "node_id": "reference"
+              },
+              "trace_id": "hf1-lru/attempt-0001/1",
+              "exit_code": 0
+            }
+          ]
+        }
+      ],
+      "expect": "LEDGER_MALFORMED"
+    }
+  ]
+}

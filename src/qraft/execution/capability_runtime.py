@@ -270,6 +270,9 @@ class CompiledWorkflowRuntime:
         force_new_attempts: bool = False,
         authority_check: AuthorityCheck | None = None,
         authority_generation: str | None = None,
+        controller_reservations: Mapping[str, Any] | None = None,
+        controller_scheduler: str = "local",
+        controller_environment: Mapping[str, str] | None = None,
     ) -> None:
         if not registry.frozen:
             raise ValueError("capability registry must be frozen before execution")
@@ -292,11 +295,24 @@ class CompiledWorkflowRuntime:
             if isinstance(execution_specs, ExecutionSpec)
             else dict(execution_specs)
         )
+        self.controller_reservations = dict(controller_reservations or {})
+        self._controller_context = None
         task_ids = {task.task_id for task in workflow.tasks}
         if set(self.scientific_identities) != task_ids:
             raise ValueError("scientific identity mapping must cover every task")
         if set(self.execution_specs) != task_ids:
             raise ValueError("execution spec mapping must cover every task")
+        declared_controllers = {task_id for task_id, execution in self.execution_specs.items()
+                                if execution.launcher == "controller"}
+        if set(self.controller_reservations) != declared_controllers:
+            raise ValueError("controller reservation map must cover exactly the controller tasks")
+        if declared_controllers and allocation is None:
+            raise ValueError("controller runtime requires an explicit allocation")
+        if declared_controllers:
+            from .controller_reservation import ControllerReservation
+            if any(not isinstance(value, ControllerReservation) for value in self.controller_reservations.values()):
+                raise ValueError("controller reservation map must contain ControllerReservation values")
+            self.allocation = allocation
         if isinstance(launcher, Mapping):
             if not launcher:
                 raise ValueError("launcher mapping must not be empty")
@@ -321,7 +337,24 @@ class CompiledWorkflowRuntime:
         self._attempts: dict[str, Attempt] = {}
         self._reused: set[str] = set()
         self._assigned_hosts: dict[str, tuple[str, ...]] = {}
+        self._retained_controller_task_ids: set[str] = set()
         self._state_lock = threading.RLock()
+        if declared_controllers:
+            import os
+            from .controller_launcher import ControllerLauncher
+            from .controller_runtime import ControllerRuntimeContext
+            controller_launcher = self.launchers.get("controller")
+            if not isinstance(controller_launcher, ControllerLauncher):
+                raise ValueError("controller tasks require the supervised ControllerLauncher")
+            self._controller_context = ControllerRuntimeContext(
+                root=self.root, allocation=self.allocation, registry=registry,
+                tasks=workflow.tasks, execution_specs=self.execution_specs,
+                reservations=self.controller_reservations,
+                scheduler=controller_scheduler,
+                environment=os.environ if controller_environment is None else controller_environment,
+                launcher=controller_launcher, run_fingerprint=lambda: self.runtime_fingerprint,
+                attempt_path=self._attempt_path, authority_generation=authority_generation,
+            )
         self._event_stream = NativeEventStream(
             self.events_path, self.runtime_fingerprint,
             check_publish=lambda: self.check_authority("publish_event"),
@@ -341,6 +374,10 @@ class CompiledWorkflowRuntime:
             },
             "capability_provenance": self._capability_provenance(),
         }
+        if self.controller_reservations:
+            payload["controller_reservations"] = {
+                key: value.to_mapping() for key, value in sorted(self.controller_reservations.items())
+            }
         return hashlib.sha256(_canonical(payload).encode("utf-8")).hexdigest()
 
     def _capability_provenance(self) -> dict[str, dict[str, str]]:
@@ -364,6 +401,8 @@ class CompiledWorkflowRuntime:
 
     def _resource_request(self, task: WorkflowTaskNode) -> ResourceRequest:
         execution = self.execution_specs[task.task_id]
+        if task.task_id in self.controller_reservations:
+            return self.controller_reservations[task.task_id].resource_request(task.task_id, self.allocation)
         try:
             requires_hosts = bool(
                 launcher_registry.require(execution.launcher).requires_hosts
@@ -372,6 +411,8 @@ class CompiledWorkflowRuntime:
             # Explicitly composed fixture/custom launchers need no global
             # registry mutation unless they request host-aware placement.
             requires_hosts = False
+        if self.controller_reservations and execution.launcher != "direct":
+            requires_hosts = True
         return ResourceRequest(
             task_id=task.task_id,
             cpus=execution.allocated_cpus,
@@ -473,7 +514,13 @@ class CompiledWorkflowRuntime:
                                 remaining_seconds=self.allocation.remaining_seconds(),
                             )
                             break
-                        lease = self.coordinator.try_acquire(request)
+                        lease_options = {}
+                        if self._controller_context is not None:
+                            if task.task_id in self.controller_reservations:
+                                lease_options["required_hosts"] = (self._controller_context.runtime_host,)
+                            elif self.execution_specs[task.task_id].launcher == "direct":
+                                lease_options["local_host"] = self._controller_context.runtime_host
+                        lease = self.coordinator.try_acquire(request, **lease_options)
                         if lease is None:
                             continue
                         attempted_this_run.add(task.task_id)
@@ -527,19 +574,27 @@ class CompiledWorkflowRuntime:
                             )
                         finally:
                             self._assigned_hosts.pop(task.task_id, None)
-                            self.coordinator.release(lease)
-                            self._event(
-                                "RESOURCE_RELEASED",
-                                task_id=task.task_id,
-                                cpus=lease.cpus,
-                                nodes=lease.nodes,
-                                hosts=list(lease.hosts),
-                            )
+                            can_release = (task.task_id not in self.controller_reservations
+                                           or self._controller_context.can_release(
+                                               task.task_id, self._state["tasks"][task.task_id]["last_attempt"]))
+                            if can_release:
+                                self.coordinator.release(lease)
+                                self._event("RESOURCE_RELEASED", task_id=task.task_id,
+                                            cpus=lease.cpus, nodes=lease.nodes, hosts=list(lease.hosts))
+                            else:
+                                self._retained_controller_task_ids.add(task.task_id)
+                                self._set_task(task.task_id, "INTERRUPTED", "CONTROLLER_CLOSURE_UNKNOWN")
+                                self.shutdown.request("CONTROLLER_CLOSURE_UNKNOWN")
+                                self._event("RESOURCE_RETAINED", task_id=task.task_id,
+                                            cpus=lease.cpus, nodes=lease.nodes, hosts=list(lease.hosts))
                     continue
                 if not launched:
                     break
 
-        self.coordinator.assert_released()
+        if not self.coordinator.active_task_ids:
+            self.coordinator.assert_released()
+        elif set(self.coordinator.active_task_ids) != self._retained_controller_task_ids:
+            self.coordinator.assert_released()
 
         statuses = {
             task_id: record["status"]
@@ -716,6 +771,30 @@ class CompiledWorkflowRuntime:
         }
         for task in self.workflow.tasks:
             record = self._state["tasks"][task.task_id]
+            if task.task_id in self.controller_reservations and record["attempts"]:
+                try:
+                    self._controller_context.previous(task.task_id, record)
+                except (OSError, TypeError, ValueError) as exc:
+                    self._set_task(task.task_id, "BLOCKED", str(exc))
+                    if str(exc).startswith("CONTROLLER_PREVIOUS_OWNER_ALIVE"):
+                        # A new invocation has a new in-memory coordinator. It
+                        # must reconstruct the unresolved host reservation,
+                        # rather than running an unrelated task on that host.
+                        lease = self.coordinator.try_acquire(
+                            self._resource_request(task),
+                            required_hosts=(self._controller_context.runtime_host,),
+                        )
+                        if lease is None:
+                            raise ValueError("unresolved controller reservation cannot be restored")
+                        self._retained_controller_task_ids.add(task.task_id)
+                        self.shutdown.request("CONTROLLER_CLOSURE_UNKNOWN")
+                        self._event("RESOURCE_RETAINED", task_id=task.task_id,
+                                    cpus=lease.cpus, nodes=lease.nodes, hosts=list(lease.hosts))
+                    continue
+                if (record["status"] == "BLOCKED"
+                        and record["reason"].startswith("CONTROLLER_PREVIOUS_OWNER_ALIVE")):
+                    self._set_task(task.task_id, "INTERRUPTED",
+                                   "previous controller owner has positive closure proof")
             if record["status"] == "FAILED":
                 max_attempts = int(task.resources.get("max_attempts", 2))
                 if int(record["attempts"]) < max_attempts:
@@ -740,6 +819,9 @@ class CompiledWorkflowRuntime:
             try:
                 attempt = self._load_valid_attempt(task, record)
             except (OSError, TypeError, ValueError) as exc:
+                if task.task_id in self.controller_reservations:
+                    self._set_task(task.task_id, "BLOCKED", f"CONTROLLER_STATE_TAMPERED: {exc}")
+                    continue
                 self._set_task(
                     task.task_id,
                     "PENDING",
@@ -1023,7 +1105,10 @@ class CompiledWorkflowRuntime:
         self.check_authority("reserve_attempt", task_id=task.task_id)
         hosts = self._assigned_hosts.get(task.task_id, ())
         record = self._state["tasks"][task.task_id]
+        controller_previous = None
         try:
+            if task.task_id in self.controller_reservations:
+                controller_previous = self._controller_context.previous(task.task_id, record)
             registered = self._resolve_executable_capability(task)
             inputs = self._resolve_inputs(task)
             primary_name = self._select_primary_input(
@@ -1061,6 +1146,11 @@ class CompiledWorkflowRuntime:
         )
         try:
             attempt_root.mkdir(parents=True, exist_ok=False)
+            controller_arguments = {}
+            if task.task_id in self.controller_reservations:
+                controller_arguments = self._controller_context.attempt_context(
+                    task, attempt_id, number, controller_previous,
+                )
             input_evidence: dict[str, str] = {}
             input_sources: dict[str, str] = {}
             working_input_evidence: dict[str, str] = {}
@@ -1101,6 +1191,7 @@ class CompiledWorkflowRuntime:
                 bindings=bindings,
                 task_id=task.task_id,
                 attempt_id=attempt_id,
+                **controller_arguments,
             )
             prepared_path = Path(getattr(prepared, "destination", prepared))
             execution_spec = self.execution_specs[task.task_id]
@@ -1111,6 +1202,7 @@ class CompiledWorkflowRuntime:
                         prepared_path,
                         execution_spec=execution_spec,
                         settings=dict(task.settings),
+                        **controller_arguments,
                     ),
                 )
             )
@@ -1123,8 +1215,7 @@ class CompiledWorkflowRuntime:
                     *command[1:],
                 )
             self.check_authority("launch_attempt", task_id=task.task_id, attempt_id=attempt_id)
-            outcome = self._launcher_for(task).launch(
-                StepLaunchSpec(
+            launch_spec = StepLaunchSpec(
                     task_id=task.task_id,
                     attempt_id=attempt_id,
                     workdir=attempt_root,
@@ -1140,7 +1231,11 @@ class CompiledWorkflowRuntime:
                     processes_per_node=execution_spec.ranks_per_node,
                     nodes=execution_spec.nodes,
                 )
-            )
+            if task.task_id in self.controller_reservations:
+                self._controller_context.bind(launch_spec, lambda: self.check_authority(
+                    "launch_attempt", task_id=task.task_id, attempt_id=attempt_id,
+                ))
+            outcome = self._launcher_for(task).launch(launch_spec)
             attempt = self._finalize_attempt(
                 task,
                 registered.implementation,
@@ -1282,6 +1377,14 @@ class CompiledWorkflowRuntime:
             )
             execution_state = "FAILED"
 
+        if task.task_id in self.controller_reservations:
+            controller_validation = self._controller_context.validation(task, attempt_id, outcome)
+            if controller_validation is not None:
+                technical = controller_validation
+                execution_state = ("INTERRUPTED" if technical.classification == "CONTROLLER_CLOSURE_UNKNOWN"
+                                   else "BLOCKED" if outcome.exit_code == 75
+                                   else "FAILED")
+
         attempt = Attempt(
             node_id=task.task_id,
             attempt_id=attempt_id,
@@ -1311,6 +1414,8 @@ class CompiledWorkflowRuntime:
         }
         if self.authority_check is not None:
             payload['controller_authority_generation'] = self.authority_generation
+        if task.task_id in self.controller_reservations:
+            payload["evidence_files"].update(self._controller_context.evidence_files(task.task_id, attempt_id))
         wrapper = {
             "schema_version": self.MANIFEST_SCHEMA,
             "payload": payload,
