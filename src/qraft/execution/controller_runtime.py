@@ -16,7 +16,7 @@ from .controller_contracts import (
     read_controller_ledger, validate_controller_descriptor,
     validate_controller_resume_verdict,
 )
-from .controller_files import contained_path, read_controller_json
+from .controller_files import atomic_controller_json, contained_path, read_controller_json
 from .controller_launcher import ControllerLauncher
 from .controller_ledger import evaluate_controller_ledger
 from .controller_reservation import ControllerReservation
@@ -32,6 +32,17 @@ def ledger_rules(descriptor: Mapping[str, Any]) -> dict[str, Any]:
         "max_concurrent": descriptor["inner"]["max_concurrent"],
         "stop_launching_at": descriptor["deadline"]["stop_launching_at"],
     }
+
+
+def write_state_seal_evidence(attempt: Path, state_seal: str | None) -> None:
+    """Persist the D.5 recovery marker as native attempt evidence, not a schema field."""
+    if state_seal is None:
+        return
+    if state_seal != "ABSENT_AFTER_BOOT_CHANGE":
+        raise ValueError("unsupported controller state seal evidence")
+    atomic_controller_json(attempt / ".qraft/controller-attempt-evidence.json", {
+        "state_seal": state_seal,
+    })
 
 
 class ControllerRuntimeContext:
@@ -98,6 +109,14 @@ class ControllerRuntimeContext:
         registered = self.registry.resolve(task.capability_id)
         attempt = self.attempt_path(task.task_id, attempt_id)
         relative = attempt.relative_to(self.root).as_posix()
+        previous_descriptor = previous
+        if previous is not None and "state_seal" in previous:
+            previous_descriptor = {
+                key: previous[key] for key in (
+                    "attempt_id", "outcome", "closure", "state_manifest_sha256",
+                )
+            }
+            write_state_seal_evidence(attempt, previous["state_seal"])
         descriptor = {
             "contract": "qraft.controller-reservation@1.0",
             "run_fingerprint": self.run_fingerprint(), "task_id": task.task_id,
@@ -124,7 +143,7 @@ class ControllerRuntimeContext:
                       "stop_request": f"{relative}/.qraft/stop-request.json",
                       "inner_ledger": f"{relative}/.qraft/inner-ledger.jsonl",
                       "resume_verdict": f"{relative}/.qraft/resume-verdict.json"},
-            "previous_attempt": previous,
+            "previous_attempt": previous_descriptor,
         }
         self.templates[(task.task_id, attempt_id)] = descriptor
         prior_ledgers = tuple(
@@ -231,7 +250,8 @@ class ControllerRuntimeContext:
         attempt = self.attempt_path(task_id, attempt_id)
         result = {}
         for name in ("controller-reservation.json", "controller-closure.json",
-                     "controller-state-manifest.json", "inner-ledger.jsonl", "resume-verdict.json"):
+                     "controller-state-manifest.json", "controller-attempt-evidence.json",
+                     "inner-ledger.jsonl", "resume-verdict.json"):
             relative = f".qraft/{name}"
             path = contained_path(attempt, relative)
             if path.is_file():
