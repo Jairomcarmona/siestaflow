@@ -14,7 +14,8 @@ from qraft.execution.controller_files import atomic_controller_json, read_contro
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--qraft-reservation", required=True)
-    parser.add_argument("--mode", choices=("normal", "escaped", "refuse"), default="normal")
+    parser.add_argument("--mode", choices=("normal", "escaped", "refuse", "runtime",
+                        "runtime-resume", "runtime-refuse", "runtime-badledger"), default="normal")
     args = parser.parse_args()
     descriptor = read_controller_json(Path(args.qraft_reservation))
     state = Path(descriptor["paths"]["state_dir"])
@@ -25,6 +26,31 @@ def main():
     if args.mode == "normal":
         atomic_controller_json(state / "synthetic-checkpoint.json", {"native_id": "fixture:opaque"})
         return 0
+    if args.mode.startswith("runtime"):
+        ledger = Path(descriptor["paths"]["inner_ledger"])
+        ledger.parent.mkdir(parents=True, exist_ok=True)
+        ledger.write_bytes(b'{"invalid":true}\n' if args.mode == "runtime-badledger" else b'')
+        previous = descriptor["previous_attempt"]
+        if previous and args.mode == "runtime-refuse":
+            atomic_controller_json(Path(descriptor["paths"]["resume_verdict"]), {
+                "contract": "qraft.controller-resume-verdict@1.0",
+                "task_id": descriptor["task_id"], "attempt_id": descriptor["attempt_id"],
+                "previous_attempt_id": previous["attempt_id"],
+                "decision": "REFUSE", "reason": "RESUME_EVIDENCE_INVALID",
+                "checkpoint_identity": None, "check_resume": None,
+                "blocking": [], "continuation": None, "scientific_effect": "NONE",
+            })
+            return 75
+        atomic_controller_json(state / "synthetic-checkpoint.json", {"native_id": "fixture:opaque"})
+        if args.mode in {"runtime", "runtime-badledger"} or previous:
+            time.sleep(.15)
+            print("synthetic-only:accepted")
+            return 0
+        # First attempt remains alive until its own supervisor requests stop.
+        atomic_controller_json(ledger.with_name("runtime-controller-ready.json"), {"pid": os.getpid()})
+        signal.signal(signal.SIGTERM, lambda *_: sys.exit(130))
+        while True:
+            time.sleep(.05)
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
     escaped_code = """
 import os,signal,time

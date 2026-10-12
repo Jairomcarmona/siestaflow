@@ -304,11 +304,20 @@ class RunInspector:
             difference = sorted(set(checksums) ^ expected_checksum_names)
             raise ValueError(f"package checksum coverage mismatch: {difference}")
 
+        mutable = set(_MUTABLE_DIRECTORIES)
+        # This native state belongs to the conditional 2.1 controller contract.
+        # It stays outside immutable package bytes and has its own sealed
+        # manifest/owner checks; legacy 2.0 coverage remains unchanged.
+        campaign = json.loads(_safe_path(root, "campaign.yaml").read_bytes())
+        if campaign.get("schema_version") == "2.1":
+            from .execution.controller_campaign import controller_task_declarations
+            if controller_task_declarations(campaign):
+                mutable.add("controller-state")
         actual = {
             path.relative_to(root).as_posix()
             for path in root.rglob("*")
             if path.is_file()
-            and path.relative_to(root).parts[0] not in _MUTABLE_DIRECTORIES
+            and path.relative_to(root).parts[0] not in mutable
             and not path.name.startswith(("OUT.", "ERROR."))
         }
         expected_actual = set(checksums) | {"checksums.sha256"}

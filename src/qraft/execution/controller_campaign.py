@@ -1,7 +1,7 @@
 """ADR-017 campaign declarations and explicit lock binding checks, without I/O.
 
-These checks are independent helpers until the campaign loader/preparer and the
-compiled runtime are connected. Importing this module does not enable execution.
+The loader, preparer and canonical runtime share these checks. Importing this
+module does not enable execution or resolve an installed plugin.
 """
 
 from __future__ import annotations

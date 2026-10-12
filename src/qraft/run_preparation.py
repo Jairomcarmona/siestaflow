@@ -916,8 +916,9 @@ class RunPreparer:
                 # They are immutable provenance retained in campaign/run hashes.
                 record["scientific_propagation"] = scientific_propagation
             tasks.append(record)
+        has_controllers = any(task.get("kind") == "controller" for task in tasks)
         campaign = {
-            "schema_version": "2.0",
+            "schema_version": "2.1" if has_controllers else "2.0",
             "campaign_id": run_id,
             "system_id": workflow.workflow_id,
             "slurm": {
@@ -954,4 +955,10 @@ class RunPreparer:
             },
             "tasks": tasks,
         }
+        if has_controllers:
+            from .execution.controller_campaign import controller_task_declarations
+            declarations = controller_task_declarations(campaign)
+            for declaration in declarations:
+                if declaration.capability_id != by_task[declaration.task_id].capability_id:
+                    raise ValueError("controller capability_id disagrees with verified workflow lock")
         return campaign, protected

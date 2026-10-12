@@ -15,6 +15,9 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e
         with:
           version: '0.11.14'
@@ -40,8 +43,17 @@ jobs:
           with tempfile.TemporaryDirectory() as temporary:
               environment = os.environ.copy()
               environment.pop('PYTHONPATH', None)
-              for name in ('check_installed_integration.py', 'check_packaged_controller.py', 'check_installed_controller.py'):
+              for name in ('check_installed_integration.py', 'check_packaged_controller.py', 'check_installed_controller.py', 'check_controller_runtime.py'):
                   fixture = pathlib.Path('tools') / name
                   copied = pathlib.Path(temporary) / name
                   copied.write_bytes(fixture.read_bytes())
                   subprocess.run([str(python), '-I', str(copied)], cwd=temporary, env=environment, check=True)
+              import shutil
+              suites = pathlib.Path(temporary) / 'tests' / 'execution'
+              suites.mkdir(parents=True)
+              for suite in pathlib.Path('tests/execution').glob('test_controller_*.py'):
+                  shutil.copyfile(suite, suites / suite.name)
+              fixtures = pathlib.Path(temporary) / 'tests' / 'fixtures' / 'controller-ledger'
+              shutil.copytree('tests/fixtures/controller-ledger', fixtures)
+              subprocess.run([str(python), '-I', '-m', 'pytest', '-q', str(suites)],
+                             cwd=temporary, env=environment, check=True)

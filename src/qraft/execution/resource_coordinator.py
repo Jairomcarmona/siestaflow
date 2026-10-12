@@ -136,6 +136,7 @@ class ResourceCoordinator:
         self._used_cpus = 0
         self._used_nodes = 0
         self._used_hosts: set[str] = set()
+        self._local_shared_hosts: dict[str, str] = {}
         self._leases: dict[str, ResourceLease] = {}
         self._lock = threading.Lock()
         self._peak_cpus = 0
@@ -188,10 +189,24 @@ class ResourceCoordinator:
             dedicated_nodes += request.nodes
         return dedicated_nodes + int(shared_single_node)
 
-    def try_acquire(self, request: ResourceRequest) -> ResourceLease | None:
+    def try_acquire(
+        self, request: ResourceRequest, *, required_hosts: tuple[str, ...] = (),
+        local_host: str | None = None,
+    ) -> ResourceLease | None:
         """Return a lease when capacity fits; temporary pressure returns ``None``."""
 
         with self._lock:
+            if required_hosts and (
+                not request.exclusive_hosts or len(required_hosts) != request.nodes
+                or len(set(required_hosts)) != len(required_hosts)
+                or not set(required_hosts) <= set(self.allocation.hosts)
+            ):
+                raise ValueError("resource lease requires unique hosts inside the allocation")
+            if local_host is not None and (
+                request.exclusive_hosts or request.nodes != 1
+                or local_host not in self.allocation.hosts
+            ):
+                raise ValueError("shared local lease requires one declared allocation host")
             if request.task_id in self._leases:
                 raise RuntimeError(f"duplicate resource lease: {request.task_id}")
             if len(self._leases) >= self.allocation.max_parallel_steps:
@@ -202,17 +217,24 @@ class ResourceCoordinator:
             if node_usage > self.allocation.total_nodes:
                 return None
             hosts: tuple[str, ...] = ()
+            if local_host in self._used_hosts:
+                return None
             if request.exclusive_hosts:
+                shared_hosts = set(self._local_shared_hosts.values())
                 available = tuple(
                     host
                     for host in self.allocation.hosts
-                    if host not in self._used_hosts
+                    if host not in self._used_hosts and host not in shared_hosts
                 )
                 if len(available) < request.nodes:
                     return None
-                hosts = available[: request.nodes]
+                if required_hosts and not set(required_hosts) <= set(available):
+                    return None
+                hosts = required_hosts or available[: request.nodes]
             lease = ResourceLease(request.task_id, request.cpus, request.nodes, hosts)
             self._leases[request.task_id] = lease
+            if local_host is not None:
+                self._local_shared_hosts[request.task_id] = local_host
             self._used_cpus += request.cpus
             self._used_nodes = node_usage
             self._used_hosts.update(hosts)
@@ -227,6 +249,7 @@ class ResourceCoordinator:
             if current != lease:
                 raise RuntimeError(f"unknown or mismatched resource lease: {lease.task_id}")
             self._used_cpus -= lease.cpus
+            self._local_shared_hosts.pop(lease.task_id, None)
             self._used_hosts.difference_update(lease.hosts)
             self._used_nodes = self._current_node_usage()
 
@@ -267,7 +290,8 @@ class ResourceCoordinator:
 
     def assert_released(self) -> None:
         with self._lock:
-            if self._leases or self._used_cpus or self._used_nodes or self._used_hosts:
+            if (self._leases or self._used_cpus or self._used_nodes
+                    or self._used_hosts or self._local_shared_hosts):
                 raise RuntimeError("resource leases remain active after runtime completion")
 
 

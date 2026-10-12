@@ -59,7 +59,7 @@ def test_schema_bytes_identical_to_normative_contracts():
         "defs.schema.json": "2c4245ded2988c8ffeb5f9bed55fcac0d0aa57cf2805277a67b0408edebfb5f4",
         "qraft-controller-reservation.schema.json": "0c1694dd725d1d0eb8ce7e8a23bd537547629ab3dc463e158567c9cb50c3df56",
         "qraft-controller-ledger-entry.schema.json": "e93daa8ca193153563eec4c563da3360e2870d1228c8ceb8a62b6efb90dad2b3",
-        "qraft-controller-resume-verdict.schema.json": "054993007e3bb579007a91262d9ea30a577b68b5273d9e2f675cc5c2fd8a1b54",
+        "qraft-controller-resume-verdict.schema.json": "d825a369a57712a11ff346d2b9333bb5956a3a21efb75eabb3d3086748c25fd5",
     }
     for name, digest in expected.items():
         assert hashlib.sha256(files("qraft.execution.controller_schemas").joinpath(name).read_bytes()).hexdigest() == digest

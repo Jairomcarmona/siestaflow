@@ -21,7 +21,7 @@ from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path, PurePosixPath
-from typing import Any, Mapping
+from typing import TYPE_CHECKING, Any, Mapping
 
 from .. import __version__ as QRAFT_VERSION
 from ..engines.siesta.output_parser import SiestaOutputParser
@@ -34,6 +34,9 @@ from .direct_launcher import DirectLauncher
 from .adapters import launcher_registry
 from .slurm_environment import ShutdownRequest, SignalHandlers, SlurmEnvironment
 from .srun_launcher import StepLaunchSpec, StepLauncher, StepOutcome
+
+if TYPE_CHECKING:
+    from .controller_reservation import ControllerReservation
 
 
 class ExecutionStatus(str, Enum):
@@ -74,6 +77,8 @@ class ControllerTask:
     command: tuple[str, ...] = ()
     input_destinations: Mapping[str, str] = field(default_factory=dict)
     optional_artifacts: tuple[str, ...] = ()
+    capability_id: str | None = None
+    reservation: ControllerReservation | None = None
 
     @property
     def cpus(self) -> int:
@@ -160,8 +165,17 @@ def _nonnegative_float(value: Any, field: str) -> float:
 def load_controller_config(path: Path) -> ControllerConfig:
     data = load_structured(path)
     schema_version = str(data.get("schema_version"))
-    if schema_version not in {"1.0", "2.0"}:
+    if schema_version not in {"1.0", "2.0", "2.1"}:
         raise ValueError("unsupported campaign worker schema")
+    if schema_version == "2.1":
+        # Keep the established vendored 2.0 runtime importable without pulling
+        # in the conditional 2.1 controller modules.
+        from .controller_campaign import controller_task_declarations
+        declarations = {
+            task.task_id: task for task in controller_task_declarations(data)
+        }
+    else:
+        declarations = {}
     campaign_id = _required_text(data.get("campaign_id"), "campaign_id")
     system_id = _required_text(data.get("system_id"), "system_id")
     slurm = data.get("slurm")
@@ -199,7 +213,7 @@ def load_controller_config(path: Path) -> ControllerConfig:
     grace = _nonnegative_float(resources.get("termination_grace_seconds"), "resources.termination_grace_seconds")
     siesta = _required_text(runtime.get("siesta_executable"), "runtime.siesta_executable")
     launcher_raw = runtime.get("launcher", {})
-    if schema_version == "2.0":
+    if schema_version in {"2.0", "2.1"}:
         if not isinstance(launcher_raw, Mapping):
             raise ValueError("runtime.launcher must be a mapping for schema 2.0")
         launcher_kind = str(launcher_raw.get("kind", "")).strip().casefold()
@@ -361,8 +375,10 @@ def load_controller_config(path: Path) -> ControllerConfig:
         if task_nodes < 0:
             raise ValueError(f"nonnegative integer required: {task_id}.nodes")
         task_kind = str(raw.get("kind", "siesta")).strip().casefold()
-        if task_kind not in {"siesta", "gate"}:
-            raise ValueError(f"task kind must be siesta or gate: {task_id}")
+        if task_kind not in {"siesta", "gate", "controller"}:
+            raise ValueError(f"task kind must be siesta, gate or controller: {task_id}")
+        if task_kind == "controller" and task_id not in declarations:
+            raise ValueError("controller requires an exact kind and campaign schema 2.1")
         command_raw_task = raw.get("command", [])
         if task_kind == "gate":
             if not isinstance(command_raw_task, list) or not command_raw_task:
@@ -384,6 +400,8 @@ def load_controller_config(path: Path) -> ControllerConfig:
             attempts, bool(raw.get("require_scf_converged", True)),
             dependencies, tuple(transfers), task_nodes, task_kind, task_command,
             input_destinations, optional,
+            declarations[task_id].capability_id if task_id in declarations else None,
+            declarations[task_id].reservation if task_id in declarations else None,
         ))
     if max_parallel > len(tasks):
         max_parallel = len(tasks)
@@ -463,6 +481,8 @@ class AllocationController:
         shutdown: ShutdownRequest | None = None,
         poll_interval_seconds: float = 0.1,
     ) -> None:
+        if any(task.task_kind == "controller" for task in config.tasks):
+            raise ValueError("controller tasks require CompiledWorkflowRuntime")
         self.root = root.resolve()
         self.config = config
         self.slurm = slurm

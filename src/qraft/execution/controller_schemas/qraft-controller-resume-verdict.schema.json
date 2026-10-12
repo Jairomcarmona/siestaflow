@@ -233,11 +233,34 @@
         }
       },
       "then": {
-        "properties": {
-          "check_resume": {
-            "type": "null"
+        "description": "Sin resultado válido, check_resume es null. La única copia nativa no nula aquí es IDENTITY_MISMATCH con changed vacío: evidencia inconsistente, conservada literalmente, sin blocking inventado (ADR-017 Adenda 3).",
+        "anyOf": [
+          {
+            "properties": {
+              "check_resume": {
+                "type": "null"
+              }
+            }
+          },
+          {
+            "properties": {
+              "check_resume": {
+                "type": "object",
+                "properties": {
+                  "native_status": {
+                    "const": "IDENTITY_MISMATCH"
+                  },
+                  "changed": {
+                    "maxItems": 0
+                  }
+                }
+              },
+              "blocking": {
+                "maxItems": 0
+              }
+            }
           }
-        }
+        ]
       },
       "else": {
         "properties": {

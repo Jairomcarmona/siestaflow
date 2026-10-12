@@ -40,6 +40,7 @@ class ControllerLauncher:
         self._templates: dict[tuple[str, str], tuple[dict[str, Any], Path, Callable[[], None]]] = {}
         self._active: dict[tuple[str, str], _Supervisor] = {}
         self._closures: dict[tuple[str, str], bool] = {}
+        self._started: set[tuple[str, str]] = set()
         self._lock = threading.RLock()
 
     def bind_attempt(
@@ -58,6 +59,10 @@ class ControllerLauncher:
     def closure_proven(self, task_id: str, attempt_id: str) -> bool:
         with self._lock:
             return self._closures.get((task_id, attempt_id), False)
+
+    def has_launched(self, task_id: str, attempt_id: str) -> bool:
+        with self._lock:
+            return (task_id, attempt_id) in self._started
 
     def launch(self, spec: StepLaunchSpec) -> StepOutcome:
         if os.name != "posix":
@@ -98,6 +103,8 @@ class ControllerLauncher:
                 cwd=root, stdin=subprocess.DEVNULL, stdout=stdout, stderr=stderr,
                 env=environment, start_new_session=True,
             )
+            with self._lock:
+                self._started.add(key)
             ready_path = descriptor_path.with_name("controller-supervisor-ready.json")
             deadline = time.monotonic() + 10
             try:
