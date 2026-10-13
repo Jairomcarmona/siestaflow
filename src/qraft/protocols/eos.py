@@ -81,6 +81,8 @@ class EosProtocol:
     def run(self, reference_fdf, *, policy, runs_root=Path('.qraft-eos'), **execution_options):
         reference_fdf, root = Path(reference_fdf).resolve(), Path(runs_root).resolve()
         view = resolve_effective_fdf(reference_fdf)
+        if any(view.scalar(label) is None for label in ('NetCharge','Spin')):
+            raise ValueError('UNDECLARED_GOVERNED_VALUE: EOS source requires explicit NetCharge and Spin')
         _nonmagnetic(view)
         if policy['relaxation_mode'] != 'fixed-fractional':
             raise ValueError('internal EOS requires a declared symmetry policy and provider')

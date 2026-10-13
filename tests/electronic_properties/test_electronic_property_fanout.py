@@ -14,6 +14,8 @@ from qraft.protocols.single_fdf import build_scientific_identity
 
 
 BASE = """SystemName carbon
+NetCharge 0
+Spin non-polarized
 SystemLabel carbon
 NumberOfAtoms 1
 NumberOfSpecies 1

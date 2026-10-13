@@ -86,7 +86,17 @@ class SiestaInputValidator:
             if not document.scalars(declared):
                 findings.append(ValidationFinding("UNDECLARED_GOVERNED_VALUE", DecisionStatus.REVIEW, f"{declared} is not explicitly declared; no default assumed"))
         step_labels = ("MD.Steps", "MD.NumCGSteps")
-        if not any(document.scalars(label) for label in step_labels):
+        run_types = document.scalars('MD.TypeOfRun')
+        force_constants = bool(run_types and run_types[0].value.strip().casefold() == 'fc')
+        if force_constants:
+            for label in ('FC.Displacement', 'FC.First', 'FC.Last'):
+                if not document.scalars(label):
+                    findings.append(ValidationFinding('UNDECLARED_GOVERNED_VALUE', DecisionStatus.REVIEW,
+                        f'{label} is not explicitly declared for FC; no default assumed'))
+            for label in ('FC.First', 'FC.Last'):
+                if document.scalars(label):
+                    _integer_scalar(document,label,findings)
+        elif not any(document.scalars(label) for label in step_labels):
             findings.append(ValidationFinding(
                 "UNDECLARED_GOVERNED_VALUE", DecisionStatus.REVIEW,
                 "MD.Steps or MD.NumCGSteps is not explicitly declared; no default assumed",

@@ -9,7 +9,7 @@ import re
 from ..contracts import CapabilityRegistry
 from ..core import ScientificIdentity
 from ..engines.siesta.electronic_analysis import POLICY, BOHR_ANG, band_gap, directional_mass, parse_bands, band_run_check, parse_eigfat, fat_partition, fat_groups
-from ..engines.siesta.effective_fdf import materialize_effective_fdf
+from ..engines.siesta.effective_fdf import materialize_effective_fdf, resolve_effective_fdf
 from ..engines.siesta.electronic_properties import PROPERTY_CAPABILITIES
 from ..engines.siesta.input_closure import resolve_scientific_input_closure
 from ..execution.capability_plugins import register_siesta_electronic_properties
@@ -74,6 +74,9 @@ class ElectronicAnalysisProtocol:
         if block_name not in ('BandLines', 'BandPoints'):
             raise ValueError('Choose an explicit native band sample')
         root = Path(runs_root).resolve()
+        view=resolve_effective_fdf(source.final_fdf)
+        if any(view.scalar(label) is None for label in ('NetCharge','Spin')):
+            raise ValueError('UNDECLARED_GOVERNED_VALUE: electronic source requires explicit NetCharge and Spin')
         branch = root / 'source/bands'
         request = dict(block_name=block_name, rows=rows, n_occupied=n_occupied, wfs_for_bands=wfs_for_bands)
         _immutable_copy(self._worker_environment.lock_path, root / 'worker-environment.json')
