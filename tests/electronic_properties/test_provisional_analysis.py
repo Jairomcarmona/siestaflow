@@ -3,7 +3,8 @@ import json
 from pathlib import Path
 from dataclasses import FrozenInstanceError
 import pytest
-from qraft.api import ProvisionalScfSource, scientific_policy_document
+from qraft.api import scientific_policy_document
+from qraft.protocols.provisional_scf import ProvisionalScfSource
 from qraft.engines.siesta.electronic_analysis import POLICY
 from test_electronic_property_fanout import BASE
 from test_electronic_analysis_runtime import locked_protocol, fake_engine
@@ -19,13 +20,18 @@ def provisional(root):
 
 def test_direct_scf_sample_preserves_candidate_without_m6(tmp_path):
     source = provisional(tmp_path)
-    result = locked_protocol(tmp_path).run_sample(source, block_name='BandPoints',
+    result = locked_protocol(tmp_path,provisional=True).run_sample(source, block_name='BandPoints',
         rows=[[0,0,0],[.01,0,0],[.02,0,0]], n_occupied=1,
         runs_root=tmp_path/'sample', profile=fake_engine(tmp_path))
     assert result['result']['authority'] == 'NUMERICAL_CANDIDATE'
     assert result['result']['parent_scf']['origin'] == 'SCF directo provisional'
     assert 'parent_electronic_state' not in result['result']
     assert not list(tmp_path.rglob('electronic-state.json'))
+    assert result['result']['origin']=='PROVISIONAL_DIRECT_SCF'
+    with pytest.raises(TypeError,match='M6'):
+        locked_protocol(tmp_path).run_sample(source,block_name='BandPoints',rows=[],n_occupied=1,runs_root=tmp_path/'rejected')
+    import qraft.api as api
+    assert not hasattr(api,'ProvisionalScfSource')
     assert source.density_matrix.read_bytes() == b'verified-dm'
     with pytest.raises(TypeError):
         source.pseudopotentials['C'] = Path('other')

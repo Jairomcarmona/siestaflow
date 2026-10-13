@@ -55,7 +55,7 @@ class ProvisionalScfSource:
 
     def provenance(self):
         return dict(artifact_type='qraft.provisional-scf', authority='NUMERICAL_CANDIDATE',
-                    origin='SCF directo provisional', final_fdf_sha256=self.final_fdf_sha256,
+                    origin='SCF directo provisional', origin_code='PROVISIONAL_DIRECT_SCF', final_fdf_sha256=self.final_fdf_sha256,
                     density_matrix_sha256=self.density_matrix_sha256, stdout_sha256=self.stdout_sha256,
                     scientific_identity_sha256=self.parent_scientific_identity_sha256,
                     closure_sha256=self.closure_sha256, pseudopotentials=dict(self.pseudo_sha256))

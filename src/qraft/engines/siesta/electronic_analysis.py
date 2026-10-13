@@ -2,11 +2,11 @@
 from math import isfinite, sqrt
 from decimal import Decimal
 import re
+from ...scientific_policies import scientific_policy_document
 
 BOHR_ANG = 0.529177210903
 HBAR2_ME = 27.211386245988 * BOHR_ANG ** 2
-POLICY = dict(fit_halfwidth_invA=.05, min_points_per_side=3, degeneracy_meV=5,
-              straightness_invA=2e-5, energy_match_eV=1e-4, weight_rounding=5e-6)
+POLICY = scientific_policy_document('qraft.electronic.policy@1')
 
 
 def band_run_check(stdout, bands_written):

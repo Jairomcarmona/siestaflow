@@ -48,9 +48,13 @@ Block 2 additionally exports `EosProtocol`, `ElectronicAnalysisProtocol`,
 1.0; native DTOs and contracts are unchanged. EOS inputs/results remain their
 existing mappings. Electronic execution still requires the verified M6 handoff;
 an operator SCF is not an electronic-state artifact. The explicitly authorized
-`ProvisionalScfSource` route verifies SCF stdout, FDF, density matrix and pseudos
+private `ProvisionalScfSource` qualification route verifies SCF stdout, FDF, density matrix and pseudos
 and records `NUMERICAL_CANDIDATE` / `SCF directo provisional` in separate
 `parent_scf` evidence. It qualifies the pipeline only. ElectronicAnalysisProtocol
+rejects this input and requires M6; the provisional source and its private
+protocol are not exported by `qraft.api`. Provisional results are labelled
+`PROVISIONAL_DIRECT_SCF` and never become scientific ESTABLISHED results.
+ElectronicAnalysisProtocol
 requires a private `worker_lock_path` identifying both SIESTA and fat before
 execution. T-042 registration in the platform worker remains outside this block.
 

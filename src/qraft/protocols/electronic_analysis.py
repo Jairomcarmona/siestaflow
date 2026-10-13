@@ -63,8 +63,12 @@ class ElectronicAnalysisProtocol:
 
     def run_sample(self, source: ElectronicStateSource | ProvisionalScfSource, *, block_name, rows, n_occupied,
                    runs_root, profile=None, wfs_for_bands=False):
-        if type(source) not in (ElectronicStateSource, ProvisionalScfSource):
-            raise TypeError('A verified M6 or explicit provisional SCF source is required')
+        if type(source) is not ElectronicStateSource:
+            raise TypeError('The integration protocol requires an immutable M6 electronic state')
+        return self._run_sample(source, block_name=block_name, rows=rows, n_occupied=n_occupied,
+            runs_root=runs_root, profile=profile, wfs_for_bands=wfs_for_bands)
+
+    def _run_sample(self, source, *, block_name, rows, n_occupied, runs_root, profile=None, wfs_for_bands=False):
         source = source.verify()
         self._worker_environment.verify()
         if block_name not in ('BandLines', 'BandPoints'):
@@ -139,6 +143,7 @@ class ElectronicAnalysisProtocol:
                                           for suffix in ('.bands.WFSX', '.HSX')}
         if provisional:
             result['authority'] = 'NUMERICAL_CANDIDATE'
+            result['origin'] = 'PROVISIONAL_DIRECT_SCF'
         _immutable_json(root / 'result.json', result)
         return {'result': result, 'bands': bands, 'attempt_root': attempt_root}
 
@@ -200,12 +205,21 @@ class ElectronicAnalysisProtocol:
         result['policy_id'] = 'qraft.electronic.policy@1'
         if parent_key == 'parent_scf':
             result['authority'] = 'NUMERICAL_CANDIDATE'
+            result['origin'] = 'PROVISIONAL_DIRECT_SCF'
         _immutable_json(root / 'result.json', result)
         return result
 
     def run_masses(self, source, *, path_rows, longitudinal, transverse_directions, band, carrier, n_occupied, spin=0,
                    step_invA, points_per_side,
                    runs_root, profile=None):
+        if type(source) is not ElectronicStateSource:
+            raise TypeError('The integration protocol requires an immutable M6 electronic state')
+        return self._run_masses(source, path_rows=path_rows, longitudinal=longitudinal,
+            transverse_directions=transverse_directions, band=band, carrier=carrier, n_occupied=n_occupied,
+            spin=spin, step_invA=step_invA, points_per_side=points_per_side, runs_root=runs_root, profile=profile)
+
+    def _run_masses(self, source, *, path_rows, longitudinal, transverse_directions, band, carrier, n_occupied, spin=0,
+                   step_invA, points_per_side, runs_root, profile=None):
         from math import sqrt, isfinite
         from ..engines.siesta.eos import _solve
         source = source.verify()
@@ -243,13 +257,15 @@ class ElectronicAnalysisProtocol:
             return first
         spec = {'from': 0, 'to': 2*points_per_side, 'band': band, 'carrier': carrier, 'spin': spin}
         mass = directional_mass(first['bands'], spec, POLICY)
+        mass = self._mass_result(source, mass)
         _immutable_json(root / 'longitudinal/mass.json', mass)
-        if mass['status'] != 'ESTABLISHED':
+        if mass.get('numerical_status', mass['status']) != 'ESTABLISHED':
             result = {'longitudinal': mass, 'transverse': [], 'policy_id': 'qraft.electronic.policy@1',
                       'worker_environment_sha256': self._worker_environment.sha256,
                       ('parent_scf' if isinstance(source, ProvisionalScfSource) else 'parent_electronic_state'): source.provenance()}
             if isinstance(source, ProvisionalScfSource):
                 result['authority'] = 'NUMERICAL_CANDIDATE'
+                result['origin'] = 'PROVISIONAL_DIRECT_SCF'
             _immutable_json(root / 'result.json', result)
             return result
         observed = [x/BOHR_ANG for x in first['bands']['k'][mass['extremum_k_index']]]
@@ -263,6 +279,7 @@ class ElectronicAnalysisProtocol:
                 transverse.append(sample)
                 continue
             value = directional_mass(sample['bands'], spec, POLICY)
+            value = self._mass_result(source, value)
             _immutable_json(root / f'transverse-{i:03}/mass.json', value)
             transverse.append(value)
         result = {'longitudinal': mass, 'transverse': transverse, 'center_cartesian_invA': fitted,
@@ -271,5 +288,27 @@ class ElectronicAnalysisProtocol:
         result['worker_environment_sha256'] = self._worker_environment.sha256
         if isinstance(source, ProvisionalScfSource):
             result['authority'] = 'NUMERICAL_CANDIDATE'
+            result['origin'] = 'PROVISIONAL_DIRECT_SCF'
         _immutable_json(root / 'result.json', result)
         return result
+
+    @staticmethod
+    def _mass_result(source, value):
+        if isinstance(source, ProvisionalScfSource):
+            value = {**value, 'authority':'NUMERICAL_CANDIDATE', 'origin':'PROVISIONAL_DIRECT_SCF'}
+            if value['status']=='ESTABLISHED':
+                value = {**value, 'status':'NUMERICAL_CANDIDATE', 'numerical_status':'ESTABLISHED'}
+        return value
+
+
+class _ProvisionalElectronicAnalysisProtocol(ElectronicAnalysisProtocol):
+    """Private qualification route; unavailable from the integration API."""
+    def run_sample(self, source, **options):
+        if type(source) is not ProvisionalScfSource:
+            raise TypeError('Qualification requires an explicit provisional SCF source')
+        return self._run_sample(source, **options)
+
+    def run_masses(self, source, **options):
+        if type(source) is not ProvisionalScfSource:
+            raise TypeError('Qualification requires an explicit provisional SCF source')
+        return self._run_masses(source, **options)

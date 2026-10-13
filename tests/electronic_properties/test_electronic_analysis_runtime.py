@@ -12,13 +12,15 @@ from qraft.workflow_authoring import BandStructureTaskBuilder
 from test_electronic_property_fanout import _source
 
 
-def locked_protocol(root):
+def locked_protocol(root, *, provisional=False):
     binary = Path(sys.executable).resolve()
     entry = dict(path=str(binary), version=sys.version, sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),
                  version_evidence='synthetic fixture interpreter, not SIESTA/fat qualification')
     lock = root / 'worker-environment.json'
     lock.write_text(json.dumps(dict(siesta=entry, fat=entry)))
-    return ElectronicAnalysisProtocol(worker_lock_path=lock)
+    from qraft.protocols.electronic_analysis import _ProvisionalElectronicAnalysisProtocol
+    protocol = _ProvisionalElectronicAnalysisProtocol if provisional else ElectronicAnalysisProtocol
+    return protocol(worker_lock_path=lock)
 
 
 def fake_engine(root, *, fail=False, missing=False, restart=True):
