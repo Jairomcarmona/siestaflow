@@ -24,7 +24,7 @@ from .protocols.electronic_analysis import ElectronicAnalysisProtocol
 from .protocols.electronic_properties import ElectronicPropertiesProtocol, ElectronicStateSource, PreparedElectronicProperties
 from .engines.siesta.electronic_properties import BandPathSpec, DosSpec, PdosSpec, PropertySpec
 from .protocols.provisional_scf import ProvisionalScfSource
-from .scientific_policies import scientific_policy_document
+from .scientific_policies import scientific_policy_document, scientific_policy_evidence
 from .scientific_convergence import MeshConvergenceRule, MeshObservation, MeshConvergenceReport, MeshConvergenceEvaluator
 from .scientific_kgrid import KGridConvergenceRule, KGridObservation, KGridConvergenceReport, KGridConvergenceEvaluator
 
@@ -42,7 +42,7 @@ __all__ = [
     "EosProtocol", "ElectronicAnalysisProtocol", "ElectronicPropertiesProtocol",
     "ElectronicStateSource", "PreparedElectronicProperties",
     "BandPathSpec", "DosSpec", "PdosSpec", "PropertySpec",
-    "ProvisionalScfSource", "scientific_policy_document",
+    "ProvisionalScfSource", "scientific_policy_document", "scientific_policy_evidence",
     "MeshConvergenceRule", "MeshObservation", "MeshConvergenceReport", "MeshConvergenceEvaluator",
     "KGridConvergenceRule", "KGridObservation", "KGridConvergenceReport", "KGridConvergenceEvaluator",
 ]

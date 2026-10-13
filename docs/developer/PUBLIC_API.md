@@ -65,6 +65,11 @@ unchanged JSON copy. The ID must match `rule_id`; legacy unversioned IDs require
 an operator decision. The corresponding rule, observation, report and evaluator
 types are exported through `qraft.api`. Validation is not scientific approval:
 results remain provisional and require human acceptance outside this block.
+`scientific_policy_evidence()` retains the literal policy/protocol IDs and
+document in an existing extensible SCIENTIFIC_ARTIFACT envelope. Its native
+content digest is `qraft.content-sha256-v1`; it is independent of the platform's
+JCS policy-document digest. Store and verify this envelope with its original
+bytes. The envelope stays PROVISIONAL, including operator-supplied rules.
 
 `qraft.api.__all__` is additionally public, with `API_VERSION = "1.0"`.
 It exports the typed compose → compile → prepare → inspect route, its request,

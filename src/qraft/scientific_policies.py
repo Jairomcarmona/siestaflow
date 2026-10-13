@@ -28,3 +28,16 @@ def scientific_policy_document(policy_id, *, rule_document=None):
     if policy_id not in _DOCUMENTS:
         raise ValueError('Unknown approved scientific policy: '+str(policy_id))
     return deepcopy(_DOCUMENTS[policy_id])
+
+
+def scientific_policy_evidence(policy_id, *, rule_document=None):
+    """Native extensible artifact; its digest stays QRAFT's original algorithm."""
+    from .contracts import ContractEnvelope, SCIENTIFIC_ARTIFACT
+    document = scientific_policy_document(policy_id, rule_document=rule_document)
+    payload = dict(schema_version='1.0', artifact_id='scientific-policy',
+                   artifact_type='qraft.scientific-policy', authority='PROVISIONAL',
+                   policy_id=policy_id, policy_document=document,
+                   origin='operator rule' if rule_document is not None else 'approved policy')
+    if policy_id=='qraft.presets.policy@1':
+        payload['protocol_ids']=['qraft.preset.s-'+str(n).zfill(2)+'@1' for n in range(1,9)]
+    return ContractEnvelope.create(SCIENTIFIC_ARTIFACT, producer='qraft.scientific-policies', payload=payload)
