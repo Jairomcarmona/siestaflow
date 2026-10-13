@@ -5,3 +5,4 @@ tests/fixtures/controller-ledger/*.json -text
 
 tests/fixtures/scientific_protocols/*.json -text
 tests/fixtures/scientific_protocols/presets/*.json -text
+tests/fixtures/scientific_protocols/eos/*.json -text
