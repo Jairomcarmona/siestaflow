@@ -352,15 +352,18 @@ dependencies = [
 dev = [
     { name = "build" },
     { name = "pytest" },
+    { name = "spglib" },
 ]
 release = [
     { name = "build" },
 ]
 symmetry = [
     { name = "seekpath" },
+    { name = "spglib" },
 ]
 test = [
     { name = "pytest" },
+    { name = "spglib" },
 ]
 
 [package.dev-dependencies]
@@ -378,6 +381,9 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "seekpath", marker = "extra == 'symmetry'", specifier = ">=2.1" },
+    { name = "spglib", marker = "extra == 'dev'", specifier = "==2.8.0" },
+    { name = "spglib", marker = "extra == 'symmetry'", specifier = "==2.8.0" },
+    { name = "spglib", marker = "extra == 'test'", specifier = "==2.8.0" },
 ]
 provides-extras = ["test", "release", "dev", "symmetry"]
 
