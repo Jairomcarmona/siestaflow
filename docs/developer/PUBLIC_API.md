@@ -41,6 +41,40 @@ silently freeze the current diagnostics.
 
 ## Integration API 1.0 (Ola 1)
 
+Block 2 additionally exports `EosProtocol`, `ElectronicAnalysisProtocol`,
+`ElectronicPropertiesProtocol`, `ElectronicStateSource`,
+`PreparedElectronicProperties`, and the existing `BandPathSpec`, `DosSpec`,
+`PdosSpec`, `PropertySpec` input types through `qraft.api`. API_VERSION remains
+1.0; native DTOs and contracts are unchanged. EOS inputs/results remain their
+existing mappings. Electronic execution still requires the verified M6 handoff;
+an operator SCF is not an electronic-state artifact. The explicitly authorized
+private `ProvisionalScfSource` qualification route verifies SCF stdout, FDF, density matrix and pseudos
+and records `NUMERICAL_CANDIDATE` / `SCF directo provisional` in separate
+`parent_scf` evidence. It qualifies the pipeline only. ElectronicAnalysisProtocol
+rejects this input and requires M6; the provisional source and its private
+protocol are not exported by `qraft.api`. Provisional results are labelled
+`PROVISIONAL_DIRECT_SCF` and never become scientific ESTABLISHED results.
+ElectronicAnalysisProtocol
+requires a private `worker_lock_path` identifying both SIESTA and fat before
+execution. T-042 registration in the platform worker remains outside this block.
+
+`scientific_policy_document(policy_id)` delivers detached JSON documents for
+the approved EOS, electronic and preset policies, rejecting unknown IDs. The
+platform hashes these documents using its contractual JCS canonicalization;
+QRAFT native artifact digests keep their existing algorithms. No convergence
+policy ID or threshold is fabricated by this provider.
+The authorized `rule_document` option validates an explicit versioned
+convergence rule against the existing Mesh/KGrid rule models and returns its
+unchanged JSON copy. The ID must match `rule_id`; legacy unversioned IDs require
+an operator decision. The corresponding rule, observation, report and evaluator
+types are exported through `qraft.api`. Validation is not scientific approval:
+results remain provisional and require human acceptance outside this block.
+`scientific_policy_evidence()` retains the literal policy/protocol IDs and
+document in an existing extensible SCIENTIFIC_ARTIFACT envelope. Its native
+content digest is `qraft.content-sha256-v1`; it is independent of the platform's
+JCS policy-document digest. Store and verify this envelope with its original
+bytes. The envelope stays PROVISIONAL, including operator-supplied rules.
+
 `qraft.api.__all__` is additionally public, with `API_VERSION = "1.0"`.
 It exports the typed compose → compile → prepare → inspect route, its request,
 result and policy types, lock readers/writer, contextual validator, canonical
