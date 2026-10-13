@@ -4,6 +4,9 @@ API 1.0 preserves native contract versions and native digest algorithms.
 Only names in __all__ are public; implementation modules remain internal.
 """
 
+from pathlib import Path
+from typing import Any
+
 from .workflow_composition import ArtifactPortContract, IntentIdentity, RecipePolicy, WorkflowComposer, WorkflowFragment
 from .workflows.compiler import WorkflowCompiler, write_workflow_lock
 from .workflows.models import WorkflowCompilation
@@ -26,8 +29,20 @@ from .engines.siesta.electronic_properties import BandPathSpec, DosSpec, PdosSpe
 from .scientific_policies import scientific_policy_document, scientific_policy_evidence
 from .scientific_convergence import MeshConvergenceRule, MeshObservation, MeshConvergenceReport, MeshConvergenceEvaluator
 from .scientific_kgrid import KGridConvergenceRule, KGridObservation, KGridConvergenceReport, KGridConvergenceEvaluator
+from .execution.controller_state import previous_controller_owner as _previous_controller_owner
 
 API_VERSION = "1.0"
+
+
+def previous_controller_owner(
+    root: Path, state_dir: Path, *, current_boot_id: str, current_host: str,
+) -> dict[str, Any] | None:
+    """Read the previous controller owner proof without changing its semantics."""
+    return _previous_controller_owner(
+        root, state_dir, current_boot_id=current_boot_id, current_host=current_host,
+    )
+
+
 __all__ = [
     "API_VERSION", "ArtifactPortContract", "IntentIdentity", "RecipePolicy",
     "WorkflowComposer", "WorkflowFragment", "WorkflowCompiler", "WorkflowCompilation",
@@ -44,4 +59,5 @@ __all__ = [
     "scientific_policy_document", "scientific_policy_evidence",
     "MeshConvergenceRule", "MeshObservation", "MeshConvergenceReport", "MeshConvergenceEvaluator",
     "KGridConvergenceRule", "KGridObservation", "KGridConvergenceReport", "KGridConvergenceEvaluator",
+    "previous_controller_owner",
 ]

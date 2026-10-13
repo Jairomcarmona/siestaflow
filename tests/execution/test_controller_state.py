@@ -4,8 +4,9 @@ import pytest
 
 from qraft.execution.controller_files import atomic_controller_json, read_controller_json
 from qraft.execution.controller_runtime import ControllerRuntimeContext, write_state_seal_evidence
+from qraft.api import previous_controller_owner
 from qraft.execution.controller_state import (
-    ControllerStateError, controller_state_manifest, previous_controller_owner,
+    ControllerStateError, controller_state_manifest,
 )
 
 OLD_BOOT = "00000000-0000-0000-0000-000000000001"
@@ -30,6 +31,16 @@ def test_absent_pid_and_absent_closure_are_not_owner_death(tmp_path):
     state, _ = owned_state(tmp_path)
     with pytest.raises(ControllerStateError, match="PREVIOUS_OWNER_ALIVE"):
         previous_controller_owner(tmp_path, state, current_boot_id=OLD_BOOT, current_host="localhost")
+
+
+def test_empty_state_preserves_no_previous_owner_result(tmp_path):
+    state = tmp_path / "controller-state" / "hf1"
+    state.mkdir(parents=True)
+
+    assert previous_controller_owner(
+        tmp_path, state, current_boot_id=OLD_BOOT, current_host="localhost",
+    ) is None
+    assert list(state.iterdir()) == []
 
 
 @pytest.mark.parametrize("proof", ["CLOSED", "OWNER_DEAD_BY_BOOT_CHANGE"])
