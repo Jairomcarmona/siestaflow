@@ -49,7 +49,7 @@ def _overrides(root: Path, *, force: float = 0.01, struct: bool = True, drift: b
     script = root / "fake.py"
     cell = "11 0 0\\n0 10 0\\n0 0 10" if drift else "10 0 0\\n0 10 0\\n0 0 10"
     body = "" if not struct else f"open('relax.STRUCT_OUT','w').write('{cell}\\n1\\n1 0 0.1 0.2 0.3\\n')\n"
-    script.write_text("import sys\nfrom pathlib import Path\n" + body + f"print('Siesta started')\nprint('SCF converged')\nprint('Maximum force: {force} eV/Ang')\nprint('Job completed')\n", encoding="utf-8")
+    script.write_text("import sys\nfrom pathlib import Path\n" + body + f"print('Siesta started')\nprint('SCF cycle converged')\nprint('outcoor: Relaxed')\nprint('siesta: Atomic forces (eV/Ang):')\nprint(' Tot 0 0 0')\nprint(' Max {force}')\nprint('Job completed')\n", encoding="utf-8")
     return {"launcher": "direct", "partition": "local", "executable": sys.executable, "executable_arguments": [str(script)]}
 
 
@@ -146,8 +146,8 @@ def test_canonical_closure_stages_includes_pseudos_and_normalized_label(tmp_path
         "required = ('input.fdf', 'subdir/settings.fdf', 'C.psf')\n"
         "if not all(Path(name).is_file() for name in required): sys.exit(2)\n"
         "Path('closure.STRUCT_OUT').write_text('10 0 0\\n0 10 0\\n0 0 10\\n1\\n1 0 0.1 0.2 0.3\\n')\n"
-        "print('Siesta started')\nprint('SCF converged')\n"
-        "print('siesta: Atomic forces (eV/Ang):')\nprint(' Max 0.01 constrained')\nprint('Job completed')\n",
+        "print('Siesta started')\nprint('SCF cycle converged')\nprint('outcoor: Relaxed')\n"
+        "print('siesta: Atomic forces (eV/Ang):')\nprint(' Tot 0 0 0')\nprint(' Max 0.01')\nprint(' Max 0.01 constrained')\nprint('Job completed')\n",
         encoding="utf-8",
     )
     protocol = RelaxationProtocol(); run_root = tmp_path / "runs"
@@ -184,3 +184,29 @@ def test_missing_geometry_and_fixed_cell_drift_are_rejected(tmp_path: Path) -> N
     assert missing["technical_validation"] != "PASS" and "geometry_reference" not in missing
     drift = protocol.run(fdf, overrides=_overrides(tmp_path, drift=True), runs_root=tmp_path / "drift")
     assert drift["technical_validation"] == "PASS" and drift["status"] == "BLOCKED" and "geometry_reference" not in drift
+
+
+@pytest.mark.parametrize("relaxed,total,constraints,status,reasons", [
+    (False, 0.0, False, "REJECTED", ["NOT_RELAXED"]),
+    (True, 0.05, False, "REVIEW", ["NET_FORCE_ABOVE_TOLERANCE"]),
+    (True, 0.05, True, "ACCEPTED", []),
+])
+def test_presets_gates_run_after_canonical_relaxation(tmp_path, relaxed, total, constraints, status, reasons):
+    text = FDF
+    if constraints:
+        text += "%block Geometry.Constraints\natom 1\n%endblock Geometry.Constraints\n"
+    fdf = _input(tmp_path, text)
+    overrides = _overrides(tmp_path)
+    script = tmp_path / "fake.py"
+    body = script.read_text(encoding="utf-8").replace("Tot 0 0 0", f"Tot {total} 0 0")
+    if not relaxed:
+        body = body.replace("outcoor: Relaxed", "outcoor: Final (unrelaxed)")
+    script.write_text(body, encoding="utf-8")
+    result = RelaxationProtocol().run(fdf, runs_root=tmp_path / "runs", overrides=overrides)
+    assert result["technical_validation"] == "PASS"
+    assert result["assessment"] == {"status": status, "reasons": reasons}
+    assert ("geometry_reference" in result) == (status == "ACCEPTED")
+    second = RelaxationProtocol().run(fdf, runs_root=tmp_path / "runs", overrides=overrides)
+    assert second["reused"]
+    assert second["assessment"] == result["assessment"]
+    assert not (tmp_path / "runs/work/relax/attempt-0002").exists()
