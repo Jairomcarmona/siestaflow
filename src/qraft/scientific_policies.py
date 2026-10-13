@@ -1,5 +1,6 @@
 """Operator-approved JSON documents delivered by the installed wheel."""
 from copy import deepcopy
+import re
 
 _DOCUMENTS = {
     'qraft.electronic.policy@1': dict(fit_halfwidth_invA=.05, min_points_per_side=3, degeneracy_meV=5,
@@ -12,8 +13,18 @@ _DOCUMENTS = {
 }
 
 
-def scientific_policy_document(policy_id):
+def scientific_policy_document(policy_id, *, rule_document=None):
     """Return a detached JSON value; unknown IDs never acquire defaults."""
+    if rule_document is not None:
+        if policy_id in _DOCUMENTS or not re.fullmatch(r'[a-z][a-z0-9_.-]*@[1-9][0-9]*', policy_id) or rule_document.get('rule_id') != policy_id:
+            raise ValueError('Explicit versioned convergence rule ID must agree with the document')
+        from .scientific_convergence import MeshConvergenceRule
+        from .scientific_kgrid import KGridConvergenceRule
+        model = {'Mesh.Cutoff': MeshConvergenceRule, 'kgrid.MonkhorstPack': KGridConvergenceRule}.get(rule_document.get('parameter'))
+        if model is None:
+            raise ValueError('Unsupported convergence rule')
+        model.from_mapping(rule_document)
+        return deepcopy(rule_document)
     if policy_id not in _DOCUMENTS:
         raise ValueError('Unknown approved scientific policy: '+str(policy_id))
     return deepcopy(_DOCUMENTS[policy_id])

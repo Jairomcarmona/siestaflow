@@ -59,6 +59,12 @@ the approved EOS, electronic and preset policies, rejecting unknown IDs. The
 platform hashes these documents using its contractual JCS canonicalization;
 QRAFT native artifact digests keep their existing algorithms. No convergence
 policy ID or threshold is fabricated by this provider.
+The authorized `rule_document` option validates an explicit versioned
+convergence rule against the existing Mesh/KGrid rule models and returns its
+unchanged JSON copy. The ID must match `rule_id`; legacy unversioned IDs require
+an operator decision. The corresponding rule, observation, report and evaluator
+types are exported through `qraft.api`. Validation is not scientific approval:
+results remain provisional and require human acceptance outside this block.
 
 `qraft.api.__all__` is additionally public, with `API_VERSION = "1.0"`.
 It exports the typed compose → compile → prepare → inspect route, its request,
