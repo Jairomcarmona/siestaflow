@@ -82,6 +82,22 @@ def test_effective_xc_reaches_manifest_verifier(tmp_path):
     assert report.status.value == 'BLOCKED'
 
 
+@pytest.mark.parametrize('xc', ['', 'XC.functional GGA\n', 'XC.authors PBE\n'])
+def test_missing_xc_has_incomplete_input_finding_without_unknown_or_defaults(tmp_path, xc):
+    header = next(c['psml'] for c in PS['cases'] if c['kind']=='psml' and c['expect']['libxc_ids']==[101,130])
+    entries = []
+    for label in ('C', 'O'):
+        path = tmp_path/(label+'.psml'); path.write_text(header)
+        entries.append(entry(path))
+    fdf = tmp_path/'input.fdf'; fdf.write_text(BASE_FDF+'\n'+xc)
+    before = fdf.read_bytes()
+    report = SiestaContextualValidator().validate_path(fdf, pseudopotential_manifest=PseudopotentialManifest(tuple(entries)))
+    assert report.status.value == 'BLOCKED'
+    assert any('SCIENTIFIC_INPUT_INCOMPLETE' in str(f) for f in report.findings)
+    assert not any('XC_UNKNOWN' in str(f) for f in report.findings)
+    assert fdf.read_bytes() == before
+
+
 @pytest.mark.parametrize('case', [c for c in PS['cases'] if c['kind'] == 'stdout'], ids=lambda c: c['id'])
 def test_post_run_xc_warning_is_fail_even_on_normal_completion(case):
     text = 'Siesta Version : 5.4.2\nSCF converged\n' + case['stdout'] + '\nJob completed\n'

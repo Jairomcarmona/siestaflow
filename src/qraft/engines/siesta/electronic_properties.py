@@ -266,8 +266,13 @@ def validate_property_branch(path: Path, property_name: str) -> None:
         raise ValueError("M7 property branches require DM.UseSaveDM true")
     if property_name == "bands":
         scale, block = effective.scalar("BandLinesScale"), effective.block("BandLines")
+        points = effective.block('BandPoints')
+        if block is None:
+            block = points
+        elif points is not None:
+            raise ValueError('bands branch must choose BandLines or BandPoints')
         if scale is None or scale.value.strip() != "ReciprocalLatticeVectors" or block is None or not block.closed:
-            raise ValueError("bands branch requires BandLinesScale and a closed BandLines block")
+            raise ValueError("bands branch requires BandLinesScale and a closed band block")
         if effective.block("ProjectedDensityOfStates") is not None or effective.block("PDOS.kgrid_Monkhorst_Pack") is not None:
             raise ValueError("bands branch must not contain DOS/PDOS directives")
     elif property_name in {"dos", "pdos"}:
@@ -323,6 +328,13 @@ def parse_bands(path: Path) -> dict[str, Any]:
     """Parse the structured native SIESTA ``.bands`` stream, including wraps."""
 
     lines = [line.strip() for line in path.read_text(encoding="utf-8", errors="replace").splitlines() if line.strip() and not line.lstrip().startswith(("#", "!", ";"))]
+    if len(lines) >= 4 and len(lines[2].split()) == 3:
+        from .electronic_analysis import parse_bands as read_sample
+        sample = read_sample(path.read_text(encoding='utf-8'))
+        bounds = _numbers_for_points_header(lines[1])
+        return {'fermi_energy': sample['fermi_eV'], 'energy_min': bounds[0], 'energy_max': bounds[1],
+                'bands': sample['nbands'], 'spins': sample['nspin'], 'kpoints': sample['nk'],
+                'line_labels': (), 'finite_eigenvalues': sample['nbands']*sample['nspin']*sample['nk']}
     if len(lines) < 5:
         raise ValueError("bands output is truncated")
     headers = [line.split() for line in lines[:4]]
@@ -355,6 +367,13 @@ def parse_bands(path: Path) -> dict[str, Any]:
         "bands": nbands, "spins": nspin, "kpoints": nkpoints, "line_labels": tuple(labels),
         "finite_eigenvalues": expected - nkpoints,
     }
+
+
+def _numbers_for_points_header(line):
+    tokens = line.split()
+    if len(tokens) != 2:
+        raise ValueError('invalid SIESTA BandPoints energy range')
+    return [_finite_token(t, 'bands energy range') for t in tokens]
 
 
 def parse_dos(path: Path, *, expected_points: int | None = None) -> dict[str, Any]:
@@ -495,6 +514,12 @@ class SiestaPropertyCapability:
         workspace = self._workspaces.get(key)
         if technical.status != "PASS" or workspace is None:
             return technical
+        if self.property_name == 'bands':
+            from .electronic_analysis import band_run_check
+            check = band_run_check((workspace / 'stdout.txt').read_text(encoding='utf-8', errors='replace'),
+                (workspace / f"{system_label(workspace / 'input.fdf')}.bands").is_file())
+            if check['status'] == 'FAIL':
+                return TechnicalValidation('FAIL', check['code'], (check['code'],), technical.parser_summary)
         try:
             expected = kwargs.get("settings", {}).get("expected_points")
             validate_property_output(workspace / f"{system_label(workspace / 'input.fdf')}{PROPERTY_SUFFIXES[self.property_name]}", self.property_name, expected_points=int(expected) if expected is not None else None)
