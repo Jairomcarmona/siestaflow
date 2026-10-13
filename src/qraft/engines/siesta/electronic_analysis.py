@@ -1,5 +1,6 @@
 """WF-ELECTRONIC B-0 through B-4, preserving native energy references."""
 from math import isfinite, sqrt
+from decimal import Decimal
 import re
 
 BOHR_ANG = 0.529177210903
@@ -197,7 +198,7 @@ def fat_groups(bands, sets, policy):
             ordered = sorted(range(len(energies)), key=lambda i: (energies[i], i))
             groups = []
             for band in ordered:
-                if not groups or (energies[band]-energies[groups[-1][-1]])*1000 > policy['degeneracy_meV']:
+                if not groups or (Decimal(str(energies[band]))-Decimal(str(energies[groups[-1][-1]])))*1000 > Decimal(str(policy['degeneracy_meV'])):
                     groups.append([])
                 groups[-1].append(band)
             for group in groups:

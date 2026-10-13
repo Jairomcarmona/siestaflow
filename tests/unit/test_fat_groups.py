@@ -14,7 +14,7 @@ def sample(energies):
 
 @pytest.mark.parametrize('energies,sizes', [([0.], [1]), ([0., .003], [2]),
     ([.006, 0., .003], [3]), ([0., .005, .010], [3]),
-    ([0., .005, .010001], [2, 1])])
+    ([0., .005, .010001], [2, 1]), ([.016, .021], [2]), ([.105, .110, .115], [3])])
 def test_maximal_chains_and_unclipped_group_weights(energies, sizes):
     bands, sets = sample(energies)
     groups = fat_groups(bands, sets, POLICY)
