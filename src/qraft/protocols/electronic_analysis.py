@@ -61,7 +61,7 @@ class ElectronicAnalysisProtocol:
     def __init__(self, *, worker_lock_path):
         self._worker_environment = _WorkerEnvironment.load(worker_lock_path)
 
-    def run_sample(self, source: ElectronicStateSource | ProvisionalScfSource, *, block_name, rows, n_occupied,
+    def run_sample(self, source: ElectronicStateSource, *, block_name, rows, n_occupied,
                    runs_root, profile=None, wfs_for_bands=False):
         if type(source) is not ElectronicStateSource:
             raise TypeError('The integration protocol requires an immutable M6 electronic state')
@@ -148,6 +148,11 @@ class ElectronicAnalysisProtocol:
         return {'result': result, 'bands': bands, 'attempt_root': attempt_root}
 
     def run_fat(self, sample, *, mpr, projections, min_band, max_band, runs_root):
+        if 'parent_scf' in sample['result'] or 'parent_electronic_state' not in sample['result']:
+            raise TypeError('The integration protocol requires an immutable M6 electronic state')
+        return self._run_fat(sample,mpr=mpr,projections=projections,min_band=min_band,max_band=max_band,runs_root=runs_root)
+
+    def _run_fat(self, sample, *, mpr, projections, min_band, max_band, runs_root):
         """Project the exact sampled wavefunctions with the locked utility.
 
         A dedicated directory preserves the immutable canonical SIESTA attempt.
@@ -312,3 +317,8 @@ class _ProvisionalElectronicAnalysisProtocol(ElectronicAnalysisProtocol):
         if type(source) is not ProvisionalScfSource:
             raise TypeError('Qualification requires an explicit provisional SCF source')
         return self._run_masses(source, **options)
+
+    def run_fat(self,sample,**options):
+        if 'parent_scf' not in sample['result'] or 'parent_electronic_state' in sample['result']:
+            raise TypeError('Qualification requires an explicit provisional SCF sample')
+        return self._run_fat(sample,**options)

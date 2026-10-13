@@ -20,7 +20,7 @@ def sample(root, protocol):
 
 
 def test_fat_uses_locked_binary_preserves_mpr_and_returns_only_group_weights(tmp_path, monkeypatch):
-    protocol = locked_protocol(tmp_path); data = sample(tmp_path, protocol)
+    protocol = locked_protocol(tmp_path,provisional=True); data = sample(tmp_path, protocol)
     mpr = tmp_path/'source.mpr'; mpr.write_text('carbon\nDOS\na\nC_2s\nb\nC_2p\n')
     def run(command, *, cwd, **kwargs):
         assert command == [protocol._worker_environment.fat.path, '-b','1','-B','2','projection']
@@ -39,9 +39,17 @@ def test_fat_uses_locked_binary_preserves_mpr_and_returns_only_group_weights(tmp
 
 
 def test_tampered_wavefunctions_prevent_fat_launch(tmp_path, monkeypatch):
-    protocol = locked_protocol(tmp_path); data = sample(tmp_path, protocol)
+    protocol = locked_protocol(tmp_path,provisional=True); data = sample(tmp_path, protocol)
     (data['attempt_root']/'carbon.bands.WFSX').write_bytes(b'changed')
     mpr = tmp_path/'source.mpr'; mpr.write_text('carbon\nDOS\na\nC\n')
     monkeypatch.setattr('qraft.protocols.electronic_analysis.subprocess.run', lambda *a, **k: pytest.fail('must not launch'))
     with pytest.raises(ValueError, match='input changed'):
         protocol.run_fat(data, mpr=mpr, projections=('a',), min_band=1, max_band=2, runs_root=tmp_path/'fat')
+
+
+def test_integration_fat_rejects_provisional_sample_before_launch(tmp_path,monkeypatch):
+    protocol=locked_protocol(tmp_path);data=sample(tmp_path,protocol)
+    monkeypatch.setattr('qraft.protocols.electronic_analysis.subprocess.run',lambda *a,**k:pytest.fail('must not launch'))
+    with pytest.raises(TypeError,match='M6'):
+        protocol.run_fat(data,mpr=tmp_path/'missing',projections=('a',),min_band=1,max_band=2,runs_root=tmp_path/'fat')
+    assert not (tmp_path/'fat').exists()
