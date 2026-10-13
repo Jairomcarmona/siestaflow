@@ -1,5 +1,6 @@
 """R12 registration and governed declarations; no engine is launched."""
 from pathlib import Path
+import hashlib,json
 import pytest
 from qraft.api import SiestaContextualValidator
 from qraft.engines.siesta.fdf_registry import FDFRegistry
@@ -69,3 +70,12 @@ def test_unknown_labels_and_mutation_permissions_are_not_promoted(tmp_path):
     assert report(tmp_path,'MD.TypeOfRun CG\nMD.Steps 0\nNotASiestaKeyword T\n').status.value=='REVIEW'
     for label in ['BandPoints','SaveHS','Mesh.Sizes','Geometry.Constraints','FC.First']:
         with pytest.raises(PermissionError):FDFRegistry.load_default().require_mutable(label)
+
+def test_real_keyword_query_fixture_is_unchanged():
+    path=Path(__file__).parents[1]/'fixtures/block2_fdf_registration/provenance.json'
+    assert hashlib.sha256(path.read_bytes()).hexdigest()=='2d7e71851a97467958014d51089ec271a31b6d3901947637dbeca04e1bf9cb75'
+    data=json.loads(path.read_bytes())
+    assert len(data['records'])==13
+    for record in data['records']:
+        assert FDFRegistry.load_default().get(record['label']) is not None
+        assert record['observed_lines'] and len(record['log_sha256'])==64
