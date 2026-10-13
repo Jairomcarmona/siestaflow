@@ -806,8 +806,8 @@ class BandStructureTaskBuilder:
             raise ValueError("band_structure requires explicit MD.NumCGSteps 0")
         if document.blocks("BandPoints"):
             raise ValueError("band_structure currently requires BandLines, not BandPoints")
-        if len(scale) != 1 or scale[0].value.casefold() not in {"reciprocallatticevectors", "pi/a"}:
-            raise ValueError("band_structure requires explicit BandLinesScale ReciprocalLatticeVectors or pi/a")
+        if len(scale) != 1 or scale[0].value.casefold() != "reciprocallatticevectors":
+            raise ValueError("band_structure requires explicit BandLinesScale ReciprocalLatticeVectors")
         if len(lines) != 1 or not lines[0].closed:
             raise ValueError("band_structure requires exactly one closed BandLines block")
         rows = [raw.split("#", 1)[0].strip().split() for raw in lines[0].body_lines]
