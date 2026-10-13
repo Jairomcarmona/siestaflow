@@ -31,17 +31,6 @@ def _safe_path(root: Path, owner: Path, target: str) -> Path:
     return candidate
 
 
-def _scalar_redirect(label: str, target: Path, newline: str) -> FDFScalar:
-    text = target.read_text(encoding="utf-8", errors="surrogateescape").strip()
-    if not text or "\n" in text or "\r" in text:
-        raise ValueError(f"scalar redirect must contain one value: {target}")
-    parsed = FDFParser().parse(f"{label} {text}{newline}")
-    scalar = next((item for item in parsed.nodes if isinstance(item, FDFScalar)), None)
-    if scalar is None or normalize_label(scalar.label) != normalize_label(label):
-        raise ValueError(f"invalid scalar redirect: {target}")
-    return scalar
-
-
 def _block_redirect(name: str, target: Path, newline: str) -> FDFBlock:
     body = target.read_text(encoding="utf-8", errors="surrogateescape")
     if body and not body.endswith(("\n", "\r")):
@@ -112,24 +101,22 @@ def resolve_effective_fdf(root_fdf: Path) -> EffectiveFDF:
     occurrences: dict[str, EffectiveOccurrence] = {}
     visiting: set[Path] = set()
 
-    def record(label: str, kind: str, owner: Path, index: int, *, scalar: FDFScalar | None = None, block: FDFBlock | None = None, redirected_from: Path | None = None) -> None:
+    def record(output, label: str, kind: str, owner: Path, index: int, *, scalar: FDFScalar | None = None, block: FDFBlock | None = None, redirected_from: Path | None = None) -> None:
         normalized = normalize_label(label)
-        if normalized in occurrences:
+        if normalized in output:
             return
-        occurrences[normalized] = EffectiveOccurrence(
+        output[normalized] = EffectiveOccurrence(
             label=label, kind=kind, owner=owner,
             relative_owner=owner.relative_to(source_root).as_posix(), node_index=index,
             scalar=scalar, block=block, redirected_from=redirected_from,
         )
 
-    def visit(path: Path) -> None:
+    def visit(path: Path, output) -> None:
         path = path.resolve()
         if path in visiting:
             raise ValueError(f"cyclic FDF include detected at {path}")
-        if path in documents:
-            return
         visiting.add(path)
-        document = FDFParser().parse_path(path)
+        document = documents.get(path) or FDFParser().parse_path(path)
         documents[path] = document
         files[path.relative_to(source_root).as_posix()] = path
         newline = document.newline_style or "\n"
@@ -137,26 +124,31 @@ def resolve_effective_fdf(root_fdf: Path) -> EffectiveFDF:
             if isinstance(node, FDFInclude):
                 target = _safe_path(source_root, path, node.target)
                 if node.directive == "%include":
-                    visit(target)
+                    visit(target, output)
                 elif node.label:
-                    raw_dependencies[target.relative_to(source_root).as_posix()] = target
-                    record(node.label, "scalar", path, index,
-                           scalar=_scalar_redirect(node.label, target, newline), redirected_from=target)
+                    redirected = {}
+                    visit(target, redirected)
+                    occurrence = redirected.get(normalize_label(node.label))
+                    if occurrence is None or occurrence.scalar is None:
+                        raise ValueError(f"REDIRECT_LABEL_NOT_FOUND: {node.label} in {target}")
+                    scalar = occurrence.scalar
+                    record(output, node.label, "scalar", path, index,
+                           scalar=scalar, redirected_from=target)
                 else:
                     raise ValueError(f"unsupported FDF include directive: {node.directive}")
             elif isinstance(node, FDFBlock):
                 if node.redirected_to:
                     target = _safe_path(source_root, path, node.redirected_to)
                     raw_dependencies[target.relative_to(source_root).as_posix()] = target
-                    record(node.name, "block", path, index,
+                    record(output, node.name, "block", path, index,
                            block=_block_redirect(node.name, target, newline), redirected_from=target)
                 else:
-                    record(node.name, "block", path, index, block=node)
+                    record(output, node.name, "block", path, index, block=node)
             elif isinstance(node, FDFScalar):
-                record(node.label, "scalar", path, index, scalar=node)
+                record(output, node.label, "scalar", path, index, scalar=node)
         visiting.remove(path)
 
-    visit(root_fdf)
+    visit(root_fdf, occurrences)
     return EffectiveFDF(root_fdf, source_root, dict(sorted(files.items())), dict(sorted(raw_dependencies.items())), documents, occurrences)
 
 

@@ -63,17 +63,9 @@ class WorkflowPreflightValidator:
                 root
                 / Path(*PurePosixPath(artifact.relative_path).parts)
             ).resolve()
-            document = FDFParser().parse_path(path)
-            pseudo_result = None
-            if pseudopotential_manifest is not None:
-                structural = SiestaInputValidator().validate(document)
-                pseudo_result = PseudopotentialVerifier().verify(
-                    pseudopotential_manifest,
-                    structural.species,
-                )
-            report = self.siesta_validator.validate(
-                document,
-                pseudo_result=pseudo_result,
+            report = self.siesta_validator.validate_path(
+                path,
+                pseudopotential_manifest=pseudopotential_manifest,
                 require_pseudos=require_pseudos,
                 profile=profile,
                 subject_id=artifact.artifact_id,

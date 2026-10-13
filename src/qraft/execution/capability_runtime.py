@@ -1335,6 +1335,8 @@ class CompiledWorkflowRuntime:
             task_id=task.task_id,
             attempt_id=attempt_id,
             settings=dict(task.settings),
+            inputs={item.name: attempt_root / item.destination for item in task.inputs},
+            bindings={item.name: item for item in task.inputs},
         )
         discovered_hashes: dict[str, str] = {}
         for item in discovered or ():

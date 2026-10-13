@@ -174,6 +174,6 @@ class FDFParser:
 
 def _strip_inline_comment(value: str) -> str:
     for index, char in enumerate(value):
-        if char in "#;!" and (index == 0 or value[index - 1].isspace()):
+        if char in "#;!":
             return value[:index]
     return value

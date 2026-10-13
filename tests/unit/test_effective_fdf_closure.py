@@ -55,7 +55,7 @@ def test_materialization_updates_the_first_effective_redirected_values(tmp_path:
     defaults = tmp_path / "defaults.fdf"
     root.write_text("%include defaults.fdf\nMesh.Cutoff 350 Ry\n%block kgrid.MonkhorstPack < grid.dat\n", encoding="utf-8")
     defaults.write_text("Mesh.Cutoff < mesh.value\n", encoding="utf-8")
-    (tmp_path / "mesh.value").write_text("100 Ry\n", encoding="utf-8")
+    (tmp_path / "mesh.value").write_text("Mesh.Cutoff 100 Ry\n", encoding="utf-8")
     (tmp_path / "grid.dat").write_text("1 0 0 0.0\n0 1 0 0.0\n0 0 1 0.0\n", encoding="utf-8")
 
     rendered = materialize_effective_fdf(
@@ -144,7 +144,7 @@ def test_destination_collisions_fail_before_creating_output(tmp_path: Path) -> N
     redirect_root = tmp_path / "redirect"; redirect_root.mkdir()
     redirected = redirect_root / "main.fdf"
     redirected.write_text("Mesh.Cutoff < input.fdf\n", encoding="utf-8")
-    (redirect_root / "input.fdf").write_text("100 Ry\n", encoding="utf-8")
+    (redirect_root / "input.fdf").write_text("Mesh.Cutoff 100 Ry\n", encoding="utf-8")
     redirect_destination = tmp_path / "redirect-rendered"
     with pytest.raises(ValueError, match="destination collision"):
         materialize_effective_fdf(redirected, redirect_destination, primary_destination="input.fdf")

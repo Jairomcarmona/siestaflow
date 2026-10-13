@@ -2,3 +2,5 @@
 *.psml -text
 src/qraft/execution/controller_schemas/*.json -text
 tests/fixtures/controller-ledger/*.json -text
+
+tests/fixtures/scientific_protocols/*.json -text

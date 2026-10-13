@@ -31,6 +31,8 @@ from .engines.siesta.validation_profile import SiestaValidationProfile
 
 
 _TRUE = {"t", "true", "yes", "y", "1", ".true."}
+_KEYWORD_RULE = "siestaflow.siesta.keyword-schema"
+_PRODUCER = "siestaflow.siesta-contextual-validator"
 _FALSE = {"f", "false", "no", "n", "0", ".false."}
 _UNIT_REQUIRED = {
     "energy_required",
@@ -100,6 +102,90 @@ class SiestaContextualValidator:
         self.catalog = catalog or SiestaValidationCatalog.load_default()
         self.structural = SiestaInputValidator(self.registry)
 
+    def validate_path(self, root_fdf, *, fdf_log=None, pseudopotential_manifest=None, **options) -> ValidationReport:
+        """Resolve a confined closure and report U-Q17 syntax using native findings.
+
+        It is read only; source files and hashes never change during validation.
+        A missing include remains FAIL, never a successful empty resolution.
+        """
+        from pathlib import Path
+        from .engines.siesta.effective_fdf import resolve_effective_fdf
+        from .engines.siesta.preflight import scalar_value, unused_labels, keyword_suggestions
+        path = Path(root_fdf)
+        identifier = options.get('subject_id') or path.stem
+        findings = []
+        try:
+            effective = resolve_effective_fdf(path)
+        except (FileNotFoundError, ValueError) as exc:
+            message = str(exc)
+            code = ('INCLUDE_NOT_FOUND' if isinstance(exc, FileNotFoundError) else
+                    'CYCLIC_INCLUDE' if 'cyclic' in message else
+                    'REDIRECT_LABEL_NOT_FOUND' if 'REDIRECT_LABEL_NOT_FOUND' in message else None)
+            if code is None:
+                raise
+            finding = self._finding(_KEYWORD_RULE, code, DecisionStatus.FAIL,
+                message, FindingScope.SYNTAX, identifier, str(path), 'Resolve the FDF dependency before running.')
+            return ValidationReport.build(report_id=f'{identifier}:siesta-contextual-validation',
+                subject=ValidationSubject(subject_id=identifier, subject_type='siesta.fdf', engine='siesta',
+                    engine_version=self.catalog.engine_version, source=str(path)),
+                findings=(finding,), ruleset_sha256=self.catalog.sha256,
+                produced_by=_PRODUCER, metadata={'execution_authorized': False})
+        nodes = [o.scalar or o.block for o in effective.occurrences.values()]
+        diagnostics = [item for source in effective.documents.values() for item in source.diagnostics]
+        document = FDFDocument(str(path), nodes, diagnostics, '\n', effective.closure_sha256)
+        if pseudopotential_manifest is not None:
+            from .engines.siesta.pseudopotentials import PseudopotentialVerifier
+            structural = self.structural.validate(document)
+            functional = effective.scalar('XC.functional')
+            authors = effective.scalar('XC.authors')
+            xc = ({'functional': functional.value.strip(), 'authors': authors.value.strip()}
+                  if functional is not None and authors is not None else None)
+            options['pseudo_result'] = PseudopotentialVerifier().verify(
+                pseudopotential_manifest, structural.species, xc=xc)
+            if xc is None:
+                from dataclasses import replace
+                audit = options['pseudo_result']
+                options['pseudo_result'] = replace(
+                    audit,
+                    status=DecisionStatus.FAIL if audit.status is DecisionStatus.FAIL else DecisionStatus.BLOCKED,
+                    findings=(*audit.findings, 'SCIENTIFIC_INPUT_INCOMPLETE: explicit XC.functional and XC.authors required for comparison'),
+                )
+        base = self.validate(document, **options)
+        for finding in base.findings:
+            if finding.code == 'UNKNOWN_LABEL':
+                # Replace the legacy unregistered-label observation with D-3,
+                # preserving REVIEW. A suggestion never makes a typo valid.
+                continue
+            findings.append(finding)
+        for occurrence in effective.occurrences.values():
+            entry = self.registry.get(occurrence.label)
+            if entry is None:
+                suggested = keyword_suggestions(occurrence.label, self.registry)
+                findings.append(self._finding(_KEYWORD_RULE, 'KEYWORD_NOT_REGISTERED',
+                    DecisionStatus.REVIEW, f'Keyword is outside the fixed registry: {occurrence.label}',
+                    FindingScope.SYNTAX, identifier, occurrence.relative_owner,
+                    'Registered alternatives: '+', '.join(suggested)))
+                continue
+            if occurrence.scalar is None or entry.value_type not in ('real', 'integer'):
+                continue
+            physical = entry.unit_policy in ('energy_required', 'length_required')
+            dimension = entry.unit_policy.split('_')[0]
+            typed = {'type': 'physical' if physical else entry.value_type,
+                     'dimension': dimension, 'canonical_unit': 'Ry' if dimension == 'energy' else 'Ang'}
+            parsed = scalar_value(effective, occurrence.label, typed)
+            if 'error' in parsed:
+                findings.append(self._finding(_KEYWORD_RULE, parsed['error'], DecisionStatus.FAIL,
+                    f'Invalid SIESTA scalar: {occurrence.label}', FindingScope.SYNTAX,
+                    identifier, occurrence.relative_owner, 'Use the registered type and a compatible explicit unit.'))
+        if fdf_log is not None:
+            for label in unused_labels(effective, fdf_log):
+                findings.append(self._finding(_KEYWORD_RULE, 'INPUT_LABEL_UNUSED', DecisionStatus.REVIEW,
+                    f'SIESTA did not query input label {label}', FindingScope.SYNTAX, identifier,
+                    effective.occurrence(label).relative_owner, 'Review the label against the actual fdf log.'))
+        return ValidationReport.build(report_id=base.report_id, subject=base.subject,
+            findings=tuple(_deduplicate(findings)), ruleset_sha256=base.ruleset_sha256,
+            produced_by=base.produced_by, metadata={**base.metadata, 'closure_sha256': effective.closure_sha256})
+
     def validate(
         self,
         document: FDFDocument,
@@ -119,7 +205,7 @@ class SiestaContextualValidator:
             legacy,
             subject_id=identifier,
             source=document.source,
-            producer="siestaflow.siesta-contextual-validator",
+            producer=_PRODUCER,
         )
         findings = list(base.findings)
         findings.extend(self._keyword_findings(document, identifier))
@@ -209,7 +295,7 @@ class SiestaContextualValidator:
             if entry.kind != observed_kind:
                 result.append(
                     self._finding(
-                        "siestaflow.siesta.keyword-schema",
+                        _KEYWORD_RULE,
                         "KEYWORD_KIND_MISMATCH",
                         DecisionStatus.FAIL,
                         (

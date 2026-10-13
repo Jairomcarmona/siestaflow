@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Iterable
@@ -125,7 +126,26 @@ class SiestaEngineAdapter(EngineAdapter):
         )
 
     def discover_artifacts(self, workspace: Path, **kwargs: Any):
-        return discover_siesta_artifacts(workspace, task_id=kwargs["task_id"], attempt_id=kwargs["attempt_id"])
+        found = list(discover_siesta_artifacts(workspace, task_id=kwargs["task_id"], attempt_id=kwargs["attempt_id"]))
+        logs = sorted(workspace.glob('fdf.*.log'))
+        inputs = kwargs.get('inputs', {})
+        if logs and inputs:
+            from ...contracts import ContractEnvelope, VALIDATION_REPORT
+            from ...contracts.serialization import canonical_primitive
+            from ...siesta_validation import SiestaContextualValidator
+            from .models import ArtifactDescriptor
+            primary = self.select_primary_input(**kwargs)
+            report = SiestaContextualValidator().validate_path(
+                inputs[primary], fdf_log='\n'.join(p.read_text(encoding='utf-8', errors='replace') for p in logs),
+                subject_id=kwargs['task_id'])
+            payload = canonical_primitive(report)
+            payload['metadata']['fdf_logs_sha256'] = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in logs}
+            envelope = ContractEnvelope.create(VALIDATION_REPORT, producer=report.produced_by, payload=payload)
+            path = workspace / 'input-validation-report.json'
+            path.write_text(json.dumps(envelope.to_dict(), sort_keys=True, indent=2)+'\n', encoding='utf-8')
+            found.append(ArtifactDescriptor(str(path), VALIDATION_REPORT.name, path.stat().st_size,
+                hashlib.sha256(path.read_bytes()).hexdigest(), kwargs['task_id'], kwargs['attempt_id']))
+        return tuple(found)
 
     def classify_result(self, parsed: Any, **kwargs: Any):
         gate = self.outputs.gate(parsed)
