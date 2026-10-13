@@ -209,6 +209,12 @@ stability is independent from Python import stability.
 
 ## Extensions
 
+The S-03 variable-cell preset compares initial/final space groups with spglib
+2.8.0 from the `symmetry` extra and the wheel's approved presets policy (0.01
+Angstrom). Changed symmetry requests review; it does not automatically reject
+a transition or grant scientific qualification. Its own real Si regression is
+separate from the unchanged normative PRESETS vectors.
+
 - Engine: implement `EngineAdapter`, declare executable/version probing through
   `EngineRegistry`, and register a protocol that names the engine.
 - Launcher: register a `RegisteredLauncher` with factory, resource invariants,

@@ -24,6 +24,8 @@ def test_measured_fixed_mesh_silicon_does_not_create_false_transition():
     assert assessment=={'status':'ACCEPTED','reasons':[]}
     assert evidence['initial_space_group']==evidence['final_space_group']==227
     assert evidence['symprec_A']==SYMPREC_A==.01
+    from qraft.api import scientific_policy_document
+    assert SYMPREC_A==scientific_policy_document('qraft.presets.policy@1')['symprec_A']
     import spglib
     from qraft.engines.siesta.eos import fractional
     positions=fractional(final['cell'],[a['coordinates'] for a in final['atoms']])

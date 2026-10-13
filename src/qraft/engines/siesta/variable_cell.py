@@ -1,8 +1,9 @@
 """PRESETS V-4 with the Si-measured, operator-approved 0.01 Angstrom policy."""
 from .eos import fractional
 from .presets import evaluate_relaxation
+from ...scientific_policies import scientific_policy_document
 
-SYMPREC_A = .01
+SYMPREC_A = scientific_policy_document('qraft.presets.policy@1')['symprec_A']
 
 
 def space_group(geometry):
