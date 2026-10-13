@@ -20,6 +20,7 @@ from .single_fdf import build_scientific_identity, resolve_execution_spec
 from ..engines.siesta.input_closure import resolve_scientific_input_closure
 from ..engines.siesta.effective_fdf import resolve_effective_fdf
 from ..engines.siesta.relaxation import geometry_envelope, geometry_from_fdf, validate_relaxation
+from ..engines.siesta.presets import parse_run, evaluate_relaxation
 
 
 def _atomic_json(path: Path, payload: Mapping[str, Any]) -> None:
@@ -96,6 +97,15 @@ class RelaxationProtocol:
         force = float(payload["provenance"]["force_ev_per_ang"])
         if force > tolerance:
             result.update({"scientific_decision": "NOT_CONVERGED", "max_force_ev_per_ang": force, "force_tolerance_ev_per_ang": tolerance}); return result
+        run = parse_run((attempt_root / attempt.stdout).read_text(encoding='utf-8', errors='replace'))
+        assessment = evaluate_relaxation(run, {'variable_cell': False,
+            'has_constraints': resolve_effective_fdf(fdf).block('Geometry.Constraints') is not None,
+            'max_force_tol_eV_A': tolerance})
+        result['assessment'] = assessment
+        if assessment['status'] != 'ACCEPTED':
+            if assessment['status'] == 'REJECTED':
+                result['scientific_decision'] = 'NOT_CONVERGED'
+            return result
         digest = hashlib.sha256(geometry_path.read_bytes()).hexdigest()
         result.update({"scientific_decision": "CONVERGED", "max_force_ev_per_ang": force, "force_tolerance_ev_per_ang": tolerance, "geometry_reference": ScientificArtifactReference("relaxed-geometry", "qraft.geometry", digest, envelope.content_sha256, ScientificAuthority.PROVISIONAL)})
         return result

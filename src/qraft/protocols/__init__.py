@@ -9,6 +9,7 @@ from .single_fdf import (
 )
 from .relaxation import RelaxationProtocol
 from .ground_state import GroundStateProtocol
+from .presets import MoleculeProtocol, MolecularVibrationProtocol
 from .magnetic_selection import MagneticCandidate, MagneticSelectionProtocol
 
 __all__ = [
@@ -19,6 +20,8 @@ __all__ = [
     "validate_technical_result",
     "RelaxationProtocol",
     "GroundStateProtocol",
+    "MoleculeProtocol",
+    "MolecularVibrationProtocol",
     "MagneticCandidate",
     "MagneticSelectionProtocol",
 ]
