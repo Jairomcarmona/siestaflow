@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from importlib.resources import files
 from pathlib import Path
+from typing import Any
 
 from .models import FDFRegistryEntry, MutableStatus, normalize_label
 
@@ -25,12 +26,13 @@ class FDFRegistry:
         return cls.from_data(json.loads(path.read_text(encoding="utf-8")))
 
     @classmethod
-    def from_data(cls, data: list[dict[str, str]]) -> "FDFRegistry":
+    def from_data(cls, data: list[dict[str, Any]]) -> "FDFRegistry":
         entries = tuple(FDFRegistryEntry(
             canonical_name=item["canonical_name"], kind=item["kind"], value_type=item["value_type"],
             unit_policy=item["unit_policy"], repeat_policy=item["repeat_policy"],
             mutable_status=MutableStatus(item["mutable_status"]), scientific_scope=item["scientific_scope"],
             evidence_class=item["evidence_class"], manual_reference=item["manual_reference"], notes=item["notes"],
+            enum_values=tuple(item.get("enum_values", ())),
         ) for item in data)
         return cls(entries)
 

@@ -59,10 +59,11 @@ requires a private `worker_lock_path` identifying both SIESTA and fat before
 execution. T-042 registration in the platform worker remains outside this block.
 
 `scientific_policy_document(policy_id)` delivers detached JSON documents for
-the approved EOS, electronic and preset policies, rejecting unknown IDs. The
-platform hashes these documents using its contractual JCS canonicalization;
-QRAFT native artifact digests keep their existing algorithms. No convergence
-policy ID or threshold is fabricated by this provider.
+the approved EOS, electronic, preset and surface policies, rejecting unknown
+IDs. The platform hashes these documents using its contractual JCS
+canonicalization; QRAFT native artifact digests keep their existing
+algorithms. No convergence policy ID or threshold is fabricated by this
+provider.
 The authorized `rule_document` option validates an explicit versioned
 convergence rule against the existing Mesh/KGrid rule models and returns its
 unchanged JSON copy. The ID must match `rule_id`; legacy unversioned IDs require
@@ -74,6 +75,13 @@ document in an existing extensible SCIENTIFIC_ARTIFACT envelope. Its native
 content digest is `qraft.content-sha256-v1`; it is independent of the platform's
 JCS policy-document digest. Store and verify this envelope with its original
 bytes. The envelope stays PROVISIONAL, including operator-supplied rules.
+
+`scientific_policy_document("qraft.surface.policy@1")` returns the accepted
+WF-SURFACE policy as detached JSON. `SurfaceProtocol` exposes the read-only
+surface analysis, dipole-label interpretation, macroscopic average, Fermi-level
+comparability and staged work-function convergence rules. It reports only the
+declared policy and supplied run data; it does not execute SIESTA or claim a
+numerical capability qualification.
 
 `qraft.api.previous_controller_owner(root, state_dir, current_boot_id=...,
 current_host=...)` is a read-only wrapper around the controller-state proof

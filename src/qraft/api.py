@@ -30,6 +30,7 @@ from .scientific_policies import scientific_policy_document, scientific_policy_e
 from .scientific_convergence import MeshConvergenceRule, MeshObservation, MeshConvergenceReport, MeshConvergenceEvaluator
 from .scientific_kgrid import KGridConvergenceRule, KGridObservation, KGridConvergenceReport, KGridConvergenceEvaluator
 from .execution.controller_state import previous_controller_owner as _previous_controller_owner
+from .protocols.surface import SurfaceProtocol
 
 API_VERSION = "1.0"
 
@@ -60,4 +61,5 @@ __all__ = [
     "MeshConvergenceRule", "MeshObservation", "MeshConvergenceReport", "MeshConvergenceEvaluator",
     "KGridConvergenceRule", "KGridObservation", "KGridConvergenceReport", "KGridConvergenceEvaluator",
     "previous_controller_owner",
+    "SurfaceProtocol",
 ]

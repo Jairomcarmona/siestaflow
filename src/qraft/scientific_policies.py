@@ -10,6 +10,9 @@ _DOCUMENTS = {
     'qraft.eos.policy@1': dict(policy_id='qraft.eos.policy@1', volume_factors=[.94,.96,.98,1.,1.02,1.04,1.06],
         energy_quantity='free_energy', relaxation_mode='fixed-fractional', min_points=7,
         min_points_each_side=2, max_rms_meV_per_atom=.5, max_rel_dV0=.005, max_rel_dB0=.05),
+    'qraft.surface.policy@1': dict(potential='VH', allow_vt=False, window_A=1.0, step_A=.25,
+        margin_A=4.0, width_min_A=2.0, slope_max_eV_per_A=.005, range_max_meV=5.0,
+        stability_meV=3.0, perpendicular_tol_deg=.01, convergence_meV=10.0),
 }
 
 

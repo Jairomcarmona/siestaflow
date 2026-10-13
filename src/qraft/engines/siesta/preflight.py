@@ -10,6 +10,7 @@ import re
 UNITS = {
     'energy': {'ry': 1.0, 'ev': 0.07349864435, 'hartree': 2.0, 'ha': 2.0, 'mry': .001, 'mev': 7.349864435e-05},
     'length': {'ang': 1.0, 'bohr': .529177, 'nm': 10.0},
+    'temperature': {'k': 1.0, 'kelvin': 1.0},
 }
 _INT = re.compile(r'^[+-]?\d+$')
 _REAL = re.compile(r'^[+-]?(\d+\.?\d*|\.\d+)([eEdD][+-]?\d+)?$')
@@ -33,11 +34,21 @@ def scalar_value(effective, label, entry, units=UNITS):
         if len(tokens) < 2:
             return {'error': 'UNIT_MISSING'}
         unit = tokens[1].casefold()
+        allowed_dimensions = (
+            {'temperature', 'energy'}
+            if entry['dimension'] == 'temperature_or_energy'
+            else {entry['dimension']}
+        )
         for dimension, table in units.items():
             if unit in table:
-                if dimension != entry['dimension']:
+                if dimension not in allowed_dimensions:
                     return {'error': 'UNIT_DIMENSION_MISMATCH'}
-                return {'value': number*table[unit], 'unit': entry['canonical_unit']}
+                canonical_unit = (
+                    'K' if entry['dimension'] == 'temperature_or_energy' and dimension == 'temperature'
+                    else 'Ry' if entry['dimension'] == 'temperature_or_energy'
+                    else entry['canonical_unit']
+                )
+                return {'value': number*table[unit], 'unit': canonical_unit}
         return {'error': 'UNIT_UNKNOWN'}
     return {'value': ' '.join(tokens)}
 

@@ -22,7 +22,7 @@ from .contracts import (
 )
 from .engines.siesta.fdf_registry import FDFRegistry
 from .engines.siesta.input_validator import SiestaInputValidator
-from .engines.siesta.models import FDFBlock, FDFDocument, FDFScalar
+from .engines.siesta.models import FDFBlock, FDFDocument, FDFScalar, normalize_label
 from .engines.siesta.pseudopotentials import (
     PseudopotentialVerificationResult,
 )
@@ -39,6 +39,7 @@ _UNIT_REQUIRED = {
     "length_required",
     "force_required",
     "pressure_required",
+    "temperature_or_energy",
 }
 # Names only, from SIESTA 5.4.2 Src/libunits/units_codata2018.f90:106–117.
 # Syntax validation preserves the input unit and performs no pressure conversion.
@@ -135,6 +136,7 @@ class SiestaContextualValidator:
                     engine_version=self.catalog.engine_version, source=str(path)),
                 findings=(finding,), ruleset_sha256=self.catalog.sha256,
                 produced_by=_PRODUCER, metadata={'execution_authorized': False})
+        findings.extend(self._duplicate_label_findings(effective.documents.values(), identifier))
         nodes = [o.scalar or o.block for o in effective.occurrences.values()]
         diagnostics = [item for source in effective.documents.values() for item in source.diagnostics]
         document = FDFDocument(str(path), nodes, diagnostics, '\n', effective.closure_sha256)
@@ -173,10 +175,22 @@ class SiestaContextualValidator:
                 continue
             if occurrence.scalar is None or entry.value_type not in ('real', 'integer'):
                 continue
-            physical = entry.unit_policy in ('energy_required', 'length_required')
-            dimension = entry.unit_policy.split('_')[0]
+            physical = entry.unit_policy in (
+                'energy_required', 'length_required', 'temperature_or_energy'
+            )
+            dimension = (
+                'temperature_or_energy'
+                if entry.unit_policy == 'temperature_or_energy'
+                else entry.unit_policy.split('_')[0]
+            )
+            canonical_unit = (
+                'Ry' if dimension == 'energy' else
+                'Ang' if dimension == 'length' else
+                'native' if dimension == 'temperature_or_energy' else
+                None
+            )
             typed = {'type': 'physical' if physical else entry.value_type,
-                     'dimension': dimension, 'canonical_unit': 'Ry' if dimension == 'energy' else 'Ang'}
+                     'dimension': dimension, 'canonical_unit': canonical_unit}
             parsed = scalar_value(effective, occurrence.label, typed)
             if 'error' not in parsed and entry.unit_policy == 'pressure_required':
                 unit=occurrence.scalar.unit
@@ -222,6 +236,7 @@ class SiestaContextualValidator:
         )
         findings = list(base.findings)
         findings.extend(self._keyword_findings(document, identifier))
+        findings.extend(self._duplicate_label_findings((document,), identifier))
         lattice, lattice_findings = self._lattice_findings(
             document, identifier
         )
@@ -339,9 +354,35 @@ class SiestaContextualValidator:
                     entry.value_type,
                     entry.unit_policy,
                     subject_id,
+                    entry.enum_values,
                 )
             )
         return result
+
+    def _duplicate_label_findings(self, documents, subject_id):
+        occurrences = {}
+        for document in documents:
+            for node in document.nodes:
+                if isinstance(node, FDFScalar):
+                    name = node.label
+                elif isinstance(node, FDFBlock):
+                    name = node.name
+                else:
+                    continue
+                entry = self.registry.get(name)
+                if entry is not None and entry.repeat_policy == "reject":
+                    occurrences.setdefault(normalize_label(entry.canonical_name), (entry, []))[1].append((document.source, node))
+        findings = []
+        for entry, nodes in occurrences.values():
+            if len(nodes) < 2:
+                continue
+            source, node = nodes[1]
+            findings.append(self._finding(
+                _KEYWORD_RULE, "LABEL_DUPLICATED", DecisionStatus.FAIL,
+                f"{entry.canonical_name} may appear only once.", FindingScope.SYNTAX,
+                subject_id, f"{source}:line:{node.span.start_line}", "Keep one declaration.",
+            ))
+        return findings
 
     def _scalar_findings(
         self,
@@ -350,6 +391,7 @@ class SiestaContextualValidator:
         value_type: str,
         unit_policy: str,
         subject_id: str,
+        enum_values: tuple[str, ...] = (),
     ) -> list[ValidationFinding]:
         result: list[ValidationFinding] = []
         location = f"line:{node.span.start_line}"
@@ -360,6 +402,8 @@ class SiestaContextualValidator:
             invalid = _real(node.value) is None
         elif value_type == "boolean":
             invalid = _boolean(node.value) is None
+        elif value_type == "enum" and enum_values:
+            invalid = node.value.strip().casefold() not in {value.casefold() for value in enum_values}
         elif value_type == "integer_list":
             values = _integer_list(node.value)
             invalid = values is None
@@ -649,8 +693,9 @@ class SiestaContextualValidator:
                     },
                 )
             )
-        dipole = _scalar_boolean(document, "Slab.DipoleCorrection")
-        if dipole is True:
+        dipole_node = _first_scalar(document, "Slab.DipoleCorrection")
+        dipole = dipole_node.value.strip().casefold() if dipole_node else None
+        if dipole in {"true", "charge", "vacuum"}:
             findings.append(
                 self._finding(
                     "siestaflow.siesta.electrostatic-context",

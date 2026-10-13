@@ -114,6 +114,7 @@ class FDFRegistryEntry:
     evidence_class: str
     manual_reference: str
     notes: str
+    enum_values: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
