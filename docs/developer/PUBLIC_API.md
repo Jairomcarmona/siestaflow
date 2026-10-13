@@ -75,6 +75,15 @@ content digest is `qraft.content-sha256-v1`; it is independent of the platform's
 JCS policy-document digest. Store and verify this envelope with its original
 bytes. The envelope stays PROVISIONAL, including operator-supplied rules.
 
+`qraft.api.previous_controller_owner(root, state_dir, current_boot_id=...,
+current_host=...)` is a read-only wrapper around the controller-state proof
+reader. It preserves the native owner record, `None` for an empty fresh-start
+state, and the existing `CONTROLLER_PREVIOUS_OWNER_ALIVE` and
+`CONTROLLER_STATE_TAMPERED` errors. `None` means there is no previous owner; it
+is not closure or death proof. Only a `CLOSED` or `OWNER_DEAD_BY_BOOT_CHANGE`
+record proves previous-owner termination. The public export is additive and
+does not change `API_VERSION` or the underlying controller-state behavior.
+
 `qraft.api.__all__` is additionally public, with `API_VERSION = "1.0"`.
 It exports the typed compose → compile → prepare → inspect route, its request,
 result and policy types, lock readers/writer, contextual validator, canonical
