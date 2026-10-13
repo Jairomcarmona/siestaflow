@@ -1,0 +1,3126 @@
+{
+ "schema": "dftlab.protocol-vectors@1",
+ "protocol": "WF-EOS",
+ "ficha": "docs/scientific-protocols/WF-EOS.md",
+ "oracle": "docs/scientific-protocols/vectors/eos-oracle.mjs",
+ "provenance": "Tablas Si de docs/reviews/evidencia-p5-p10 (SIESTA 5.4.2, SZP/PBE, un hilo); energías FreeEng finales. Valores esperados calculados con numpy (lstsq) independientemente del oráculo.",
+ "arithmetic_tolerance": {
+  "rel": 1e-07,
+  "abs_meV": 1e-06
+ },
+ "cases": [
+  {
+   "id": "eos-geom-01",
+   "kind": "deformation",
+   "title": "Si en Å cartesianos a +6 %: celda y átomos escalados",
+   "reference": {
+    "cell": [
+     [
+      0,
+      2.715,
+      2.715
+     ],
+     [
+      2.715,
+      0,
+      2.715
+     ],
+     [
+      2.715,
+      2.715,
+      0
+     ]
+    ],
+    "atoms": [
+     {
+      "id": "Si1",
+      "species": "Si",
+      "cart": [
+       0,
+       0,
+       0
+      ]
+     },
+     {
+      "id": "Si2",
+      "species": "Si",
+      "cart": [
+       1.3575,
+       1.3575,
+       1.3575
+      ]
+     }
+    ]
+   },
+   "factor": 1.06,
+   "candidate": {
+    "cell": [
+     [
+      0.0,
+      2.768248812876317,
+      2.768248812876317
+     ],
+     [
+      2.768248812876317,
+      0.0,
+      2.768248812876317
+     ],
+     [
+      2.768248812876317,
+      2.768248812876317,
+      0.0
+     ]
+    ],
+    "atoms": [
+     {
+      "id": "Si1",
+      "species": "Si",
+      "cart": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "id": "Si2",
+      "species": "Si",
+      "cart": [
+       1.3841244064381586,
+       1.3841244064381586,
+       1.3841244064381586
+      ]
+     }
+    ]
+   },
+   "tolerance": {
+    "cell_A": 1e-09,
+    "fractional": 1e-10
+   },
+   "expect": null
+  },
+  {
+   "id": "eos-geom-02",
+   "kind": "deformation",
+   "title": "Trampa de LatticeConstant: celda escalada, átomos no",
+   "reference": {
+    "cell": [
+     [
+      0,
+      2.715,
+      2.715
+     ],
+     [
+      2.715,
+      0,
+      2.715
+     ],
+     [
+      2.715,
+      2.715,
+      0
+     ]
+    ],
+    "atoms": [
+     {
+      "id": "Si1",
+      "species": "Si",
+      "cart": [
+       0,
+       0,
+       0
+      ]
+     },
+     {
+      "id": "Si2",
+      "species": "Si",
+      "cart": [
+       1.3575,
+       1.3575,
+       1.3575
+      ]
+     }
+    ]
+   },
+   "factor": 1.06,
+   "candidate": {
+    "cell": [
+     [
+      0.0,
+      2.768248812876317,
+      2.768248812876317
+     ],
+     [
+      2.768248812876317,
+      0.0,
+      2.768248812876317
+     ],
+     [
+      2.768248812876317,
+      2.768248812876317,
+      0.0
+     ]
+    ],
+    "atoms": [
+     {
+      "id": "Si1",
+      "species": "Si",
+      "cart": [
+       0,
+       0,
+       0
+      ]
+     },
+     {
+      "id": "Si2",
+      "species": "Si",
+      "cart": [
+       1.3575,
+       1.3575,
+       1.3575
+      ]
+     }
+    ]
+   },
+   "tolerance": {
+    "cell_A": 1e-09,
+    "fractional": 1e-10
+   },
+   "expect": "FRACTIONAL_NOT_PRESERVED"
+  },
+  {
+   "id": "eos-geom-03",
+   "kind": "deformation",
+   "title": "Celda hexagonal con parámetro interno a −6 %",
+   "reference": {
+    "cell": [
+     [
+      3.19,
+      0,
+      0
+     ],
+     [
+      -1.595,
+      2.7626210380723593,
+      0
+     ],
+     [
+      0,
+      0,
+      5.19
+     ]
+    ],
+    "atoms": [
+     {
+      "id": "Ga1",
+      "species": "Ga",
+      "cart": [
+       0.0,
+       1.841747358714906,
+       0.0
+      ]
+     },
+     {
+      "id": "Ga2",
+      "species": "Ga",
+      "cart": [
+       1.5949999999999998,
+       0.920873679357453,
+       2.595
+      ]
+     },
+     {
+      "id": "N1",
+      "species": "N",
+      "cart": [
+       0.0,
+       1.841747358714906,
+       1.95663
+      ]
+     },
+     {
+      "id": "N2",
+      "species": "N",
+      "cart": [
+       1.5949999999999998,
+       0.920873679357453,
+       4.55163
+      ]
+     }
+    ]
+   },
+   "factor": 0.94,
+   "candidate": {
+    "cell": [
+     [
+      3.124879686802641,
+      0.0,
+      0.0
+     ],
+     [
+      -1.5624398434013205,
+      2.7062251925410474,
+      0.0
+     ],
+     [
+      0.0,
+      0.0,
+      5.084051904233765
+     ]
+    ],
+    "atoms": [
+     {
+      "id": "Ga1",
+      "species": "Ga",
+      "cart": [
+       0.0,
+       1.8041501283606982,
+       0.0
+      ]
+     },
+     {
+      "id": "Ga2",
+      "species": "Ga",
+      "cart": [
+       1.5624398434013205,
+       0.9020750641803491,
+       2.5420259521168824
+      ]
+     },
+     {
+      "id": "N1",
+      "species": "N",
+      "cart": [
+       0.0,
+       1.8041501283606982,
+       1.9166875678961293
+      ]
+     },
+     {
+      "id": "N2",
+      "species": "N",
+      "cart": [
+       1.5624398434013205,
+       0.9020750641803491,
+       4.458713520013012
+      ]
+     }
+    ]
+   },
+   "tolerance": {
+    "cell_A": 1e-09,
+    "fractional": 1e-10
+   },
+   "expect": null
+  },
+  {
+   "id": "eos-geom-04",
+   "kind": "deformation",
+   "title": "Átomos reordenados: el atom map se pierde",
+   "reference": {
+    "cell": [
+     [
+      0,
+      2.715,
+      2.715
+     ],
+     [
+      2.715,
+      0,
+      2.715
+     ],
+     [
+      2.715,
+      2.715,
+      0
+     ]
+    ],
+    "atoms": [
+     {
+      "id": "Si1",
+      "species": "Si",
+      "cart": [
+       0,
+       0,
+       0
+      ]
+     },
+     {
+      "id": "Si2",
+      "species": "Si",
+      "cart": [
+       1.3575,
+       1.3575,
+       1.3575
+      ]
+     }
+    ]
+   },
+   "factor": 1.06,
+   "candidate": {
+    "cell": [
+     [
+      0.0,
+      2.768248812876317,
+      2.768248812876317
+     ],
+     [
+      2.768248812876317,
+      0.0,
+      2.768248812876317
+     ],
+     [
+      2.768248812876317,
+      2.768248812876317,
+      0.0
+     ]
+    ],
+    "atoms": [
+     {
+      "id": "Si2",
+      "species": "Si",
+      "cart": [
+       1.3841244064381586,
+       1.3841244064381586,
+       1.3841244064381586
+      ]
+     },
+     {
+      "id": "Si1",
+      "species": "Si",
+      "cart": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    ]
+   },
+   "tolerance": {
+    "cell_A": 1e-09,
+    "fractional": 1e-10
+   },
+   "expect": "ATOM_MAP_MISMATCH"
+  },
+  {
+   "id": "eos-geom-05",
+   "kind": "deformation",
+   "title": "Solo un vector escalado (no isotrópico)",
+   "reference": {
+    "cell": [
+     [
+      0,
+      2.715,
+      2.715
+     ],
+     [
+      2.715,
+      0,
+      2.715
+     ],
+     [
+      2.715,
+      2.715,
+      0
+     ]
+    ],
+    "atoms": [
+     {
+      "id": "Si1",
+      "species": "Si",
+      "cart": [
+       0,
+       0,
+       0
+      ]
+     },
+     {
+      "id": "Si2",
+      "species": "Si",
+      "cart": [
+       1.3575,
+       1.3575,
+       1.3575
+      ]
+     }
+    ]
+   },
+   "factor": 1.06,
+   "candidate": {
+    "cell": [
+     [
+      0,
+      2.715,
+      2.715
+     ],
+     [
+      2.715,
+      0,
+      2.715
+     ],
+     [
+      2.8779,
+      2.8779,
+      0.0
+     ]
+    ],
+    "atoms": [
+     {
+      "id": "Si1",
+      "species": "Si",
+      "cart": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "id": "Si2",
+      "species": "Si",
+      "cart": [
+       1.3841244064381586,
+       1.3841244064381586,
+       1.3841244064381586
+      ]
+     }
+    ]
+   },
+   "tolerance": {
+    "cell_A": 1e-09,
+    "fractional": 1e-10
+   },
+   "expect": "CELL_NOT_SCALED"
+  },
+  {
+   "id": "eos-energy-01",
+   "kind": "energy",
+   "title": "Al con Methfessel–Paxton: energía libre, última aparición",
+   "stdout": "siesta: FreeEng =       -74.078893\nSCF cycle converged after 4 iterations\nsiesta: E_KS(eV) =              -74.0791\nsiesta: FreeEng =       -74.079164\nsiesta: Final energy (eV):\nsiesta:         Total =     -74.079115\nJob completed",
+   "quantity": "free_energy",
+   "expect": {
+    "value": -74.079164
+   }
+  },
+  {
+   "id": "eos-energy-02",
+   "kind": "energy",
+   "title": "Al: energía total con 6 decimales, no E_KS(eV)",
+   "stdout": "siesta: FreeEng =       -74.078893\nSCF cycle converged after 4 iterations\nsiesta: E_KS(eV) =              -74.0791\nsiesta: FreeEng =       -74.079164\nsiesta: Final energy (eV):\nsiesta:         Total =     -74.079115\nJob completed",
+   "quantity": "total_energy",
+   "expect": {
+    "value": -74.079115
+   }
+  },
+  {
+   "id": "eos-energy-03",
+   "kind": "energy",
+   "title": "Sin prueba de convergencia SCF",
+   "stdout": "siesta: FreeEng =       -74.078893\n\nsiesta: E_KS(eV) =              -74.0791\nsiesta: FreeEng =       -74.079164\nsiesta: Final energy (eV):\nsiesta:         Total =     -74.079115\nJob completed",
+   "quantity": "free_energy",
+   "expect": {
+    "error": "SCF_NOT_PROVEN"
+   }
+  },
+  {
+   "id": "eos-energy-04",
+   "kind": "energy",
+   "title": "Solo E_KS(eV) con 4 decimales: no se acepta",
+   "stdout": "SCF cycle converged after 4 iterations\nsiesta: E_KS(eV) =              -74.0791\nJob completed",
+   "quantity": "free_energy",
+   "expect": {
+    "error": "ENERGY_MISSING"
+   }
+  },
+  {
+   "id": "eos-energy-05",
+   "kind": "energy",
+   "title": "Cantidad no declarada en la ficha",
+   "stdout": "siesta: FreeEng =       -74.078893\nSCF cycle converged after 4 iterations\nsiesta: E_KS(eV) =              -74.0791\nsiesta: FreeEng =       -74.079164\nsiesta: Final energy (eV):\nsiesta:         Total =     -74.079115\nJob completed",
+   "quantity": "e_ks",
+   "expect": {
+    "error": "ENERGY_QUANTITY_UNKNOWN"
+   }
+  },
+  {
+   "id": "eos-table-01",
+   "kind": "table",
+   "title": "Si SZP/PBE, malla fija 30³: ajuste establecido",
+   "policy": {
+    "policy_id": "qraft.eos.policy@1",
+    "energy_quantity": "free_energy",
+    "relaxation_mode": "fixed-fractional",
+    "min_points": 7,
+    "min_points_each_side": 2,
+    "max_rms_meV_per_atom": 0.5,
+    "max_rel_dV0": 0.005,
+    "max_rel_dB0": 0.05
+   },
+   "table": {
+    "quantity": "free_energy",
+    "n_atoms": 2,
+    "points": [
+     {
+      "volume_factor": 1.0105,
+      "volume_A3": 40.4460221434,
+      "energy_eV": -265.505456,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.032,
+      "volume_A3": 41.306575806,
+      "energy_eV": -265.529846,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.0535,
+      "volume_A3": 42.1671294686,
+      "energy_eV": -265.543516,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.075,
+      "volume_A3": 43.0276831312,
+      "energy_eV": -265.548085,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.0965,
+      "volume_A3": 43.8882367939,
+      "energy_eV": -265.54349,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.118,
+      "volume_A3": 44.7487904565,
+      "energy_eV": -265.531431,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.1395,
+      "volume_A3": 45.6093441191,
+      "energy_eV": -265.512639,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     }
+    ]
+   },
+   "expect": {
+    "status": "ESTABLISHED",
+    "reasons": [],
+    "fit": {
+     "E0_eV": -265.5478757102856,
+     "V0_A3": 43.007247130936555,
+     "B0_GPa": 79.82715380431563,
+     "B0_prime": 4.402662022568209,
+     "rms_meV": 0.10222932778874075
+    },
+    "sensitivity": {
+     "max_rel_dV0": 9.755707530900715e-05,
+     "max_rel_dB0": 0.008271636209115973
+    },
+    "per_atom": {
+     "V0_A3": 21.503623565468278,
+     "E0_eV": -132.7739378551428
+    }
+   }
+  },
+  {
+   "id": "eos-table-02",
+   "kind": "table",
+   "title": "Si con MeshCutoff fijo: la malla salta 24³→30³",
+   "policy": {
+    "policy_id": "qraft.eos.policy@1",
+    "energy_quantity": "free_energy",
+    "relaxation_mode": "fixed-fractional",
+    "min_points": 7,
+    "min_points_each_side": 2,
+    "max_rms_meV_per_atom": 0.5,
+    "max_rel_dV0": 0.005,
+    "max_rel_dB0": 0.05
+   },
+   "table": {
+    "quantity": "free_energy",
+    "n_atoms": 2,
+    "points": [
+     {
+      "volume_factor": 1.0105,
+      "volume_A3": 40.4460221434,
+      "energy_eV": -265.501801,
+      "mesh": [
+       24,
+       24,
+       24
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.032,
+      "volume_A3": 41.306575806,
+      "energy_eV": -265.526308,
+      "mesh": [
+       24,
+       24,
+       24
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.0535,
+      "volume_A3": 42.1671294686,
+      "energy_eV": -265.540296,
+      "mesh": [
+       24,
+       24,
+       24
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.075,
+      "volume_A3": 43.0276831312,
+      "energy_eV": -265.545223,
+      "mesh": [
+       24,
+       24,
+       24
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.0965,
+      "volume_A3": 43.8882367939,
+      "energy_eV": -265.54349,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.118,
+      "volume_A3": 44.7487904565,
+      "energy_eV": -265.531431,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.1395,
+      "volume_A3": 45.6093441191,
+      "energy_eV": -265.512639,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     }
+    ]
+   },
+   "expect": {
+    "status": "REJECTED",
+    "reasons": [
+     "MESH_INCONSISTENT"
+    ]
+   }
+  },
+  {
+   "id": "eos-table-03",
+   "kind": "table",
+   "title": "Si centrado en 5.43 Å: el mínimo del modelo cae fuera",
+   "policy": {
+    "policy_id": "qraft.eos.policy@1",
+    "energy_quantity": "free_energy",
+    "relaxation_mode": "fixed-fractional",
+    "min_points": 7,
+    "min_points_each_side": 2,
+    "max_rms_meV_per_atom": 0.5,
+    "max_rel_dV0": 0.005,
+    "max_rel_dB0": 0.05
+   },
+   "table": {
+    "quantity": "free_energy",
+    "n_atoms": 2,
+    "points": [
+     {
+      "volume_factor": 0.94,
+      "volume_A3": 37.624206645,
+      "energy_eV": -265.339525,
+      "mesh": [
+       18,
+       18,
+       18
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 0.96,
+      "volume_A3": 38.42472168,
+      "energy_eV": -265.404208,
+      "mesh": [
+       18,
+       18,
+       18
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 0.98,
+      "volume_A3": 39.225236715,
+      "energy_eV": -265.456005,
+      "mesh": [
+       18,
+       18,
+       18
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.0,
+      "volume_A3": 40.02575175,
+      "energy_eV": -265.494988,
+      "mesh": [
+       18,
+       18,
+       18
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.02,
+      "volume_A3": 40.826266785,
+      "energy_eV": -265.523636,
+      "mesh": [
+       18,
+       18,
+       18
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.04,
+      "volume_A3": 41.62678182,
+      "energy_eV": -265.542118,
+      "mesh": [
+       18,
+       18,
+       18
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.06,
+      "volume_A3": 42.427296855,
+      "energy_eV": -265.551907,
+      "mesh": [
+       18,
+       18,
+       18
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     }
+    ]
+   },
+   "expect": {
+    "status": "NOT_ESTABLISHED",
+    "reasons": [
+     "MINIMUM_OUTSIDE_RANGE"
+    ]
+   }
+  },
+  {
+   "id": "eos-table-04",
+   "kind": "table",
+   "title": "Un punto con kgrid.Cutoff",
+   "policy": {
+    "policy_id": "qraft.eos.policy@1",
+    "energy_quantity": "free_energy",
+    "relaxation_mode": "fixed-fractional",
+    "min_points": 7,
+    "min_points_each_side": 2,
+    "max_rms_meV_per_atom": 0.5,
+    "max_rel_dV0": 0.005,
+    "max_rel_dB0": 0.05
+   },
+   "table": {
+    "quantity": "free_energy",
+    "n_atoms": 2,
+    "points": [
+     {
+      "volume_factor": 1.0105,
+      "volume_A3": 40.4460221434,
+      "energy_eV": -265.505456,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.032,
+      "volume_A3": 41.306575806,
+      "energy_eV": -265.529846,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.0535,
+      "volume_A3": 42.1671294686,
+      "energy_eV": -265.543516,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.075,
+      "volume_A3": 43.0276831312,
+      "energy_eV": -265.548085,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "Cutoff",
+       "cutoff_A": 10.0
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.0965,
+      "volume_A3": 43.8882367939,
+      "energy_eV": -265.54349,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.118,
+      "volume_A3": 44.7487904565,
+      "energy_eV": -265.531431,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.1395,
+      "volume_A3": 45.6093441191,
+      "energy_eV": -265.512639,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     }
+    ]
+   },
+   "expect": {
+    "status": "REJECTED",
+    "reasons": [
+     "KGRID_NOT_FIXED"
+    ]
+   }
+  },
+  {
+   "id": "eos-table-05",
+   "kind": "table",
+   "title": "Tabla en energía total con política de energía libre",
+   "policy": {
+    "policy_id": "qraft.eos.policy@1",
+    "energy_quantity": "free_energy",
+    "relaxation_mode": "fixed-fractional",
+    "min_points": 7,
+    "min_points_each_side": 2,
+    "max_rms_meV_per_atom": 0.5,
+    "max_rel_dV0": 0.005,
+    "max_rel_dB0": 0.05
+   },
+   "table": {
+    "quantity": "total_energy",
+    "n_atoms": 2,
+    "points": [
+     {
+      "volume_factor": 1.0105,
+      "volume_A3": 40.4460221434,
+      "energy_eV": -265.505456,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.032,
+      "volume_A3": 41.306575806,
+      "energy_eV": -265.529846,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.0535,
+      "volume_A3": 42.1671294686,
+      "energy_eV": -265.543516,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.075,
+      "volume_A3": 43.0276831312,
+      "energy_eV": -265.548085,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.0965,
+      "volume_A3": 43.8882367939,
+      "energy_eV": -265.54349,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.118,
+      "volume_A3": 44.7487904565,
+      "energy_eV": -265.531431,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.1395,
+      "volume_A3": 45.6093441191,
+      "energy_eV": -265.512639,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     }
+    ]
+   },
+   "expect": {
+    "status": "REJECTED",
+    "reasons": [
+     "ENERGY_QUANTITY_MISMATCH"
+    ]
+   }
+  },
+  {
+   "id": "eos-table-06",
+   "kind": "table",
+   "title": "Solo cinco volúmenes",
+   "policy": {
+    "policy_id": "qraft.eos.policy@1",
+    "energy_quantity": "free_energy",
+    "relaxation_mode": "fixed-fractional",
+    "min_points": 7,
+    "min_points_each_side": 2,
+    "max_rms_meV_per_atom": 0.5,
+    "max_rel_dV0": 0.005,
+    "max_rel_dB0": 0.05
+   },
+   "table": {
+    "quantity": "free_energy",
+    "n_atoms": 2,
+    "points": [
+     {
+      "volume_factor": 1.032,
+      "volume_A3": 41.306575806,
+      "energy_eV": -265.529846,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.0535,
+      "volume_A3": 42.1671294686,
+      "energy_eV": -265.543516,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.075,
+      "volume_A3": 43.0276831312,
+      "energy_eV": -265.548085,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.0965,
+      "volume_A3": 43.8882367939,
+      "energy_eV": -265.54349,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.118,
+      "volume_A3": 44.7487904565,
+      "energy_eV": -265.531431,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     }
+    ]
+   },
+   "expect": {
+    "status": "REJECTED",
+    "reasons": [
+     "TOO_FEW_POINTS"
+    ]
+   }
+  },
+  {
+   "id": "eos-table-07",
+   "kind": "table",
+   "title": "Modos de relajación mezclados",
+   "policy": {
+    "policy_id": "qraft.eos.policy@1",
+    "energy_quantity": "free_energy",
+    "relaxation_mode": "fixed-fractional",
+    "min_points": 7,
+    "min_points_each_side": 2,
+    "max_rms_meV_per_atom": 0.5,
+    "max_rel_dV0": 0.005,
+    "max_rel_dB0": 0.05
+   },
+   "table": {
+    "quantity": "free_energy",
+    "n_atoms": 2,
+    "points": [
+     {
+      "volume_factor": 1.0105,
+      "volume_A3": 40.4460221434,
+      "energy_eV": -265.505456,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "internal"
+     },
+     {
+      "volume_factor": 1.032,
+      "volume_A3": 41.306575806,
+      "energy_eV": -265.529846,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.0535,
+      "volume_A3": 42.1671294686,
+      "energy_eV": -265.543516,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.075,
+      "volume_A3": 43.0276831312,
+      "energy_eV": -265.548085,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.0965,
+      "volume_A3": 43.8882367939,
+      "energy_eV": -265.54349,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.118,
+      "volume_A3": 44.7487904565,
+      "energy_eV": -265.531431,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.1395,
+      "volume_A3": 45.6093441191,
+      "energy_eV": -265.512639,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     }
+    ]
+   },
+   "expect": {
+    "status": "REJECTED",
+    "reasons": [
+     "RELAXATION_MODE_MISMATCH"
+    ]
+   }
+  },
+  {
+   "id": "eos-fit-01",
+   "kind": "table",
+   "title": "BM3 sintético exacto: el ajuste recupera E0, V0, B0 y B0′",
+   "policy": {
+    "policy_id": "qraft.eos.policy@1",
+    "energy_quantity": "free_energy",
+    "relaxation_mode": "fixed-fractional",
+    "min_points": 7,
+    "min_points_each_side": 2,
+    "max_rms_meV_per_atom": 0.5,
+    "max_rel_dV0": 0.005,
+    "max_rel_dB0": 0.05
+   },
+   "table": {
+    "quantity": "free_energy",
+    "n_atoms": 2,
+    "points": [
+     {
+      "volume_factor": 0.94,
+      "volume_A3": 37.599999999999994,
+      "energy_eV": -99.94966379278398,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 0.96,
+      "volume_A3": 38.4,
+      "energy_eV": -99.97847520052646,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 0.98,
+      "volume_A3": 39.2,
+      "energy_eV": -99.99481839479022,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.0,
+      "volume_A3": 40.0,
+      "energy_eV": -100.0,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.02,
+      "volume_A3": 40.8,
+      "energy_eV": -99.99518482793007,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.04,
+      "volume_A3": 41.6,
+      "energy_eV": -99.98141303052722,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.06,
+      "volume_A3": 42.400000000000006,
+      "energy_eV": -99.95961493395635,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     }
+    ]
+   },
+   "expect": {
+    "status": "ESTABLISHED",
+    "reasons": [],
+    "fit": {
+     "E0_eV": -100.0,
+     "V0_A3": 40.0,
+     "B0_GPa": 100.0,
+     "B0_prime": 4.5,
+     "rms_meV": 0.0
+    }
+   }
+  },
+  {
+   "id": "eos-table-08",
+   "kind": "table",
+   "title": "Mínimo entre el primer y el segundo punto: un solo punto por debajo",
+   "policy": {
+    "policy_id": "qraft.eos.policy@1",
+    "energy_quantity": "free_energy",
+    "relaxation_mode": "fixed-fractional",
+    "min_points": 7,
+    "min_points_each_side": 2,
+    "max_rms_meV_per_atom": 0.5,
+    "max_rel_dV0": 0.005,
+    "max_rel_dB0": 0.05
+   },
+   "table": {
+    "quantity": "free_energy",
+    "n_atoms": 2,
+    "points": [
+     {
+      "volume_factor": 0.995,
+      "volume_A3": 39.8,
+      "energy_eV": -99.99968504349499,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.01,
+      "volume_A3": 40.4,
+      "energy_eV": -99.99877426415722,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.03,
+      "volume_A3": 41.2,
+      "energy_eV": -99.98935794756434,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.05,
+      "volume_A3": 42.0,
+      "energy_eV": -99.97146305047849,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.07,
+      "volume_A3": 42.800000000000004,
+      "energy_eV": -99.94596992093105,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.09,
+      "volume_A3": 43.6,
+      "energy_eV": -99.91366772841724,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.11,
+      "volume_A3": 44.400000000000006,
+      "energy_eV": -99.87526489856859,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     }
+    ]
+   },
+   "expect": {
+    "status": "NOT_ESTABLISHED",
+    "reasons": [
+     "MINIMUM_NOT_BRACKETED"
+    ]
+   }
+  },
+  {
+   "id": "eos-table-09",
+   "kind": "table",
+   "title": "Un punto con +4 meV de error: residuo y B0 sensible",
+   "policy": {
+    "policy_id": "qraft.eos.policy@1",
+    "energy_quantity": "free_energy",
+    "relaxation_mode": "fixed-fractional",
+    "min_points": 7,
+    "min_points_each_side": 2,
+    "max_rms_meV_per_atom": 0.5,
+    "max_rel_dV0": 0.005,
+    "max_rel_dB0": 0.05
+   },
+   "table": {
+    "quantity": "free_energy",
+    "n_atoms": 2,
+    "points": [
+     {
+      "volume_factor": 1.0105,
+      "volume_A3": 40.4460221434,
+      "energy_eV": -265.505456,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.032,
+      "volume_A3": 41.306575806,
+      "energy_eV": -265.529846,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.0535,
+      "volume_A3": 42.1671294686,
+      "energy_eV": -265.543516,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.075,
+      "volume_A3": 43.0276831312,
+      "energy_eV": -265.544085,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.0965,
+      "volume_A3": 43.8882367939,
+      "energy_eV": -265.54349,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.118,
+      "volume_A3": 44.7487904565,
+      "energy_eV": -265.531431,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     },
+     {
+      "volume_factor": 1.1395,
+      "volume_A3": 45.6093441191,
+      "energy_eV": -265.512639,
+      "mesh": [
+       30,
+       30,
+       30
+      ],
+      "kgrid": {
+       "kind": "MonkhorstPack",
+       "block": [
+        [
+         6,
+         0,
+         0,
+         0.5
+        ],
+        [
+         0,
+         6,
+         0,
+         0.5
+        ],
+        [
+         0,
+         0,
+         6,
+         0.5
+        ]
+       ]
+      },
+      "relaxation_mode": "fixed-fractional"
+     }
+    ]
+   },
+   "expect": {
+    "status": "NOT_ESTABLISHED",
+    "reasons": [
+     "RESIDUAL_TOO_LARGE",
+     "B0_SENSITIVE"
+    ]
+   }
+  }
+ ]
+}
