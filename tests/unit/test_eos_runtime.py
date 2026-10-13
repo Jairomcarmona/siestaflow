@@ -12,6 +12,8 @@ POLICY = next(c['policy'] for c in VECTORS['cases'] if c['id'] == 'eos-table-01'
 POLICY = {**POLICY, 'volume_factors': [0.94, 0.96, 0.98, 1, 1.02, 1.04, 1.06]}
 
 FDF = """SystemLabel si
+NetCharge 0
+Spin non-polarized
 NumberOfSpecies 1
 NumberOfAtoms 1
 PAO.BasisSize SZP
@@ -107,7 +109,7 @@ def test_eos_invalid_reference_fails_before_launch(tmp_path, change):
     fdf, overrides = prepare(tmp_path)
     text = fdf.read_text()
     if change == 'spin':
-        text += 'Spin polarized\n'
+        text = text.replace('Spin non-polarized','Spin polarized')
     elif change == 'kgrid':
         text += 'kgrid.Cutoff 10 Ang\n'
     else:
@@ -146,3 +148,11 @@ def test_mesh_sizes_block_is_supported_and_preserved(tmp_path):
     result = EosProtocol().run(fdf, policy=POLICY, runs_root=tmp_path / 'runs', overrides=overrides)
     assert result['status'] == 'ESTABLISHED'
     assert '%block Mesh.Sizes\n30 30 30\n%endblock Mesh.Sizes' in (tmp_path / 'runs/points/source/volume-000/input.fdf').read_text()
+
+@pytest.mark.parametrize('missing',['NetCharge 0\n','Spin non-polarized\n'])
+def test_missing_governed_source_is_rejected_before_launch(tmp_path,missing):
+    fdf,overrides=prepare(tmp_path)
+    fdf.write_text(fdf.read_text().replace(missing,''))
+    with pytest.raises(ValueError,match='UNDECLARED_GOVERNED_VALUE'):
+        EosProtocol().run(fdf,policy=POLICY,runs_root=tmp_path/'runs',overrides=overrides)
+    assert not (tmp_path/'runs').exists()

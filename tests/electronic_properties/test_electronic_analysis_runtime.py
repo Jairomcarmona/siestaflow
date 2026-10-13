@@ -73,6 +73,16 @@ def test_tampered_parent_stops_before_runtime(tmp_path):
             n_occupied=1, runs_root=tmp_path / 'sample', profile=fake_engine(tmp_path))
     assert not (tmp_path / 'sample/runtime').exists()
 
+@pytest.mark.parametrize('missing',['NetCharge 0\n','Spin non-polarized\n'])
+def test_missing_governed_parent_is_rejected_before_generation(tmp_path,monkeypatch,missing):
+    import test_electronic_property_fanout as fixture
+    monkeypatch.setattr(fixture,'BASE',fixture.BASE.replace(missing,''))
+    source=fixture._source(tmp_path)
+    with pytest.raises(ValueError,match='UNDECLARED_GOVERNED_VALUE'):
+        locked_protocol(tmp_path).run_sample(source,block_name='BandPoints',rows=[[0,0,0]],
+            n_occupied=1,runs_root=tmp_path/'sample',profile=fake_engine(tmp_path))
+    assert not (tmp_path/'sample').exists()
+
 
 def test_transverse_center_uses_fitted_longitudinal_extremum(tmp_path, monkeypatch):
     fixture = json.loads((Path(__file__).parents[1] / 'fixtures/scientific_protocols/electronic/electronic.cases.json').read_text(encoding='utf-8'))

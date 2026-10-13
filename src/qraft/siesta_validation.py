@@ -38,7 +38,12 @@ _UNIT_REQUIRED = {
     "energy_required",
     "length_required",
     "force_required",
+    "pressure_required",
 }
+# Names only, from SIESTA 5.4.2 Src/libunits/units_codata2018.f90:106–117.
+# Syntax validation preserves the input unit and performs no pressure conversion.
+_PRESSURE_UNITS = {'pa','gpa','atm','bar','kbar','mbar','ev/ang**3','ev/ang^3',
+                   'ry/bohr**3','ry/bohr^3','ha/bohr**3','ha/bohr^3'}
 _SPIN_VALUES = {
     "non-polarized",
     "polarized",
@@ -173,6 +178,14 @@ class SiestaContextualValidator:
             typed = {'type': 'physical' if physical else entry.value_type,
                      'dimension': dimension, 'canonical_unit': 'Ry' if dimension == 'energy' else 'Ang'}
             parsed = scalar_value(effective, occurrence.label, typed)
+            if 'error' not in parsed and entry.unit_policy == 'pressure_required':
+                unit=occurrence.scalar.unit
+                if unit is None:
+                    parsed={'error':'UNIT_MISSING'}
+                elif unit.casefold() not in _PRESSURE_UNITS:
+                    from .engines.siesta.preflight import UNITS
+                    known=any(unit.casefold() in table for table in UNITS.values())
+                    parsed={'error':'UNIT_DIMENSION_MISMATCH' if known else 'UNIT_UNKNOWN'}
             if 'error' in parsed:
                 findings.append(self._finding(_KEYWORD_RULE, parsed['error'], DecisionStatus.FAIL,
                     f'Invalid SIESTA scalar: {occurrence.label}', FindingScope.SYNTAX,
@@ -292,7 +305,7 @@ class SiestaContextualValidator:
             if entry is None:
                 continue
             location = f"line:{node.span.start_line}"
-            if entry.kind != observed_kind:
+            if entry.kind not in (observed_kind, 'scalar_or_block'):
                 result.append(
                     self._finding(
                         _KEYWORD_RULE,
@@ -309,6 +322,14 @@ class SiestaContextualValidator:
                     )
                 )
                 continue
+            if entry.canonical_name == 'Mesh.Sizes':
+                text=node.value if isinstance(node,FDFScalar) else ' '.join(_data_lines(node))
+                sizes=_integer_list(text)
+                list_form=not isinstance(node,FDFScalar) or (text.strip().startswith('[') and text.strip().endswith(']'))
+                if not list_form or sizes is None or len(sizes)!=3 or any(size<=0 for size in sizes):
+                    result.append(self._finding(_KEYWORD_RULE,'KEYWORD_VALUE_INVALID',DecisionStatus.FAIL,
+                        'Mesh.Sizes requires three positive integers.',FindingScope.SYNTAX,subject_id,location,
+                        'Use the documented bracketed list or block form.'))
             if not isinstance(node, FDFScalar):
                 continue
             result.extend(

@@ -1,0 +1,9 @@
+# Evidencia de lectura R12
+
+Barrido previo único sobre QRAFT fusionado `0acd9a45196f71c80ca9a581eb1d6a481bc604f0`: ocho FDF de presets, ocho EOS y seis electrónicos distintos por SHA-256. Informe privado `q6/sweep-before.json`, SHA-256 `4f16acf40d8ff98649048cd569164351f417cee40efba16afaf5e68e4ea04508`.
+
+`provenance.json` conserva trece etiquetas, líneas consultadas y hashes de los logs reales. SHA-256 del fixture: `2d7e71851a97467958014d51089ec271a31b6d3901947637dbeca04e1bf9cb75`. Las consultas de valores por defecto se etiquetan como tales; no prueban que ese control estuviera declarado en la entrada. EOS y electrónica anteriores permanecen intactas.
+
+Tipos/unidades contrastados con el [manual SIESTA 5.4](https://docs.siesta-project.org/projects/siesta/en/5.4/reference/siesta.html), apartados Target stress, Mesh.Sizes, Geometry.Constraints, Phonon calculations, salida VH/Denchar/ondas y BandPoints. SaveHS y WriteDenchar son equivalentes en FDF a Save.HS y Write.Denchar. Presión: nombres de unidades en SIESTA 5.4.2 `Src/libunits/units_codata2018.f90:106–117`; la validación comprueba nombres/dimensiones sin convertir presión ni modificar umbrales.
+
+Geometry.Constraints se comprobó en una corrida técnica nueva con SIESTA fijado, dos pasos CG, Si PBE/SZ y un átomo restringido. `constraint-probe-003/input.fdf` SHA `ce481f4d8364232848775a55de1fe45161ccdeff2b74b2942a0fffbf474d0715`; stdout `497ca867a67f9561e21c151806270d62d838d9a988dae0bcfe3a2bec7c572c8e`; log `6abcbd818ddb2464fd5ffc396584b3f358c51ece2adebb7c7ac019a477cabbf4`; exit 0 / Job completed. Dos intentos previos fallidos se conservan: el renderer de plataforma emitía coordenadas enteras en un bloque que mezcla reales e índice de especie; el arreglo de representación numérica pertenece a P-1. Ninguna de estas pruebas califica ciencia o workflow HPC.

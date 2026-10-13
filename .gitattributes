@@ -7,3 +7,4 @@ tests/fixtures/scientific_protocols/*.json -text
 tests/fixtures/scientific_protocols/presets/*.json -text
 tests/fixtures/scientific_protocols/eos/*.json -text
 tests/fixtures/scientific_protocols/electronic/*.json -text
+tests/fixtures/block2_fdf_registration/*.json -text

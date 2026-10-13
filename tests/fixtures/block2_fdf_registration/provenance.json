@@ -1,0 +1,127 @@
+{
+  "scope": "keyword-read evidence, no science/runtime promotion",
+  "siesta_version": "5.4.2",
+  "siesta_sha256": "aaa9a2e45a41b12f3aad52ca4fca7c25b1cc6afd3aff2a0c7fe145b1bd9f18ce",
+  "records": [
+    {
+      "label": "MD.TargetPressure",
+      "log_file": "fdf.20261012T211412.486.log",
+      "log_sha256": "3100b86d986f869e20b4126d572b4067e41a028ebfa39fc8bb9ea246ddd5d1dd",
+      "observed_lines": [
+        "MD.TargetPressure          0.000000000     Ry/Bohr**3"
+      ],
+      "observation": "declared value queried"
+    },
+    {
+      "label": "MD.MaxStressTol",
+      "log_file": "fdf.20261012T211412.486.log",
+      "log_sha256": "3100b86d986f869e20b4126d572b4067e41a028ebfa39fc8bb9ea246ddd5d1dd",
+      "observed_lines": [
+        "MD.MaxStressTol         0.3398930922E-05 Ry/Bohr**3"
+      ],
+      "observation": "declared value queried"
+    },
+    {
+      "label": "Mesh.Sizes",
+      "log_file": "fdf.20261012T211412.486.log",
+      "log_sha256": "3100b86d986f869e20b4126d572b4067e41a028ebfa39fc8bb9ea246ddd5d1dd",
+      "observed_lines": [
+        "Mesh.Sizes              3",
+        "Mesh.Sizes              3"
+      ],
+      "observation": "declared value queried"
+    },
+    {
+      "label": "Geometry.Constraints",
+      "log_file": "fdf.20261013T082105.055.log",
+      "log_sha256": "6abcbd818ddb2464fd5ffc396584b3f358c51ece2adebb7c7ac019a477cabbf4",
+      "observed_lines": [
+        "%block Geometry.Constraints",
+        "%endblock Geometry.Constraints"
+      ],
+      "observation": "declared value queried"
+    },
+    {
+      "label": "SaveElectrostaticPotential",
+      "log_file": "fdf.20261012T211412.486.log",
+      "log_sha256": "3100b86d986f869e20b4126d572b4067e41a028ebfa39fc8bb9ea246ddd5d1dd",
+      "observed_lines": [
+        "SaveElectrostaticPotential              F     # default value"
+      ],
+      "observation": "default queried"
+    },
+    {
+      "label": "WriteDenchar",
+      "log_file": "fdf.20261012T211412.486.log",
+      "log_sha256": "3100b86d986f869e20b4126d572b4067e41a028ebfa39fc8bb9ea246ddd5d1dd",
+      "observed_lines": [
+        "WriteDenchar              F     # default value"
+      ],
+      "observation": "default queried"
+    },
+    {
+      "label": "WriteWaveFunctions",
+      "log_file": "fdf.20261012T211412.486.log",
+      "log_sha256": "3100b86d986f869e20b4126d572b4067e41a028ebfa39fc8bb9ea246ddd5d1dd",
+      "observed_lines": [
+        "WriteWaveFunctions              F     # default value"
+      ],
+      "observation": "default queried"
+    },
+    {
+      "label": "FC.Displacement",
+      "log_file": "fdf.20261012T211412.486.log",
+      "log_sha256": "3100b86d986f869e20b4126d572b4067e41a028ebfa39fc8bb9ea246ddd5d1dd",
+      "observed_lines": [
+        "FC.Displacement          0.4000000000E-01 Bohr     # default value"
+      ],
+      "observation": "default queried"
+    },
+    {
+      "label": "FC.First",
+      "log_file": "fdf.20261012T211412.486.log",
+      "log_sha256": "3100b86d986f869e20b4126d572b4067e41a028ebfa39fc8bb9ea246ddd5d1dd",
+      "observed_lines": [
+        "FC.first         1     # default value"
+      ],
+      "observation": "default queried"
+    },
+    {
+      "label": "FC.Last",
+      "log_file": "fdf.20261012T211412.486.log",
+      "log_sha256": "3100b86d986f869e20b4126d572b4067e41a028ebfa39fc8bb9ea246ddd5d1dd",
+      "observed_lines": [
+        "FC.last         2     # default value"
+      ],
+      "observation": "default queried"
+    },
+    {
+      "label": "BandPoints",
+      "log_file": "fdf.20261012T234327.458.log",
+      "log_sha256": "b0947320f50aac9922212494caca297e454bf7c9b0788ee50650f3b85dcc9b7f",
+      "observed_lines": [
+        "%block BandPoints",
+        "%endblock BandPoints"
+      ],
+      "observation": "declared value queried"
+    },
+    {
+      "label": "SaveHS",
+      "log_file": "fdf.20261012T211412.486.log",
+      "log_sha256": "3100b86d986f869e20b4126d572b4067e41a028ebfa39fc8bb9ea246ddd5d1dd",
+      "observed_lines": [
+        "SaveHS              T     # default value"
+      ],
+      "observation": "default queried"
+    },
+    {
+      "label": "WFS.Write.For.Bands",
+      "log_file": "fdf.20261012T234327.458.log",
+      "log_sha256": "b0947320f50aac9922212494caca297e454bf7c9b0788ee50650f3b85dcc9b7f",
+      "observed_lines": [
+        "WFS.Write.For.Bands              F"
+      ],
+      "observation": "declared value queried"
+    }
+  ]
+}
