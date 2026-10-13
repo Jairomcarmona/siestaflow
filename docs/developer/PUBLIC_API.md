@@ -41,6 +41,25 @@ silently freeze the current diagnostics.
 
 ## Integration API 1.0 (Ola 1)
 
+Block 2 additionally exports `EosProtocol`, `ElectronicAnalysisProtocol`,
+`ElectronicPropertiesProtocol`, `ElectronicStateSource`,
+`PreparedElectronicProperties`, and the existing `BandPathSpec`, `DosSpec`,
+`PdosSpec`, `PropertySpec` input types through `qraft.api`. API_VERSION remains
+1.0; native DTOs and contracts are unchanged. EOS inputs/results remain their
+existing mappings. Electronic execution still requires the verified M6 handoff;
+an operator SCF is not an electronic-state artifact. The explicitly authorized
+`ProvisionalScfSource` route verifies SCF stdout, FDF, density matrix and pseudos
+and records `NUMERICAL_CANDIDATE` / `SCF directo provisional` in separate
+`parent_scf` evidence. It qualifies the pipeline only. ElectronicAnalysisProtocol
+requires a private `worker_lock_path` identifying both SIESTA and fat before
+execution. T-042 registration in the platform worker remains outside this block.
+
+`scientific_policy_document(policy_id)` delivers detached JSON documents for
+the approved EOS, electronic and preset policies, rejecting unknown IDs. The
+platform hashes these documents using its contractual JCS canonicalization;
+QRAFT native artifact digests keep their existing algorithms. No convergence
+policy ID or threshold is fabricated by this provider.
+
 `qraft.api.__all__` is additionally public, with `API_VERSION = "1.0"`.
 It exports the typed compose → compile → prepare → inspect route, its request,
 result and policy types, lock readers/writer, contextual validator, canonical

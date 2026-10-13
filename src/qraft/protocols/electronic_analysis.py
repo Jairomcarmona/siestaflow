@@ -3,10 +3,12 @@ import hashlib
 import json
 from pathlib import Path
 import tempfile
+import subprocess
+import re
 
 from ..contracts import CapabilityRegistry
 from ..core import ScientificIdentity
-from ..engines.siesta.electronic_analysis import POLICY, BOHR_ANG, band_gap, directional_mass, parse_bands, band_run_check
+from ..engines.siesta.electronic_analysis import POLICY, BOHR_ANG, band_gap, directional_mass, parse_bands, band_run_check, parse_eigfat, fat_partition, fat_groups
 from ..engines.siesta.effective_fdf import materialize_effective_fdf
 from ..engines.siesta.electronic_properties import PROPERTY_CAPABILITIES
 from ..engines.siesta.input_closure import resolve_scientific_input_closure
@@ -16,6 +18,8 @@ from ..execution.runtime_composition import compose_runtime
 from ..workflows import WorkflowCompiler
 from .single_fdf import build_scientific_identity, resolve_execution_spec
 from .electronic_properties import ElectronicStateSource, _immutable_copy, _immutable_json
+from ._worker_environment import _WorkerEnvironment
+from .provisional_scf import ProvisionalScfSource
 
 
 def _hash(path):
@@ -54,19 +58,27 @@ class ElectronicAnalysisProtocol:
     Directions, centers, spacing and occupation are explicit operator input;
     no silicon-specific assumptions or Fermi-derived occupations are used.
     """
-    def run_sample(self, source: ElectronicStateSource, *, block_name, rows, n_occupied,
+    def __init__(self, *, worker_lock_path):
+        self._worker_environment = _WorkerEnvironment.load(worker_lock_path)
+
+    def run_sample(self, source: ElectronicStateSource | ProvisionalScfSource, *, block_name, rows, n_occupied,
                    runs_root, profile=None, wfs_for_bands=False):
+        if type(source) not in (ElectronicStateSource, ProvisionalScfSource):
+            raise TypeError('A verified M6 or explicit provisional SCF source is required')
         source = source.verify()
+        self._worker_environment.verify()
         if block_name not in ('BandLines', 'BandPoints'):
             raise ValueError('Choose an explicit native band sample')
         root = Path(runs_root).resolve()
         branch = root / 'source/bands'
         request = dict(block_name=block_name, rows=rows, n_occupied=n_occupied, wfs_for_bands=wfs_for_bands)
-        _immutable_json(root / 'lock.json', {'parent': source.provenance(), 'request': request, 'policy_id': 'qraft.electronic.policy@1', 'policy': POLICY})
+        _immutable_copy(self._worker_environment.lock_path, root / 'worker-environment.json')
+        _immutable_json(root / 'lock.json', {'parent': source.provenance(), 'request': request, 'policy_id': 'qraft.electronic.policy@1', 'policy': POLICY, 'worker_environment_sha256': self._worker_environment.sha256})
         with tempfile.TemporaryDirectory(prefix='qraft-bands-render-') as temporary:
             rendered = materialize_effective_fdf(source.final_fdf, Path(temporary), primary_destination='input.fdf',
                 scalar_updates={'DM.UseSaveDM': ('T', None), 'BandLinesScale': ('ReciprocalLatticeVectors', None),
-                                'WFS.Write.For.Bands': ('T' if wfs_for_bands else 'F', None)},
+                                'WFS.Write.For.Bands': ('T' if wfs_for_bands else 'F', None),
+                                **({'SaveHS': ('T', None)} if wfs_for_bands else {})},
                 block_updates={block_name: '\n'.join(' '.join(str(v) for v in row) for row in rows)})
             for path in Path(temporary).rglob('*'):
                 if path.is_file():
@@ -74,7 +86,11 @@ class ElectronicAnalysisProtocol:
         for pseudo in source.pseudopotentials.values():
             _immutable_copy(pseudo, branch / pseudo.name)
         _immutable_copy(source.density_matrix, branch / source.density_matrix.name)
-        _immutable_copy(source.state_path, branch / 'electronic-state.json')
+        provisional = isinstance(source, ProvisionalScfSource)
+        if provisional:
+            _immutable_json(branch / 'provisional-scf.json', source.provenance())
+        else:
+            _immutable_copy(source.state_path, branch / 'electronic-state.json')
         fdf = branch / 'input.fdf'
         closure = resolve_scientific_input_closure(fdf)
         inputs = [{'name': e.name, 'source': 'bands/'+e.destination, 'destination': e.destination,
@@ -84,6 +100,7 @@ class ElectronicAnalysisProtocol:
         outputs = [{'name': 'bands', 'path': source.label+'.bands', 'artifact_type': 'qraft.bands.raw', 'media_type': 'text/plain', 'required': True}]
         if wfs_for_bands:
             outputs.append({'name': 'wavefunctions', 'path': source.label+'.bands.WFSX', 'artifact_type': 'siesta.wfsx', 'media_type': 'application/octet-stream', 'required': True})
+            outputs.append({'name': 'overlap', 'path': source.label+'.HSX', 'artifact_type': 'siesta.hsx', 'media_type': 'application/octet-stream', 'required': True})
         workflow = root / 'source/workflow.json'
         _immutable_json(workflow, {'schema_version': '1.0', 'workflow_id': 'electronic-sample', 'project_id': 'electronic-sample',
             'tasks': [{'task_id': 'bands', 'kind': 'calculation', 'capability': PROPERTY_CAPABILITIES['bands'], 'inputs': inputs,
@@ -95,13 +112,15 @@ class ElectronicAnalysisProtocol:
         identity = ScientificIdentity(engine=identity.engine, effective_fdf_sha256=identity.effective_fdf_sha256,
             geometry_sha256=identity.geometry_sha256, species_mapping_sha256=identity.species_mapping_sha256,
             pseudopotentials=identity.pseudopotentials, included_scientific_files=identity.included_scientific_files,
-            components={**identity.components, 'm7.parent_electronic_state': source.identity_component(), 'm7.sample': _digest(request)})
+            components={**identity.components, ('qraft.provisional_scf' if provisional else 'm7.parent_electronic_state'): source.identity_component(), 'm7.sample': _digest(request)})
         execution, _ = resolve_execution_spec(profile=profile)
+        if execution.executable != self._worker_environment.siesta.path:
+            raise ValueError('Execution executable differs from worker lock')
         registry = CapabilityRegistry(); register_siesta_electronic_properties(registry); registry.freeze()
         composition = compose_runtime(execution, max_parallel_steps=1, placement_probe_root=root)
         runtime = CompiledWorkflowRuntime(workflow=compilation.compiled, registry=registry, root=root / 'runtime',
             source_root=root / 'source', scientific_identities={'bands': identity}, execution_specs=execution,
-            launcher=composition.launcher, allocation=composition.allocation).run()
+            launcher=self._worker_environment.launcher(composition.launcher), allocation=composition.allocation).run()
         attempt = runtime.attempts.get('bands')
         if attempt is None or attempt.result.technical_validation.status != 'PASS':
             return {'status': 'NOT_EVALUATED', 'runtime_status': runtime.status}
@@ -112,10 +131,77 @@ class ElectronicAnalysisProtocol:
             return check
         bands = parse_bands(raw.read_text(encoding='utf-8'))
         result = {'gap': band_gap(bands, n_occupied), 'policy_id': 'qraft.electronic.policy@1',
-                  'parent_electronic_state': source.provenance(), 'sample': request,
+                  ('parent_scf' if provisional else 'parent_electronic_state'): source.provenance(), 'sample': request,
                   'bands_sha256': _hash(raw), 'stdout_sha256': _hash(stdout)}
+        result['worker_environment_sha256'] = self._worker_environment.sha256
+        if wfs_for_bands:
+            result['fat_input_sha256'] = {source.label+suffix: _hash(attempt_root / (source.label+suffix))
+                                          for suffix in ('.bands.WFSX', '.HSX')}
+        if provisional:
+            result['authority'] = 'NUMERICAL_CANDIDATE'
         _immutable_json(root / 'result.json', result)
         return {'result': result, 'bands': bands, 'attempt_root': attempt_root}
+
+    def run_fat(self, sample, *, mpr, projections, min_band, max_band, runs_root):
+        """Project the exact sampled wavefunctions with the locked utility.
+
+        A dedicated directory preserves the immutable canonical SIESTA attempt.
+        Version provenance for fat is its pinned distribution/build, not a
+        nonexistent independent --version interface.
+        """
+        self._worker_environment.verify()
+        if sample['result']['worker_environment_sha256'] != self._worker_environment.sha256:
+            raise ValueError('Sample worker lock differs')
+        if type(min_band) is not int or type(max_band) is not int or not 1 <= min_band <= max_band <= sample['bands']['nbands']:
+            raise ValueError('Explicit valid fat band range required')
+        names = tuple(projections)
+        if not names or len(set(names)) != len(names) or any(not re.fullmatch(r'[A-Za-z0-9_-]+', n) for n in names):
+            raise ValueError('Explicit safe projection names required')
+        description = Path(mpr).read_bytes()
+        label = description.decode('utf-8').splitlines()[0].strip()
+        if not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]*', label):
+            raise ValueError('Unsafe fat SystemLabel')
+        attempt = Path(sample['attempt_root'])
+        bands_path = attempt / (label+'.bands')
+        if _hash(bands_path) != sample['result']['bands_sha256']:
+            raise ValueError('Sample bands changed')
+        bands = parse_bands(bands_path.read_text(encoding='utf-8'))
+        if max_band > bands['nbands']:
+            raise ValueError('Fat range exceeds verified bands')
+        root = Path(runs_root).resolve()
+        root.mkdir(parents=True, exist_ok=False)
+        hashes = {}
+        for suffix in ('.bands', '.bands.WFSX', '.HSX'):
+            path = attempt / (label+suffix)
+            if not path.is_file():
+                raise ValueError('Required fat input missing: '+path.name)
+            expected = sample['result']['bands_sha256'] if suffix=='.bands' else sample['result']['fat_input_sha256'].get(path.name)
+            if _hash(path) != expected:
+                raise ValueError('Sample fat input changed: '+path.name)
+            _immutable_copy(path, root / path.name)
+            hashes[path.name] = _hash(path)
+        (root / 'projection.mpr').write_bytes(description)
+        hashes['projection.mpr'] = _hash(root / 'projection.mpr')
+        _immutable_copy(self._worker_environment.lock_path, root / 'worker-environment.json')
+        command = [self._worker_environment.fat.path, '-b', str(min_band), '-B', str(max_band), 'projection']
+        self._worker_environment.verify()
+        with (root / 'stdout.txt').open('xb') as out, (root / 'stderr.txt').open('xb') as err:
+            process = subprocess.run(command, cwd=root, stdout=out, stderr=err, check=False)
+        if process.returncode != 0:
+            raise ValueError('fat execution failed')
+        sets = {name: parse_eigfat((root / ('projection.'+name+'.EIGFAT')).read_text(encoding='utf-8')) for name in names}
+        partition = fat_partition(bands, sets, POLICY)
+        parent_key = 'parent_scf' if 'parent_scf' in sample['result'] else 'parent_electronic_state'
+        result = dict(partition=partition, groups=fat_groups(bands, sets, POLICY) if partition['status']=='PASS' else [],
+                      input_sha256=hashes, output_sha256={p.name: _hash(p) for p in root.glob('*.EIGFAT')},
+                      stdout_sha256=_hash(root / 'stdout.txt'), stderr_sha256=_hash(root / 'stderr.txt'),
+                      worker_environment_sha256=self._worker_environment.sha256, command=command)
+        result[parent_key] = sample['result'][parent_key]
+        result['policy_id'] = 'qraft.electronic.policy@1'
+        if parent_key == 'parent_scf':
+            result['authority'] = 'NUMERICAL_CANDIDATE'
+        _immutable_json(root / 'result.json', result)
+        return result
 
     def run_masses(self, source, *, path_rows, longitudinal, transverse_directions, band, carrier, n_occupied, spin=0,
                    step_invA, points_per_side,
@@ -159,7 +245,13 @@ class ElectronicAnalysisProtocol:
         mass = directional_mass(first['bands'], spec, POLICY)
         _immutable_json(root / 'longitudinal/mass.json', mass)
         if mass['status'] != 'ESTABLISHED':
-            return {'longitudinal': mass, 'transverse': []}
+            result = {'longitudinal': mass, 'transverse': [], 'policy_id': 'qraft.electronic.policy@1',
+                      'worker_environment_sha256': self._worker_environment.sha256,
+                      ('parent_scf' if isinstance(source, ProvisionalScfSource) else 'parent_electronic_state'): source.provenance()}
+            if isinstance(source, ProvisionalScfSource):
+                result['authority'] = 'NUMERICAL_CANDIDATE'
+            _immutable_json(root / 'result.json', result)
+            return result
         observed = [x/BOHR_ANG for x in first['bands']['k'][mass['extremum_k_index']]]
         fitted = [c+mass['extremum_offset_invA']*d for c, d in zip(observed, unit)]
         transverse = []
@@ -175,5 +267,9 @@ class ElectronicAnalysisProtocol:
             transverse.append(value)
         result = {'longitudinal': mass, 'transverse': transverse, 'center_cartesian_invA': fitted,
                   'step_invA': step_invA, 'points_per_side': points_per_side, 'policy_id': 'qraft.electronic.policy@1'}
+        result['parent_scf' if isinstance(source, ProvisionalScfSource) else 'parent_electronic_state'] = source.provenance()
+        result['worker_environment_sha256'] = self._worker_environment.sha256
+        if isinstance(source, ProvisionalScfSource):
+            result['authority'] = 'NUMERICAL_CANDIDATE'
         _immutable_json(root / 'result.json', result)
         return result

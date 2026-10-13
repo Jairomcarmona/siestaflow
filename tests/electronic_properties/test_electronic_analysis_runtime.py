@@ -12,6 +12,15 @@ from qraft.workflow_authoring import BandStructureTaskBuilder
 from test_electronic_property_fanout import _source
 
 
+def locked_protocol(root):
+    binary = Path(sys.executable).resolve()
+    entry = dict(path=str(binary), version=sys.version, sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),
+                 version_evidence='synthetic fixture interpreter, not SIESTA/fat qualification')
+    lock = root / 'worker-environment.json'
+    lock.write_text(json.dumps(dict(siesta=entry, fat=entry)))
+    return ElectronicAnalysisProtocol(worker_lock_path=lock)
+
+
 def fake_engine(root, *, fail=False, missing=False, restart=True):
     script = root / 'siesta_fake.py'
     script.write_text(
@@ -22,13 +31,13 @@ def fake_engine(root, *, fail=False, missing=False, restart=True):
         + ("print('attempting to read DM from file succeeded')\n" if restart else '')
         + ("Path('carbon.bands').write_text('0\\n-5 5\\n2 1 3\\n0 0 0 -1 1\\n0.01 0 0 -1 0.5\\n0.02 0 0 -1 1\\n')\n" if not missing else '')
         + "Path('carbon.DM').write_bytes(b'engine-updated-dm')\nprint('Job completed')\n", encoding='utf-8')
-    return {'partition': 'local', 'launcher': 'direct', 'executable': sys.executable,
+    return {'partition': 'local', 'launcher': 'direct', 'executable': str(Path(sys.executable).resolve()),
             'executable_arguments': [str(script.resolve())]}
 
 
 def test_sample_delegates_reuses_and_preserves_parent(tmp_path):
     source = _source(tmp_path)
-    protocol = ElectronicAnalysisProtocol()
+    protocol = locked_protocol(tmp_path)
     profile = fake_engine(tmp_path)
     kwargs = dict(block_name='BandPoints', rows=[[0, 0, 0], [.01, 0, 0], [.02, 0, 0]],
                   n_occupied=1, runs_root=tmp_path / 'sample', profile=profile)
@@ -48,7 +57,7 @@ def test_sample_delegates_reuses_and_preserves_parent(tmp_path):
 def test_no_scientific_result_on_failed_or_missing_output_or_restart(tmp_path, mode):
     source = _source(tmp_path)
     profile = fake_engine(tmp_path, fail=mode=='failed', missing=mode=='missing', restart=mode!='restart')
-    result = ElectronicAnalysisProtocol().run_sample(source, block_name='BandPoints',
+    result = locked_protocol(tmp_path).run_sample(source, block_name='BandPoints',
         rows=[[0, 0, 0], [.01, 0, 0], [.02, 0, 0]], n_occupied=1, runs_root=tmp_path / 'sample', profile=profile)
     assert result['status'] == 'NOT_EVALUATED'
     assert not (tmp_path / 'sample/result.json').exists()
@@ -58,7 +67,7 @@ def test_tampered_parent_stops_before_runtime(tmp_path):
     source = _source(tmp_path)
     source.density_matrix.write_bytes(b'tampered')
     with pytest.raises(ValueError, match='density-matrix SHA'):
-        ElectronicAnalysisProtocol().run_sample(source, block_name='BandPoints', rows=[[0, 0, 0]],
+        locked_protocol(tmp_path).run_sample(source, block_name='BandPoints', rows=[[0, 0, 0]],
             n_occupied=1, runs_root=tmp_path / 'sample', profile=fake_engine(tmp_path))
     assert not (tmp_path / 'sample/runtime').exists()
 
@@ -76,7 +85,7 @@ def test_transverse_center_uses_fitted_longitudinal_extremum(tmp_path, monkeypat
             return {'bands': {'nk': 41, 'E': synthetic['E']}}
         return {'bands': synthetic}
     monkeypatch.setattr(ElectronicAnalysisProtocol, 'run_sample', sample)
-    result = ElectronicAnalysisProtocol().run_masses(source, path_rows=[[1,0,0,0,'G'],[40,.5,.5,0,'X']],
+    result = locked_protocol(tmp_path).run_masses(source, path_rows=[[1,0,0,0,'G'],[40,.5,.5,0,'X']],
         longitudinal=[1, 1, 0], transverse_directions=[[0, 0, 1]],
         band=2, carrier='electron', n_occupied=1, step_invA=.003,
         points_per_side=20, runs_root=tmp_path / 'mass')

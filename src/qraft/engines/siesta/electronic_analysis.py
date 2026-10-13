@@ -177,3 +177,36 @@ def fat_partition(bands, sets, policy):
             reasons.append('PARTITION_INCOMPLETE')
     return dict(status='FAIL' if reasons else 'PASS', reasons=reasons, sets=names,
                 max_energy_diff_eV=max_energy, max_sum_error=max_sum, min_weight=min_weight)
+
+
+def fat_groups(bands, sets, policy):
+    """Basis-invariant weights for maximal energy chains at each k and spin.
+
+    Band identities are retained after energy sorting. A partial projection
+    range must contain entire groups: otherwise there is no invariant weight
+    for that range and presentation is refused.
+    """
+    partition = fat_partition(bands, sets, policy)
+    if partition['status'] != 'PASS':
+        raise ValueError('Invalid fat partition: '+str(partition['reasons']))
+    first = sets[partition['sets'][0]]
+    low, high = first['min_band']-1, first['min_band']-1+first['nbands']
+    result = []
+    for k, spins in enumerate(bands['E']):
+        for spin, energies in enumerate(spins):
+            ordered = sorted(range(len(energies)), key=lambda i: (energies[i], i))
+            groups = []
+            for band in ordered:
+                if not groups or (energies[band]-energies[groups[-1][-1]])*1000 > policy['degeneracy_meV']:
+                    groups.append([])
+                groups[-1].append(band)
+            for group in groups:
+                selected = [band for band in group if low <= band < high]
+                if not selected:
+                    continue
+                if len(selected) != len(group):
+                    raise ValueError('Fat range cuts a degenerate group')
+                result.append(dict(k_index=k, spin=spin, bands=[b+1 for b in group], size=len(group),
+                    weights={name: sum(sets[name]['W'][k][spin*first['nbands']+b-low] for b in group)
+                             for name in partition['sets']}))
+    return result
