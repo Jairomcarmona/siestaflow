@@ -153,6 +153,7 @@ class M4RemoteSmokePackager:
             "runtime/qraft/execution/srun_launcher.py": base / "src/qraft/execution/srun_launcher.py",
             "runtime/qraft/engines/siesta/models.py": base / "src/qraft/engines/siesta/models.py",
             "runtime/qraft/engines/siesta/output_parser.py": base / "src/qraft/engines/siesta/output_parser.py",
+            "runtime/qraft/engines/siesta/pseudo_metadata.py": base / "src/qraft/engines/siesta/pseudo_metadata.py",
             "runtime/qraft/output/__init__.py": base / "src/qraft/output/__init__.py",
             "runtime/qraft/output/contributor.py": base / "src/qraft/output/contributor.py",
             "runtime/qraft/output/csv_exporter.py": base / "src/qraft/output/csv_exporter.py",

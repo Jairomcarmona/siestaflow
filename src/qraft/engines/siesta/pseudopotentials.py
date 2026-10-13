@@ -65,16 +65,18 @@ class PseudopotentialVerificationResult:
 
 
 class PseudopotentialVerifier:
-    FORMATS = {"psml", "psf"}
+    FORMATS = {"psml", "psf", "vps"}
 
     def verify(
         self,
         manifest: PseudopotentialManifest,
         expected_species: tuple[str, ...] | list[str],
+        *, xc: dict[str, str] | None = None,
     ) -> PseudopotentialVerificationResult:
         findings: list[str] = []
         verified: list[str] = []
         by_species: dict[str, list[PseudopotentialEntry]] = {}
+        headers = {}
         for entry in manifest.entries:
             by_species.setdefault(entry.species.casefold(), []).append(entry)
             if entry.format.casefold() not in self.FORMATS:
@@ -82,7 +84,7 @@ class PseudopotentialVerifier:
             expected_extension = "." + entry.format.casefold()
             if not entry.filename.casefold().endswith(expected_extension):
                 findings.append(f"FORMAT_FILENAME_MISMATCH:{entry.filename}")
-            if not entry.filename.casefold().startswith(entry.species.casefold()):
+            if entry.filename != entry.species + expected_extension:
                 findings.append(f"SPECIES_FILENAME_MISMATCH:{entry.species}:{entry.filename}")
             if entry.path:
                 path = Path(entry.path)
@@ -94,6 +96,17 @@ class PseudopotentialVerifier:
                         findings.append(f"HASH_MISMATCH:{entry.species}")
                     else:
                         verified.append(entry.species)
+                    if xc is not None and entry.format.casefold() == 'psml':
+                        from .pseudo_metadata import psml_info
+                        metadata = psml_info(path.read_text(encoding='utf-8'))
+                        if 'error' in metadata:
+                            findings.append(metadata['error']+':'+entry.species)
+                        else:
+                            headers[entry.species] = metadata
+                    from .pseudo_metadata import resolve_pseudo_file
+                    selected = resolve_pseudo_file(entry.species, [p.name for p in path.parent.iterdir() if p.is_file()])
+                    if selected.get('ambiguous'):
+                        findings.append(f'PSEUDO_FILE_AMBIGUOUS:{entry.species}')
             elif entry.location_status != "EXTERNAL_NOT_PACKAGED":
                 findings.append(f"LOCATION_UNCONFIGURED:{entry.species}")
 
@@ -104,7 +117,12 @@ class PseudopotentialVerifier:
         if duplicates:
             findings.extend(f"DUPLICATE_SPECIES:{species}" for species in duplicates)
 
-        hard = any(item.startswith(("INVALID_FORMAT", "FORMAT_FILENAME", "SPECIES_FILENAME", "HASH_MISMATCH", "DUPLICATE")) for item in findings)
+        if xc is not None:
+            from .pseudo_metadata import xc_gate
+            result = xc_gate(xc, headers)
+            if result['status'] == 'FAIL':
+                findings.append(result['code'])
+        hard = any(item.startswith(("INVALID_FORMAT", "FORMAT_FILENAME", "SPECIES_FILENAME", "HASH_MISMATCH", "DUPLICATE", "PSEUDO_XC_MISMATCH", "XC_UNKNOWN", "PSEUDO_FILE_AMBIGUOUS", "PSML_HEADER_MISSING")) for item in findings)
         unavailable = bool(missing) or any(item.startswith(("MISSING_FILE", "LOCATION_UNCONFIGURED")) for item in findings)
         external = any(entry.location_status == "EXTERNAL_NOT_PACKAGED" and not entry.path for entry in manifest.entries)
         if hard:
@@ -157,7 +175,13 @@ class PseudopotentialStager:
             raise FileExistsError(f"staging destination is not an empty directory: {destination}")
         entries: list[StagingEntry] = []
         findings: list[str] = []
+        planned_species = set()
         for item in manifest.entries:
+            if item.species in planned_species:
+                findings.append(f"PSEUDO_FILE_AMBIGUOUS:{item.species}")
+                entries.append(StagingEntry(item.species, item.filename, None, str(destination), "INVALID_MANIFEST", None))
+                continue
+            planned_species.add(item.species)
             if Path(item.filename).name != item.filename or any(separator in item.filename for separator in ("/", "\\")):
                 findings.append(f"INVALID_MANIFEST_PATH:{item.species}:{item.filename}")
                 entries.append(StagingEntry(item.species, item.filename, None, str(destination), "INVALID_MANIFEST", None))
@@ -180,7 +204,7 @@ class PseudopotentialStager:
             valid_format = (
                 item.format.casefold() == "psml" and b"<psml" in content[:8192].lower()
             ) or (
-                item.format.casefold() == "psf" and bool(content.strip())
+                item.format.casefold() in {"psf", "vps"} and bool(content.strip())
             )
             if not valid_format:
                 findings.append(f"INVALID_FORMAT:{item.species}:{item.filename}")
@@ -190,14 +214,26 @@ class PseudopotentialStager:
                 findings.append(f"HASH_MISMATCH:{item.species}:{item.filename}")
                 entries.append(StagingEntry(item.species, item.filename, str(source), str(target), "HASH_MISMATCH", digest))
                 continue
+            competing = [destination / (item.species + '.' + extension) for extension in ('vps', 'psf', 'psml')]
+            if any(path.exists() for path in competing):
+                findings.append(f"PSEUDO_FILE_AMBIGUOUS:{item.species}")
+                entries.append(StagingEntry(item.species, item.filename, str(source), str(target), "INVALID_MANIFEST", digest))
+                continue
+            if item.filename != item.species + '.' + item.format.casefold():
+                findings.append(f"SPECIES_FILENAME_MISMATCH:{item.species}:{item.filename}")
+                entries.append(StagingEntry(item.species, item.filename, str(source), str(target), "INVALID_MANIFEST", digest))
+                continue
             if not dry_run:
                 destination.mkdir(parents=True, exist_ok=True)
                 if policy == "copy":
                     shutil.copy2(source, target)
                 else:
                     target.symlink_to(source.resolve())
+                if hashlib.sha256(target.read_bytes()).hexdigest() != digest:
+                    raise ValueError(f"HASH_MISMATCH:{item.species}: copied pseudopotential")
             entries.append(StagingEntry(item.species, item.filename, str(source), str(target), "PLANNED" if dry_run else "STAGED", digest))
-        status = DecisionStatus.PASS if not findings else DecisionStatus.BLOCKED
+        hard = any(item.startswith(('PSEUDO_FILE_AMBIGUOUS', 'SPECIES_FILENAME_MISMATCH')) for item in findings)
+        status = DecisionStatus.FAIL if hard else DecisionStatus.BLOCKED if findings else DecisionStatus.PASS
         if not findings:
             example_status = "EXAMPLE_READY"
         elif any(item.startswith("HASH_MISMATCH") for item in findings):

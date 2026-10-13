@@ -127,6 +127,7 @@ class RealSiestaSmokePackager:
             "scripts/runtime_parser/qraft/models.py": source_root / "models.py",
             "scripts/runtime_parser/qraft/engines/siesta/models.py": source_root / "engines/siesta/models.py",
             "scripts/runtime_parser/qraft/engines/siesta/output_parser.py": source_root / "engines/siesta/output_parser.py",
+            "scripts/runtime_parser/qraft/engines/siesta/pseudo_metadata.py": source_root / "engines/siesta/pseudo_metadata.py",
         }.items():
             files[package_path] = source_path.read_bytes()
         for source_path in sorted((source_root / "contracts").glob("*.py")):

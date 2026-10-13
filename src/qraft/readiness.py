@@ -305,16 +305,11 @@ class ReadinessChecker:
         self, classification: TargetClassification, options: ReadinessOptions,
     ) -> tuple[ReadinessDimension, ...]:
         path = classification.path
-        document = FDFParser().parse_path(path)
-        pseudo_result = None
+        manifest = None
         input_adapter_findings: list[ReadinessFinding] = []
         if options.pseudo_manifest is not None:
             try:
                 manifest = PseudopotentialManifest.load(options.pseudo_manifest)
-                structural = SiestaInputValidator().validate(document)
-                pseudo_result = PseudopotentialVerifier().verify(
-                    manifest, structural.species,
-                )
             except (OSError, TypeError, ValueError) as exc:
                 input_adapter_findings.append(ReadinessFinding(
                     "BLOCKED:PSEUDOPOTENTIAL_MANIFEST_INVALID",
@@ -322,9 +317,9 @@ class ReadinessChecker:
                     "PseudopotentialManifest.load",
                     (str(options.pseudo_manifest),),
                 ))
-        report = SiestaContextualValidator().validate(
-            document,
-            pseudo_result=pseudo_result,
+        report = SiestaContextualValidator().validate_path(
+            path,
+            pseudopotential_manifest=manifest,
             require_pseudos=options.pseudo_manifest is not None,
         )
         input_contract, scientific_contract = _partition_validation_findings(

@@ -2013,15 +2013,8 @@ def _dispatch(args: argparse.Namespace) -> int:
                     )
                     print(f"  Evidence: {item['reference']}")
             return 0
-        document = FDFParser().parse_path(args.path)
-        initial = SiestaInputValidator().validate(document)
-        pseudo_result = None
-        if args.pseudo_manifest:
-            manifest = PseudopotentialManifest.load(args.pseudo_manifest)
-            pseudo_result = PseudopotentialVerifier().verify(
-                manifest,
-                initial.species,
-            )
+        manifest = (PseudopotentialManifest.load(args.pseudo_manifest)
+                    if args.pseudo_manifest else None)
         profile = (
             SiestaValidationProfile.load(args.profile)
             if args.profile
@@ -2034,12 +2027,11 @@ def _dispatch(args: argparse.Namespace) -> int:
             )
         report = SiestaContextualValidator(
             catalog=catalog,
-        ).validate(
-            document,
-            pseudo_result=pseudo_result,
+        ).validate_path(
+            args.path,
+            pseudopotential_manifest=manifest,
             require_pseudos=args.require_pseudos,
             profile=profile,
-            subject_id=initial.system_id or args.path.stem,
         )
         if args.json:
             _emit(report, True)

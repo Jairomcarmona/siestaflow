@@ -12,6 +12,7 @@ from typing import Iterable
 from ...contracts import ContractEnvelope, SCIENTIFIC_ARTIFACT
 from ...models import DecisionStatus, GateDecision
 from .models import OutputClassification, SiestaOutputRecord
+from .pseudo_metadata import stdout_xc_warnings
 
 
 _FLOAT = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][-+]?\d+)?"
@@ -195,7 +196,10 @@ class SiestaOutputParser:
                     dm_restart_succeeded = True
             if any(marker in lowered for marker in ("job completed", "normal termination", "end of run")):
                 normal = True
-            if "pseudopotential" in lowered and any(marker in lowered for marker in ("missing", "not found", "cannot open", "error")):
+            if stdout_xc_warnings(line):
+                classification_hint = OutputClassification.PSEUDOPOTENTIAL_ERROR
+                errors.append('PSEUDO_XC_MISMATCH: ' + line.strip())
+            elif "pseudopotential" in lowered and any(marker in lowered for marker in ("missing", "not found", "cannot open", "error")):
                 classification_hint = OutputClassification.PSEUDOPOTENTIAL_ERROR
                 errors.append(line.strip())
             elif any(marker in lowered for marker in ("input error", "fdf error", "bad input")):
@@ -260,6 +264,8 @@ class SiestaOutputParser:
         )
 
     def gate(self, record: SiestaOutputRecord) -> GateDecision:
+        if any(error.startswith('PSEUDO_XC_MISMATCH:') for error in record.errors):
+            return GateDecision(DecisionStatus.FAIL, 'PSEUDO_XC_MISMATCH', tuple(record.errors))
         if record.classification is OutputClassification.COMPLETED:
             return GateDecision(DecisionStatus.PASS, "normal technical completion evidence", (record.provisional_status,))
         if record.classification in {OutputClassification.UNKNOWN_WARNING, OutputClassification.TRUNCATED_OUTPUT, OutputClassification.UNKNOWN_FAILURE}:

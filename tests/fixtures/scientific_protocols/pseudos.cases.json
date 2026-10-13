@@ -1,0 +1,377 @@
+{
+ "schema": "dftlab.protocol-vectors@1",
+ "protocol": "PSEUDOS",
+ "ficha": "docs/scientific-protocols/PSEUDOS.md",
+ "oracle": "docs/scientific-protocols/vectors/pseudo-oracle.mjs",
+ "engine": "SIESTA 5.4.2 (siesta-env conda-forge)",
+ "arithmetic_tolerance": {
+  "rel": 1e-12
+ },
+ "cases": [
+  {
+   "id": "ps-psml-pbe-si",
+   "kind": "psml",
+   "title": "Biblioteca, PBE, Si",
+   "psml": "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<psml version=\"1.1\" energy_unit=\"hartree\" length_unit=\"bohr\"\n uuid=\"648e3d70-c42a-11f1-6581-ac73fbbf6063\"\n xmlns=\"http://esl.cecam.org/PSML/ns/1.1\">\n<provenance creator=\"ONCVPSP-3.3.1+psml-3.3.1-75 (scalar-relativistic)\"\n date=\"2026-10-09\">\n<annotation action=\"semilocal-pseudopotential-generation\"\n action-cont=\"projectors-generation\" />\n<input-file name=\"oncvpsp-input\">\n<![CDATA[# DFT Lab pseudopotential library -- Si, GGA-PBE (ONCVPSP iexc=4)\n# ONCVPSP 3.3.1 (scalar-relativistic, PSML output), 2 projectors per channel.\n# Test configurations: 1) neutral excitation, 2) +0.5 ion, 3) +1 ion (relative to the reference configuration).\n# ATOM AND REFERENCE CONFIGURATION\n# atsym, z, nc, nv, iexc   psfile\n    Si  14.0  3  2  4  psp8\n#\n# n, l, f  (nc+nv lines)\n    1    0    2.00\n    2    0    2.00\n    2    1    6.00\n    3    0    2.00\n    3    1    2.00\n#\n# PSEUDOPOTENTIAL AND OPTIMIZATION\n# lmax\n    2\n#\n# l, rc, ep, ncon, nbas, qcut  (lmax+1 lines, l's must be in order)\n    0    2.70    0.00    5    8    5.00\n    1    2.70    0.00    5    8    5.00\n    2    2.70    0.10    5    8    5.00\n#\n# LOCAL POTENTIAL\n# lloc, lpopt, rc(5), dvloc0\n    4    5    2.70    0.00\n#\n# VANDERBILT-KLEINMAN-BYLANDER PROJECTORs\n# l, nproj, debl  (lmax+1 lines, l's in order)\n    0    2    1.00\n    1    2    0.75\n    2    2    0.75\n#\n# MODEL CORE CHARGE\n# icmod, fcfact, rcfact\n    1    0.25\n#\n# LOG DERIVATIVE ANALYSIS\n# epsh1, epsh2, depsh\n    -2.0  2.0  0.02\n#\n# OUTPUT GRID\n# rlmax, drl\n    5.0  0.01\n#\n# TEST CONFIGURATIONS\n# ncnf\n    3\n#\n#   nvcnf (repeated ncnf times)\n#   n, l, f  (nvcnf lines, repeated follwing nvcnf's ncnf times)\n    2\n    3    0    1.00\n    3    1    3.00\n#\n    2\n    3    0    2.00\n    3    1    1.50\n#\n    2\n    3    0    2.00\n    3    1    1.00\n#\n]]>\n</input-file>\n</provenance>\n<pseudo-atom-spec atomic-label=\"Si\" atomic-number=\"14\" z-pseudo=\"4\"\n flavor=\"Hamann&apos;s oncvpsp\" relativity=\"scalar\" spin-dft=\"no\"\n core-corrections=\"yes\">\n<annotation pseudo-energy=\"-3.77420620779\" cutoff_hint_low=\"9\"\n cutoff_hint_normal=\"10\" cutoff_hint_high=\"11\" />\n<exchange-correlation>\n<annotation oncvpsp-xc-code=\"4\" oncvpsp-xc-type=\"GGA -- Perdew-Burke-Ernzerhof\" />\n<libxc-info number-of-functionals=\"2\">\n<functional name=\"Perdew, Burke &amp; Ernzerhof (GGA)\" type=\"exchange\" id=\"101\" />\n<functional name=\"Perdew, Burke &amp; Ernzerhof (GGA)\" type=\"correlation\"\n id=\"130\" />\n</libxc-info>\n</exchange-correlation>\n",
+   "expect": {
+    "label": "Si",
+    "z": 14,
+    "z_valence": 4.0,
+    "relativity": "scalar",
+    "core_corrections": true,
+    "libxc_ids": [
+     101,
+     130
+    ],
+    "xc": [
+     "GGA_X_PBE",
+     "GGA_C_PBE"
+    ]
+   }
+  },
+  {
+   "id": "ps-psml-lda-si",
+   "kind": "psml",
+   "title": "Biblioteca, LDA (CA-PZ), Si",
+   "psml": "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<psml version=\"1.1\" energy_unit=\"hartree\" length_unit=\"bohr\"\n uuid=\"62017810-c42a-11f1-4e34-9e2cfffb3c3f\"\n xmlns=\"http://esl.cecam.org/PSML/ns/1.1\">\n<provenance creator=\"ONCVPSP-3.3.1+psml-3.3.1-75 (scalar-relativistic)\"\n date=\"2026-10-09\">\n<annotation action=\"semilocal-pseudopotential-generation\"\n action-cont=\"projectors-generation\" />\n<input-file name=\"oncvpsp-input\">\n<![CDATA[# DFT Lab pseudopotential library -- Si, LDA (Ceperley-Alder / Perdew-Zunger, ONCVPSP iexc=3)\n# ONCVPSP 3.3.1 (scalar-relativistic, PSML output), 2 projectors per channel.\n# Test configurations: 1) neutral excitation, 2) +0.5 ion, 3) +1 ion (relative to the reference configuration).\n# ATOM AND REFERENCE CONFIGURATION\n# atsym, z, nc, nv, iexc   psfile\n    Si  14.0  3  2  3  psp8\n#\n# n, l, f  (nc+nv lines)\n    1    0    2.00\n    2    0    2.00\n    2    1    6.00\n    3    0    2.00\n    3    1    2.00\n#\n# PSEUDOPOTENTIAL AND OPTIMIZATION\n# lmax\n    2\n#\n# l, rc, ep, ncon, nbas, qcut  (lmax+1 lines, l's must be in order)\n    0    2.70    0.00    5    8    5.00\n    1    2.70    0.00    5    8    5.00\n    2    2.70    0.10    5    8    5.00\n#\n# LOCAL POTENTIAL\n# lloc, lpopt, rc(5), dvloc0\n    4    5    2.70    0.00\n#\n# VANDERBILT-KLEINMAN-BYLANDER PROJECTORs\n# l, nproj, debl  (lmax+1 lines, l's in order)\n    0    2    1.00\n    1    2    0.75\n    2    2    0.75\n#\n# MODEL CORE CHARGE\n# icmod, fcfact, rcfact\n    1    0.25\n#\n# LOG DERIVATIVE ANALYSIS\n# epsh1, epsh2, depsh\n    -2.0  2.0  0.02\n#\n# OUTPUT GRID\n# rlmax, drl\n    5.0  0.01\n#\n# TEST CONFIGURATIONS\n# ncnf\n    3\n#\n#   nvcnf (repeated ncnf times)\n#   n, l, f  (nvcnf lines, repeated follwing nvcnf's ncnf times)\n    2\n    3    0    1.00\n    3    1    3.00\n#\n    2\n    3    0    2.00\n    3    1    1.50\n#\n    2\n    3    0    2.00\n    3    1    1.00\n#\n]]>\n</input-file>\n</provenance>\n<pseudo-atom-spec atomic-label=\"Si\" atomic-number=\"14\" z-pseudo=\"4\"\n flavor=\"Hamann&apos;s oncvpsp\" relativity=\"scalar\" spin-dft=\"no\"\n core-corrections=\"yes\">\n<annotation pseudo-energy=\"-3.79221256038\" cutoff_hint_low=\"9\"\n cutoff_hint_normal=\"10\" cutoff_hint_high=\"11\" />\n<exchange-correlation>\n<annotation oncvpsp-xc-code=\"3\"\n oncvpsp-xc-type=\"LDA -- Ceperley-Alder Perdew-Zunger\" />\n<libxc-info number-of-functionals=\"2\">\n<functional name=\"Slater exchange (LDA)\" type=\"exchange\" id=\"1\" />\n<functional name=\"Perdew &amp; Zunger (LDA)\" type=\"correlation\" id=\"9\" />\n</libxc-info>\n</exchange-correlation>\n",
+   "expect": {
+    "label": "Si",
+    "z": 14,
+    "z_valence": 4.0,
+    "relativity": "scalar",
+    "core_corrections": true,
+    "libxc_ids": [
+     1,
+     9
+    ],
+    "xc": [
+     "LDA_X",
+     "LDA_C_PZ"
+    ]
+   }
+  },
+  {
+   "id": "ps-psml-pbe-fe",
+   "kind": "psml",
+   "title": "Biblioteca, PBE, Fe con semicore",
+   "psml": "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<psml version=\"1.1\" energy_unit=\"hartree\" length_unit=\"bohr\"\n uuid=\"8430feb0-c42a-11f1-6ca1-c7183ff2193c\"\n xmlns=\"http://esl.cecam.org/PSML/ns/1.1\">\n<provenance creator=\"ONCVPSP-3.3.1+psml-3.3.1-75 (scalar-relativistic)\"\n date=\"2026-10-09\">\n<annotation action=\"semilocal-pseudopotential-generation\"\n action-cont=\"projectors-generation\" />\n<input-file name=\"oncvpsp-input\">\n<![CDATA[# DFT Lab pseudopotential library -- Fe, GGA-PBE (ONCVPSP iexc=4)\n# ONCVPSP 3.3.1 (scalar-relativistic, PSML output), 2 projectors per channel.\n# Test configurations: 1) neutral excitation, 2) +0.5 ion, 3) +1 ion (relative to the reference configuration).\n# ATOM AND REFERENCE CONFIGURATION\n# atsym, z, nc, nv, iexc   psfile\n    Fe  26.0  3  4  4  psp8\n#\n# n, l, f  (nc+nv lines)\n    1    0    2.00\n    2    0    2.00\n    2    1    6.00\n    3    0    2.00\n    3    1    6.00\n    3    2    6.00\n    4    0    2.00\n#\n# PSEUDOPOTENTIAL AND OPTIMIZATION\n# lmax\n    2\n#\n# l, rc, ep, ncon, nbas, qcut  (lmax+1 lines, l's must be in order)\n    0    1.71    0.00    5    8    7.78\n    1    1.89    0.00    5    8    8.89\n    2    1.89    0.00    5    9    10.00\n#\n# LOCAL POTENTIAL\n# lloc, lpopt, rc(5), dvloc0\n    4    5    1.71    0.00\n#\n# VANDERBILT-KLEINMAN-BYLANDER PROJECTORs\n# l, nproj, debl  (lmax+1 lines, l's in order)\n    0    2    1.50\n    1    2    1.50\n    2    2    1.00\n#\n# MODEL CORE CHARGE\n# icmod, fcfact, rcfact\n    0    0.0\n#\n# LOG DERIVATIVE ANALYSIS\n# epsh1, epsh2, depsh\n    -5.0  2.0  0.02\n#\n# OUTPUT GRID\n# rlmax, drl\n    6.0  0.01\n#\n# TEST CONFIGURATIONS\n# ncnf\n    3\n#\n#   nvcnf (repeated ncnf times)\n#   n, l, f  (nvcnf lines, repeated follwing nvcnf's ncnf times)\n    4\n    3    0    2.00\n    3    1    6.00\n    3    2    7.00\n    4    0    1.00\n#\n    4\n    3    0    2.00\n    3    1    6.00\n    3    2    6.00\n    4    0    1.50\n#\n    4\n    3    0    2.00\n    3    1    6.00\n    3    2    6.00\n    4    0    1.00\n#\n]]>\n</input-file>\n</provenance>\n<pseudo-atom-spec atomic-label=\"Fe\" atomic-number=\"26\" z-pseudo=\"16\"\n flavor=\"Hamann&apos;s oncvpsp\" relativity=\"scalar\" spin-dft=\"no\"\n core-corrections=\"no\">\n<annotation pseudo-energy=\"-120.387629954\" cutoff_hint_low=\"41\"\n cutoff_hint_normal=\"42\" cutoff_hint_high=\"44\" />\n<exchange-correlation>\n<annotation oncvpsp-xc-code=\"4\" oncvpsp-xc-type=\"GGA -- Perdew-Burke-Ernzerhof\" />\n<libxc-info number-of-functionals=\"2\">\n<functional name=\"Perdew, Burke &amp; Ernzerhof (GGA)\" type=\"exchange\" id=\"101\" />\n<functional name=\"Perdew, Burke &amp; Ernzerhof (GGA)\" type=\"correlation\"\n id=\"130\" />\n</libxc-info>\n</exchange-correlation>\n",
+   "expect": {
+    "label": "Fe",
+    "z": 26,
+    "z_valence": 16.0,
+    "relativity": "scalar",
+    "core_corrections": false,
+    "libxc_ids": [
+     101,
+     130
+    ],
+    "xc": [
+     "GGA_X_PBE",
+     "GGA_C_PBE"
+    ]
+   }
+  },
+  {
+   "id": "ps-psml-soft",
+   "kind": "psml",
+   "title": "PSML 1.0: <header>, tipos XC_EXCHANGE y relatividad «no»",
+   "psml": "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<psml version=\"1.0\" energy_unit=\"hartree\" length_unit=\"bohr\"\n uuid=\"a8b853e0-dce6-11e6-5d95-3efccffd7307\">\n<provenance creator=\"ATM4.1.0+rev-87\" date=\"17-JAN-17\">\n<input-file name=\"INP\">\n<![CDATA[#\n#  Pseudopotential generation for Silicon\n#  pg: simple generation\n#\n%define SMOOTH_TAIL_CUTOFF\n   pg      Silicon\n        tm2      3.0             # PS flavor, logder R\n n=Si c=ca                       # Symbol, XC flavor,{ |r|s}\n       0.0       0.0       0.0       0.0       0.0       0.0\n    3    4                       # norbs_core, norbs_valence\n    3    0      2.00      0.00   # 3s2\n    3    1      2.00      0.00   # 3p2\n    3    2      0.00      0.00   # 3d0\n    4    3      0.00      0.00   # 4f0\n      1.90      1.90      1.90      1.90      0.00      0.00\n#\n# Last line (above):\n#    rc(s)     rc(p)     rc(d)     rc(f)   rcore_flag  rcore\n#\n#23456789012345678901234567890123456789012345678901234567890\n\n]]>\n</input-file>\n</provenance>\n<header atomic-label=\"Si\" atomic-number=\"14\" z-pseudo=\"4\"\n flavor=\"Troullier-Martins\" relativity=\"no\" polarized=\"no\" core-corrections=\"no\">\n<exchange-correlation>\n<annotation atom-xc-code=\"ca\" siesta-xc-type=\"LDA\" siesta-xc-authors=\"CA\" />\n<libxc-info number-of-functionals=\"2\">\n<functional name=\"XC_LDA_X\" type=\"XC_EXCHANGE\" id=\"1\" />\n<functional name=\"XC_LDA_C_PZ\" type=\"XC_CORRELATION\" id=\"9\" />\n</libxc-info>\n</exchange-correlation>\n",
+   "expect": {
+    "label": "Si",
+    "z": 14,
+    "z_valence": 4.0,
+    "relativity": "no",
+    "core_corrections": false,
+    "libxc_ids": [
+     1,
+     9
+    ],
+    "xc": [
+     "LDA_X",
+     "LDA_C_PZ"
+    ]
+   }
+  },
+  {
+   "id": "ps-xc-pbe",
+   "kind": "xc",
+   "title": "GGA PBE con pseudo PBE",
+   "run": {
+    "functional": "GGA",
+    "authors": "PBE"
+   },
+   "pseudos": {
+    "Si": {
+     "libxc_ids": [
+      101,
+      130
+     ]
+    }
+   },
+   "expect": {
+    "status": "PASS",
+    "run_libxc_ids": [
+     101,
+     130
+    ]
+   }
+  },
+  {
+   "id": "ps-xc-lda-ca",
+   "kind": "xc",
+   "title": "LDA CA con pseudo LDA CA-PZ",
+   "run": {
+    "functional": "LDA",
+    "authors": "CA"
+   },
+   "pseudos": {
+    "Si": {
+     "libxc_ids": [
+      1,
+      9
+     ]
+    }
+   },
+   "expect": {
+    "status": "PASS",
+    "run_libxc_ids": [
+     1,
+     9
+    ]
+   }
+  },
+  {
+   "id": "ps-xc-lda-pw92",
+   "kind": "xc",
+   "title": "LDA PW92 con pseudo CA-PZ: SIESTA solo avisa",
+   "run": {
+    "functional": "LDA",
+    "authors": "PW92"
+   },
+   "pseudos": {
+    "Si": {
+     "libxc_ids": [
+      1,
+      9
+     ]
+    }
+   },
+   "expect": {
+    "status": "FAIL",
+    "code": "PSEUDO_XC_MISMATCH",
+    "run_libxc_ids": [
+     1,
+     12
+    ],
+    "mismatched": [
+     "Si"
+    ]
+   }
+  },
+  {
+   "id": "ps-xc-pbe-on-lda",
+   "kind": "xc",
+   "title": "GGA PBE con pseudo LDA: SIESTA solo avisa",
+   "run": {
+    "functional": "GGA",
+    "authors": "PBE"
+   },
+   "pseudos": {
+    "Si": {
+     "libxc_ids": [
+      1,
+      9
+     ]
+    }
+   },
+   "expect": {
+    "status": "FAIL",
+    "code": "PSEUDO_XC_MISMATCH",
+    "run_libxc_ids": [
+     101,
+     130
+    ],
+    "mismatched": [
+     "Si"
+    ]
+   }
+  },
+  {
+   "id": "ps-xc-lda-on-pbe",
+   "kind": "xc",
+   "title": "LDA CA con pseudo PBE: SIESTA solo avisa",
+   "run": {
+    "functional": "LDA",
+    "authors": "CA"
+   },
+   "pseudos": {
+    "Si": {
+     "libxc_ids": [
+      101,
+      130
+     ]
+    }
+   },
+   "expect": {
+    "status": "FAIL",
+    "code": "PSEUDO_XC_MISMATCH",
+    "run_libxc_ids": [
+     1,
+     9
+    ],
+    "mismatched": [
+     "Si"
+    ]
+   }
+  },
+  {
+   "id": "ps-xc-unknown",
+   "kind": "xc",
+   "title": "XC.authors fuera de la tabla",
+   "run": {
+    "functional": "GGA",
+    "authors": "XYZ"
+   },
+   "pseudos": {},
+   "expect": {
+    "status": "FAIL",
+    "code": "XC_UNKNOWN"
+   }
+  },
+  {
+   "id": "ps-stdout-warning",
+   "kind": "stdout",
+   "title": "Aviso de xc_check en la salida (psf LDA con corrida PBE)",
+   "stdout": "xc_check: Exchange-correlation functional:\nxc_check: GGA Perdew, Burke & Ernzerhof 1996\nxc_check: WARNING: Pseudopotential generated with LDA CA functional",
+   "expect": [
+    "LDA CA"
+   ]
+  },
+  {
+   "id": "ps-stdout-clean",
+   "kind": "stdout",
+   "title": "Sin aviso",
+   "stdout": "xc_check: Exchange-correlation functional:\nxc_check: GGA Perdew, Burke & Ernzerhof 1996",
+   "expect": []
+  },
+  {
+   "id": "ps-file-label",
+   "kind": "file",
+   "title": "Etiqueta Si1 con solo Si.psml: SIESTA aborta",
+   "label": "Si1",
+   "files": [
+    "Si.psml"
+   ],
+   "expect": {
+    "error": "PSEUDO_FILE_NOT_FOUND"
+   }
+  },
+  {
+   "id": "ps-file-both",
+   "kind": "file",
+   "title": "Si.psf y Si.psml: SIESTA usa Si.psf sin avisar",
+   "label": "Si",
+   "files": [
+    "Si.psf",
+    "Si.psml"
+   ],
+   "expect": {
+    "file": "Si.psf",
+    "ambiguous": true
+   }
+  },
+  {
+   "id": "ps-file-psf",
+   "kind": "file",
+   "title": "Solo Si.psf",
+   "label": "Si",
+   "files": [
+    "Si.psf"
+   ],
+   "expect": {
+    "file": "Si.psf",
+    "ambiguous": false
+   }
+  },
+  {
+   "id": "ps-file-alias",
+   "kind": "file",
+   "title": "Alias Si1 y Si2 con copias del mismo PSML",
+   "label": "Si1",
+   "files": [
+    "Si1.psml",
+    "Si2.psml"
+   ],
+   "expect": {
+    "file": "Si1.psml",
+    "ambiguous": false
+   }
+  },
+  {
+   "id": "ps-file-psml",
+   "kind": "file",
+   "title": "Solo Si.psml",
+   "label": "Si",
+   "files": [
+    "Si.psml"
+   ],
+   "expect": {
+    "file": "Si.psml",
+    "ambiguous": false
+   }
+  },
+  {
+   "id": "ps-manifest-prefix",
+   "kind": "manifest",
+   "title": "Especie S con Si.psml: QRAFT lo acepta por prefijo; SIESTA buscaría S.psml",
+   "entries": [
+    {
+     "species": "S",
+     "filename": "Si.psml"
+    }
+   ],
+   "expect": {
+    "status": "FAIL",
+    "findings": [
+     "SPECIES_FILENAME_MISMATCH:S:Si.psml"
+    ]
+   }
+  },
+  {
+   "id": "ps-manifest-suffix",
+   "kind": "manifest",
+   "title": "Especie Si con Si_old.psml",
+   "entries": [
+    {
+     "species": "Si",
+     "filename": "Si_old.psml"
+    }
+   ],
+   "expect": {
+    "status": "FAIL",
+    "findings": [
+     "SPECIES_FILENAME_MISMATCH:Si:Si_old.psml"
+    ]
+   }
+  },
+  {
+   "id": "ps-manifest-alias",
+   "kind": "manifest",
+   "title": "Un archivo por etiqueta",
+   "entries": [
+    {
+     "species": "Si1",
+     "filename": "Si1.psml"
+    },
+    {
+     "species": "Si2",
+     "filename": "Si2.psml"
+    }
+   ],
+   "expect": {
+    "status": "PASS",
+    "findings": []
+   }
+  }
+ ]
+}
