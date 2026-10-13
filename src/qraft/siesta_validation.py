@@ -325,7 +325,8 @@ class SiestaContextualValidator:
             if entry.canonical_name == 'Mesh.Sizes':
                 text=node.value if isinstance(node,FDFScalar) else ' '.join(_data_lines(node))
                 sizes=_integer_list(text)
-                if sizes is None or len(sizes)!=3 or any(size<=0 for size in sizes):
+                list_form=not isinstance(node,FDFScalar) or (text.strip().startswith('[') and text.strip().endswith(']'))
+                if not list_form or sizes is None or len(sizes)!=3 or any(size<=0 for size in sizes):
                     result.append(self._finding(_KEYWORD_RULE,'KEYWORD_VALUE_INVALID',DecisionStatus.FAIL,
                         'Mesh.Sizes requires three positive integers.',FindingScope.SYNTAX,subject_id,location,
                         'Use the documented bracketed list or block form.'))

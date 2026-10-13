@@ -59,6 +59,7 @@ def test_fc_requires_its_declared_controls_instead_of_cg_steps(tmp_path):
  ('FC.First 1.5\n','INTEGER_EXPECTED'),
  ('WriteDenchar maybe\n','KEYWORD_VALUE_INVALID'),
  ('Mesh.Sizes [30 30]\n','KEYWORD_VALUE_INVALID'),
+ ('Mesh.Sizes 30 30 30\n','KEYWORD_VALUE_INVALID'),
  ('%block Mesh.Sizes\n30 0 30\n%endblock\n','KEYWORD_VALUE_INVALID'),
 ])
 def test_registered_types_and_units_remain_fail_closed(tmp_path,extra,code):
